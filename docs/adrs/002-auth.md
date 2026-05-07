@@ -17,7 +17,7 @@ related:
 
 ## Context and problem statement
 
-Auth is the highest-stakes decision in TODO for Dues because the product is invite-only by design — non-members of a fraternal organization must not be able to gain access. Per PRD-001 R-01 and R-02, signup is gated by an Admin-issued invite token, the user picks Active or Alumni at signup, and Moderator/Admin are escalated only.
+Auth is the highest-stakes decision in TODOs for Dues because the product is invite-only by design — non-members of a fraternal organization must not be able to gain access. Per PRD-001 R-01 and R-02, signup is gated by an Admin-issued invite token, the user picks Active or Alumni at signup, and Moderator/Admin are escalated only.
 
 Product discovery (during ADR-002 drafting) confirmed:
 - Email + password is the primary login method.

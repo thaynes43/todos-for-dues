@@ -17,7 +17,7 @@ related:
 
 ## Context and problem statement
 
-TODO for Dues is an invite-only, mobile-first SaaS where most users will interact from phones, with a likely future native iOS/Android app. We need to pick the web app framework, language, and UI toolkit as a coherent set — these three choices are tightly coupled (the framework dictates the component model; the component model dictates which UI libraries are realistic). The decision locks in our component language for the foreseeable future and determines whether code sharing with a future native app is realistic.
+TODOs for Dues is an invite-only, mobile-first SaaS where most users will interact from phones, with a likely future native iOS/Android app. We need to pick the web app framework, language, and UI toolkit as a coherent set — these three choices are tightly coupled (the framework dictates the component model; the component model dictates which UI libraries are realistic). The decision locks in our component language for the foreseeable future and determines whether code sharing with a future native app is realistic.
 
 This ADR does **not** decide auth, the API contract for mobile portability, the database, or the email provider — those are ADR-002 through ADR-005.
 

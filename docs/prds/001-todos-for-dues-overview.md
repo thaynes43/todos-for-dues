@@ -1,6 +1,6 @@
 ---
 id: PRD-001
-title: TODO for Dues — product overview
+title: TODOs for Dues — product overview
 status: Draft
 author: Tom Haynes
 reviewers: []
@@ -22,7 +22,7 @@ related:
 
 ## 2. Background & context
 
-- The product name "TODO for Dues" reads as: the *TODO* is the job an Alumni needs done; *for Dues* means the Active does it to fund their chapter dues.
+- The product name "TODOs for Dues" reads as: a *TODO* is a job an Alumni posts; *for Dues* means an Active completes TODOs to fund their chapter dues.
 - Dues are paid directly from the Alumni to the chapter (Venmo for the launch chapter). The app does **not** custody money or process payments — it coordinates work and tracks state.
 - The product targets a niche where social trust is high (members of the same fraternal organization), reducing the need for heavy escrow/dispute machinery in the MVP.
 - One instance of the SaaS is hosted per fraternal organization (chapter scope vs. national-org scope is open — see Q-01).
@@ -165,3 +165,4 @@ These terms are introduced by this PRD and need to land in `docs/domain/glossary
 | 2026-05-06 | Tom Haynes | Linked ADR-004 (DB + ORM, Proposed). |
 | 2026-05-06 | Tom Haynes | Linked ADR-005 (email, Proposed). |
 | 2026-05-07 | Tom Haynes | Linked ADR-006 (hosting, Proposed). All six tech-stack ADRs now Proposed. |
+| 2026-05-07 | Tom Haynes | Pluralized product name "TODO for Dues" → "TODOs for Dues" throughout. PRD filename slug renamed `001-todo-for-dues-overview.md` → `001-todos-for-dues-overview.md`. PRD-001 ID unchanged. |

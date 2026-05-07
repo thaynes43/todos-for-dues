@@ -1,2 +1,2 @@
 # todos-for-dues
-TODO for Dues!
+TODOs for Dues!

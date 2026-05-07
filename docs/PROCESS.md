@@ -121,7 +121,7 @@ Every doc has a status in its frontmatter:
 
 ## Next steps
 
-1. ~~Product overview PRD (`prds/001-todo-for-dues-overview.md`)~~ — drafted
+1. ~~Product overview PRD (`prds/001-todos-for-dues-overview.md`)~~ — drafted
 2. ~~Tech stack ADRs (001 web framework, 002 auth, 003 API contract, 004 DB + ORM, 005 email, 006 hosting)~~ — all Proposed
 3. Write the MVP-scope PRD (`prds/002-mvp.md`) — turns capability-level requirements into testable feature requirements
 4. Domain model + walking-skeleton flow spec
