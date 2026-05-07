@@ -25,7 +25,7 @@ Constraints captured during ADR-006 discovery:
 - **Phase 1.2 — go-live on self-hosted, externally exposed:** the same cluster, but the launch-chapter instance is published externally via Traefik's external entry point and the existing `cloudflare-tunnel`. Domain: `*.haynesnetwork.com` (internet-routable), TLS cert `certificate-haynesnetwork`. Internal domain may be retained alongside or replaced.
 - **Phase 2 (if needed) — GKE migration:** migrate prod to GKE for scale, retaining the self-hosted cluster for dev/test. The cloud-deployment ADR is deferred until that phase begins; it will likely live in a dedicated cluster repo (Argo or Flux — undecided).
 - **Cluster-portability** matters: nothing this ADR commits to should make GKE migration painful.
-- **GitHub repo:** <https://github.com/thaynes43/todo-for-dues>. Currently working off `main`; PR-based workflow will start once we transition off main.
+- **GitHub repo:** <https://github.com/thaynes43/todos-for-dues>. Currently working off `main`; PR-based workflow will start once we transition off main.
 - **Local dev parity:** Docker on the user's M5 MacBook is fine; no resource constraint.
 - **Test DB approach** is decided here so it composes with the deploy pipeline.
 
@@ -70,15 +70,15 @@ For the test database:
 ### Deployment (Option A)
 
 - **Cluster:** the existing `main` cluster in `haynes-ops`. Dev, test, and launch-chapter prod all land here for now. GKE migration is a future ADR triggered when scale or compliance demands it.
-- **GitOps repo:** the existing `haynes-ops`. App manifests live at `kubernetes/main/apps/frontend/todo-for-dues/` (mirroring the existing convention used by `homepage`, `headlamp`, etc.). Per-instance deploys for multiple chapters can live as siblings: `todo-for-dues-<chapter>` under the same category, each with its own ExternalSecret reference and IngressRoute.
-- **Container registry:** GHCR (`ghcr.io/thaynes43/todo-for-dues`). Free for the repo; same auth surface as GitHub.
+- **GitOps repo:** the existing `haynes-ops`. App manifests live at `kubernetes/main/apps/frontend/todos-for-dues/` (mirroring the existing convention used by `homepage`, `headlamp`, etc.). Per-instance deploys for multiple chapters can live as siblings: `todos-for-dues-<chapter>` under the same category, each with its own ExternalSecret reference and IngressRoute.
+- **Container registry:** GHCR (`ghcr.io/thaynes43/todos-for-dues`). Free for the repo; same auth surface as GitHub.
 - **CI:** GitHub Actions on the SaaS repo. On push to `main` (Phase 1) and on tagged release (later): build the Next.js standalone image, tag with the commit SHA and a moving tag (e.g., `:main`), push to GHCR. PR-triggered builds added when we move off main.
 - **Image rollout:** image tag in `haynes-ops` is updated by a small workflow that opens a PR against `haynes-ops` with the new SHA tag (or, if Flux Image Update Automation is wired up in the cluster, by an `ImagePolicy` that auto-bumps). Either way, *the container image is published from the SaaS repo; the manifests are versioned in haynes-ops.* This separation matches the existing pattern.
 - **Ingress (Phase 1.1 — internal):** Traefik IngressRoute on the `traefik-internal` class, `entryPoints: [websecure]`, TLS via `certificate-haynesops`. Subdomain on `*.haynesops.com` (LAN-only), e.g., `dues.haynesops.com` or `<chapter>.dues.haynesops.com` — final form in the design doc.
 - **Ingress (Phase 1.2 — go-live external):** Traefik IngressRoute on the `traefik-external` class, TLS via `certificate-haynesnetwork`, subdomain on `*.haynesnetwork.com` (internet-routable). Public access flows through the existing `cloudflare-tunnel` already running in `network/cloudflare-tunnel`. The internal IngressRoute may be retained side-by-side (useful for admin/debug) or replaced — design-doc decision.
 - **DNS:** managed by `external-dns` via annotations on the IngressRoute. Internal route uses `external-dns.alpha.kubernetes.io/target: internal.haynesops`; external route uses the cloudflare-tunnel target per existing convention.
 - **Secrets:** ExternalSecret resources pull from 1Password Connect (already running in `external-secrets` namespace). One ExternalSecret per deployment containing app-runtime secrets (DATABASE_URL components, Resend API key, Better Auth secret, BOOTSTRAP_ADMIN_EMAIL). 1Password vault is the user's personal account for now; if we move to GKE, we either keep 1Password Connect (works anywhere) or migrate to GCP Secret Manager — that decision is part of the future GKE ADR.
-- **Database:** the existing `cluster16` CNPG cluster, with a dedicated database created for `todo-for-dues` (and per-chapter databases as we add instances). This keeps ops surface small in Phase 1; if isolation pressure grows (one chapter's load affects another), promote to a dedicated CNPG cluster per chapter.
+- **Database:** the existing `cluster16` CNPG cluster, with a dedicated database created for `todos-for-dues` (and per-chapter databases as we add instances). This keeps ops surface small in Phase 1; if isolation pressure grows (one chapter's load affects another), promote to a dedicated CNPG cluster per chapter.
 - **Migrations:** `drizzle-kit migrate` runs as a Kubernetes Job (or initContainer) before the app rolls; the Job's image is the same as the app, with a different command. Applied once per release.
 
 ### Local dev (Option A.1)
@@ -111,7 +111,7 @@ For the test database:
 - **C-01 (good)** — Reuses every existing platform component in haynes-ops; zero new infrastructure.
 - **C-02 (good)** — Standard image + standard manifests; GKE migration is a manifest port (Traefik IngressRoute → GKE Ingress / Istio), not a stack rewrite.
 - **C-03 (good)** — Local dev, integration tests, and prod all run the same Postgres major version with the same migration pipeline.
-- **C-04 (good)** — Per-instance deploys layout (`frontend/todo-for-dues-<chapter>/`) is straightforward inside haynes-ops conventions.
+- **C-04 (good)** — Per-instance deploys layout (`frontend/todos-for-dues-<chapter>/`) is straightforward inside haynes-ops conventions.
 - **C-05 (good)** — Secrets stay out of git; ESO + 1Password is already proven in this cluster.
 - **C-06 (bad)** — The self-hosted cluster is a single-host SPOF for the launch chapter. Acceptable for MVP; documented as a known risk; mitigated by GKE migration ADR when warranted.
 - **C-07 (bad)** — 1Password Connect uses the user's personal vault. Sufficient for one-operator MVP; revisit if the operator surface grows or if we move to cloud (where a managed secret manager may be preferable).
@@ -121,12 +121,12 @@ For the test database:
 
 ### Confirmation
 
-- The walking-skeleton design doc (`docs/design/deploy.md`, pending) lists every manifest in the `todo-for-dues` haynes-ops directory: `helmrelease.yaml` (or raw `deployment.yaml` + `service.yaml`), `ingressroute.yaml`, `externalsecret.yaml`, `kustomization.yaml`, plus the parent `ks.yaml`.
+- The walking-skeleton design doc (`docs/design/deploy.md`, pending) lists every manifest in the `todos-for-dues` haynes-ops directory: `helmrelease.yaml` (or raw `deployment.yaml` + `service.yaml`), `ingressroute.yaml`, `externalsecret.yaml`, `kustomization.yaml`, plus the parent `ks.yaml`.
 - A GH Actions workflow file in the SaaS repo builds the Docker image on push to `main` and pushes to GHCR with the commit SHA and a moving tag.
 - A second workflow (or the same one with a follow-up step) updates the image tag referenced in haynes-ops — by direct PR or via Flux Image Update Automation, decided in the design doc.
 - A `docker-compose.yaml` at the repo root brings up PG16 locally; `pnpm db:up` works on a fresh checkout with no further setup.
 - An integration test using Testcontainers spins up PG, applies all migrations, runs one full tRPC mutation, and tears down. The same test runs in CI.
-- The `cluster16` CNPG cluster has a dedicated database for `todo-for-dues`; the connection string is sourced from 1Password via the ExternalSecret.
+- The `cluster16` CNPG cluster has a dedicated database for `todos-for-dues`; the connection string is sourced from 1Password via the ExternalSecret.
 
 ## Pros and cons of the options
 
@@ -178,7 +178,7 @@ Same cluster, separate manifests repo.
 Mirroring the existing `frontend/homepage` pattern in haynes-ops:
 
 ```
-kubernetes/main/apps/frontend/todo-for-dues/
+kubernetes/main/apps/frontend/todos-for-dues/
   ks.yaml
   app/
     helmrelease.yaml          # generic app chart wrapping the Next.js image
@@ -189,7 +189,7 @@ kubernetes/main/apps/frontend/todo-for-dues/
     kustomization.yaml
 ```
 
-For multi-chapter, each chapter gets its own directory at the same level (`todo-for-dues-<chapter>/`) with its own ExternalSecret, IngressRoute (chapter-specific subdomain), and database name.
+For multi-chapter, each chapter gets its own directory at the same level (`todos-for-dues-<chapter>/`) with its own ExternalSecret, IngressRoute (chapter-specific subdomain), and database name.
 
 ### CI workflow shape (informative)
 
@@ -223,3 +223,4 @@ For multi-chapter, each chapter gets its own directory at the same level (`todo-
 |------|--------|--------|
 | 2026-05-07 | Tom Haynes | Initial draft. |
 | 2026-05-07 | Tom Haynes | Corrected ingress phasing: Phase 1.1 internal on `traefik-internal` with `*.haynesops.com` and `certificate-haynesops`; Phase 1.2 go-live on `traefik-external` with `*.haynesnetwork.com` and `certificate-haynesnetwork` via the existing `cloudflare-tunnel`. |
+| 2026-05-07 | Tom Haynes | Repo renamed `todo-for-dues` → `todos-for-dues`; updated repo URL, image path, manifest directory, and database-name references throughout. |
