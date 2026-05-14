@@ -7,7 +7,7 @@ reviewers: []
 created: 2026-05-06
 last_updated: 2026-05-06
 related:
-  adrs: [ADR-001, ADR-002, ADR-003, ADR-004, ADR-005, ADR-006]   # web framework, auth, API contract, DB, email, hosting — all Proposed
+  adrs: [ADR-001, ADR-002, ADR-003, ADR-004, ADR-005, ADR-006, ADR-007]   # web framework, auth, API contract, DB, email, hosting — all Proposed; ADR-007 Google Workspace OIDC
   flows: []             # docs/flows/walking-skeleton.md pending
   designs: []
   supersedes: null
@@ -63,7 +63,7 @@ Targets are directional for this overview PRD; the MVP-scope PRD will commit to 
 | US-07 | As an **Alumni**, I want to mark the job complete and indicate the dues payment has been sent, so that the Active knows to expect it. | P0 |
 | US-08 | As an **Active**, I want to confirm that the dues payment has been received, so that the loop is closed and recorded. | P0 |
 | US-09 | As an **Admin**, I want to change any user's role across {Active, Alumni, Moderator, Admin}, so that the org can self-govern and accommodate role transitions (graduations, escalations, departures). | P0 |
-| US-10 | As any user, I want to authenticate via my organization's SSO when present, so that I don't manage another password. | P1 |
+| US-10 | As any user, I want to authenticate via my organization's SSO when present, so that I don't manage another password. | P0 |
 
 ## 5. Requirements
 
@@ -80,7 +80,7 @@ This is the overview PRD: requirements are stated at capability level. Subsequen
 | R-07 | The system shall track per-job state across {posted, awaiting moderation, approved, claimed, completed, payment-sent, payment-received, closed} including rejection and cancellation paths. | P0 | US-03 – US-08 | Single state machine, source of truth for the loop. |
 | R-08 | The system shall record the dues payment as sent (by Alumni) and received (by Active) without itself processing the payment. | P0 | US-07, US-08 | Payment medium is external (Venmo for MVP). |
 | R-09 | The system shall allow Admins to change any user's role across {Active, Alumni, Moderator, Admin}. | P0 | US-09 | Role-change history is auditable. Self-service transitions are out of scope (Admin-only). See Q-08 for Admin self-protection edge cases. |
-| R-10 | The system shall support OIDC SSO as an alternative to app-managed accounts. | P1 | US-10 | App-managed accounts ship first. |
+| R-10 | The system shall support OIDC SSO via Google Workspace as a required login path for instances with a configured hosted-domain IdP. | P0 | US-10 | Workspace membership is sufficient authorization; no invite token required for SSO users. App-managed accounts ship first (walking skeleton); OIDC SSO required by MVP. Full model in PRD-003. |
 | R-11 | The system shall be deployable as a single-tenant instance per fraternal organization. | P0 | — | One instance == one organization (chapter or national — see Q-01). |
 
 ### 5.1 Acceptance criteria
@@ -132,8 +132,8 @@ This overview PRD does not enumerate ACs — they belong in scoped PRDs (MVP, in
 
 - **Phasing:**
   1. Walking skeleton — single chapter, app-managed accounts, manual moderation, full job loop end-to-end.
-  2. MVP — same scope plus polish, role-escalation UX, and in-app notifications.
-  3. Post-MVP — OIDC SSO, multi-instance deployment automation, Docker packaging.
+  2. MVP — same scope plus polish, role-escalation UX, in-app notifications, and Google Workspace OIDC SSO for the launch chapter.
+  3. Post-MVP — multi-instance deployment automation, SCIM sync for automated Workspace offboarding, Docker packaging.
 - **Rollout:** First instance deployed for the launch chapter privately; expand chapter-by-chapter on request.
 - **Reversibility:** No external integrations to unwind in MVP (no payment-processor lock-in). Per-instance deploys can be torn down independently.
 
@@ -166,3 +166,4 @@ These terms are introduced by this PRD and need to land in `docs/domain/glossary
 | 2026-05-06 | Tom Haynes | Linked ADR-005 (email, Proposed). |
 | 2026-05-07 | Tom Haynes | Linked ADR-006 (hosting, Proposed). All six tech-stack ADRs now Proposed. |
 | 2026-05-07 | Tom Haynes | Pluralized product name "TODO for Dues" → "TODOs for Dues" throughout. PRD filename slug renamed `001-todo-for-dues-overview.md` → `001-todos-for-dues-overview.md`. PRD-001 ID unchanged. |
+| 2026-05-14 | Tom Haynes | Promoted R-10 / US-10 from P1 → P0. OIDC SSO via Google Workspace is a hard MVP requirement (not post-MVP) for the launch chapter. Phasing §10 updated accordingly. ADR-007 and PRD-003 added to related. |

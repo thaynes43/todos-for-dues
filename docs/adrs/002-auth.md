@@ -7,8 +7,8 @@ deciders: [Tom Haynes]
 consulted: []
 informed: []
 related:
-  prds: [PRD-001]
-  adrs: [ADR-001]               # web framework
+  prds: [PRD-001, PRD-003]
+  adrs: [ADR-001, ADR-007]      # web framework; Google Workspace OIDC federation model
   flows: []                     # docs/flows/walking-skeleton.md pending — will trace signup
   designs: []                   # docs/design/auth.md pending — invite-token table, MFA enforcement
   supersedes: null
@@ -20,10 +20,10 @@ related:
 Auth is the highest-stakes decision in TODOs for Dues because the product is invite-only by design — non-members of a fraternal organization must not be able to gain access. Per PRD-001 R-01 and R-02, signup is gated by an Admin-issued invite token, the user picks Active or Alumni at signup, and Moderator/Admin are escalated only.
 
 Product discovery (during ADR-002 drafting) confirmed:
-- Email + password is the primary login method.
-- Optional MFA (TOTP) and passkey (WebAuthn) enrollment post-signup, available to all users.
-- MFA **required** for Moderator and Admin (conditional enforcement based on role).
-- OIDC SSO is post-MVP — must be addable without a rewrite.
+- Email + password is the primary login method for app-managed accounts.
+- Optional MFA (TOTP) and passkey (WebAuthn) enrollment post-signup, available to all app-managed users.
+- MFA **required** for Moderator and Admin on app-managed accounts (conditional enforcement based on role). MFA for SSO-authenticated privileged users is delegated to the Workspace admin (ADR-007 C-07).
+- **OIDC SSO via Google Workspace is required for MVP** at the launch chapter. Better Auth's OIDC client plugin is the implementation path. HD restriction is enforced at the application callback. Per-instance config via env vars. Full model: ADR-007 and PRD-003.
 - Bootstrap admin on a fresh instance via an env-var-seeded flow.
 - A single active invite token per instance, with whichever-comes-first expiry (time or use-cap), Admin-rotatable. Redeemable via clickable link **or** typed code (Discord-style).
 
@@ -53,7 +53,7 @@ This ADR picks the auth library/strategy and the high-level shape of the invite-
 
 **Chosen option:** **Option A — Better Auth**, with the invite-token gate implemented as a small custom layer (table + pre-signup endpoint) on top.
 
-Better Auth covers every primitive on our roadmap as first-party functionality: email + password, email verification, password reset, TOTP MFA, passkeys, and an OIDC client plugin for post-MVP SSO. Its TypeScript-first API matches ADR-001 and gives agents typed call sites, which materially improves their precision when modifying auth code. Self-hosting keeps member-roster data in our database and avoids per-MAU pricing that would scale poorly across many small chapters. The session model supports both cookies (web) and bearer tokens (mobile), preserving the mobile-future option without committing us to a contract here. The invite-token gate is custom application code on top of any library we'd pick — Better Auth's plugin/middleware shape makes the wrapper straightforward.
+Better Auth covers every primitive on our roadmap as first-party functionality: email + password, email verification, password reset, TOTP MFA, passkeys, and an OIDC client plugin for in-MVP Google Workspace SSO (ADR-007). Its TypeScript-first API matches ADR-001 and gives agents typed call sites, which materially improves their precision when modifying auth code. Self-hosting keeps member-roster data in our database and avoids per-MAU pricing that would scale poorly across many small chapters. The session model supports both cookies (web) and bearer tokens (mobile), preserving the mobile-future option without committing us to a contract here. The invite-token gate is custom application code on top of any library we'd pick — Better Auth's plugin/middleware shape makes the wrapper straightforward.
 
 Auth.js is the credible alternative — more mature, larger community — but its TypeScript types are weaker, MFA and passkey support are community-driven rather than first-party, and the session/adapter model is opinionated in ways that make custom pre-signup gating awkward. Clerk is rejected on cost, lock-in, and data-residency. Keycloak and Ory are credible but introduce a separate service to operate before we need its capabilities; both remain viable migration targets if SSO/SCIM ever needs to live in a dedicated IdP.
 
@@ -61,7 +61,7 @@ Auth.js is the credible alternative — more mature, larger community — but it
 
 - **C-01 (good)** — TypeScript-native API and types compose with ADR-001's stack; auth code reads as normal app code to agents.
 - **C-02 (good)** — Self-hosted; no per-MAU fees as the product expands chapter-by-chapter; member rosters remain in our DB.
-- **C-03 (good)** — First-party plugins for TOTP MFA, passkeys (WebAuthn), and OIDC client cover the full feature roadmap without third-party glue.
+- **C-03 (good)** — First-party plugins for TOTP MFA, passkeys (WebAuthn), and OIDC client cover the full feature roadmap without third-party glue. OIDC client is confirmed in MVP scope (ADR-007).
 - **C-04 (good)** — Sessions support both cookies and bearer tokens, keeping the mobile path open for ADR-003.
 - **C-05 (good)** — Drizzle and Prisma adapters fit whichever ORM ADR-004 picks.
 - **C-06 (bad)** — Younger and less battle-tested than Auth.js; smaller community, fewer worked examples online. Mitigation: pin a known-good version, write our own integration tests, and maintain an Auth.js-shaped escape hatch in our session middleware boundary so a future migration is a matter of re-implementing one module rather than threading a new auth library through the whole app.
@@ -78,6 +78,9 @@ Auth.js is the credible alternative — more mature, larger community — but it
 - Integration test: a Moderator or Admin cannot complete login (or perform any privileged action) without an enrolled MFA factor.
 - Integration test: a non-Admin cannot promote any user (R-09 enforcement).
 - Integration test: a passkey-enrolled user can log in without their password using only the passkey.
+- Integration test: first OIDC SSO login from a valid `@{OIDC_HOSTED_DOMAIN}` email with no existing app account → Alumni account created, session established, no invite token consulted.
+- Integration test: OIDC callback presenting a non-hosted-domain email → rejected server-side, no account created, no session established.
+- Integration test: OIDC callback with a valid HD email where the account is marked deactivated by an Admin → OAuth succeeds at Google but app rejects the session.
 
 ## Pros and cons of the options
 
@@ -182,7 +185,7 @@ Compose primitives directly; own every line.
 - **ADR-003** (API contract for mobile) — must accommodate Better Auth's session model (cookies for web; bearer tokens for native clients).
 - **ADR-004** (DB + ORM) — informs the adapter choice (Drizzle vs. Prisma); both are first-party in Better Auth.
 - **ADR-005** (Email provider) — verification + password reset + bootstrap-admin link delivery all depend on it.
-- **Future ADR** — when adding OIDC SSO, decide whether to add Better Auth's `genericOAuth` / OIDC-client plugin (per-instance config) or front Better Auth with Keycloak as a centralized IdP.
+- **ADR-007** (Google Workspace OIDC, Proposed) — captures the federation model: Better Auth OIDC client plugin, HD restriction at callback, per-instance env-var config, and MFA delegation to Workspace admin.
 - **Future ADR** — if member-roster sensitivity grows (e.g., national-org compliance requirements), evaluate moving to Keycloak/Ory for SCIM and audit-grade IdP features.
 
 ## Changelog
@@ -190,3 +193,4 @@ Compose primitives directly; own every line.
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-06 | Tom Haynes | Initial draft. |
+| 2026-05-14 | Tom Haynes | OIDC SSO promoted from post-MVP to MVP scope per confirmed product requirement. Updated context, decision outcome, C-03, and confirmation tests to reflect Google Workspace OIDC as in-scope. Linked ADR-007 (federation model) and PRD-003 (Identity & Access). |
