@@ -212,16 +212,16 @@ import { z } from 'zod';
 import { router } from '../trpc';
 import { alumniProcedure, moderatorProcedure, activeProcedure, adminProcedure, privilegedProcedure, authedProcedure } from '../middleware/role';
 import { jobPosterProcedure, enrolledProcedure } from '../middleware/job';
-import { createJob, approveJob, transitionJob } from '@app/domain/job-state-machine';
+import { createJob, approveJob, transitionJob, recordRelationshipEvent } from '@app/domain/job-state-machine';
 import { jobs, jobEnrollments, jobStateTransitions, type JobState } from '@app/db/schema';
-import { sendTreasurerEmail, sendAdminDisputeEmail } from '@app/notifications';   // DESIGN-005
+import { sendTreasurerEmail, sendAdminDisputeEmail, sendModeratorQueueEmail } from '@app/notifications';   // DESIGN-005
 import { getSetting } from '@app/settings';                                         // ADR-010 helper
 import { and, eq, sql, asc, desc } from 'drizzle-orm';
 
 export const jobsRouter = router({
   // ─── Mutations ─────────────────────────────────────────────────────
 
-  // CMD-01 PostJob — PRD-002 R-01..R-05
+  // CMD-01 PostJob — PRD-002 R-01..R-05 + R-12 (moderator-queue notification)
   post: alumniProcedure
     .input(z.object({
       description: z.string().trim().min(1),                    // PRD-002 R-03
@@ -234,6 +234,8 @@ export const jobsRouter = router({
         description: input.description,
         duesAmount: input.duesAmount,
         recommendedPeopleCount: input.recommendedPeopleCount,
+        // PRD-002 R-12 — fire moderator notification once the row commits.
+        afterCommit: async (jobId) => { await sendModeratorQueueEmail({ jobId }); },
       });
       return { jobId };
     }),
@@ -262,43 +264,61 @@ export const jobsRouter = router({
     }),
 
   // CMD-04 EnrollInJob — PRD-004 R-02
+  // Persistence + audit-log row land via `recordRelationshipEvent()` (DESIGN-002 §4.1.5)
+  // so DESIGN-002 stays the sole writer of job_state_transitions rows.
   enroll: activeProcedure
     .input(z.object({ jobId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      // Idempotent: ON CONFLICT DO NOTHING per ADC-01 INV-14.
-      const inserted = await ctx.db
-        .insert(jobEnrollments)
-        .values({ jobId: input.jobId, activeId: ctx.userId })
-        .onConflictDoNothing()
-        .returning({ jobId: jobEnrollments.jobId });
-      if (inserted.length > 0) {
-        // Audit-log row only when actually inserted (not on idempotent no-op).
-        await ctx.db.insert(jobStateTransitions).values({
-          jobId: input.jobId, fromState: 'enrollment_open', toState: 'enrollment_open',  // no FSM transition; relationship-only
-          actorId: ctx.userId, actorKind: 'user', note: 'enroll',
-        });
-      }
-      // Side-condition: job must be in enrollment_open. Validated by checking row count + state in a single query in production code; sketched here as separate.
+      // Guard: job must be in enrollment_open.
+      const [job] = await ctx.db.select({ state: jobs.state }).from(jobs).where(eq(jobs.id, input.jobId));
+      if (!job) throw new TRPCError({ code: 'NOT_FOUND' });
+      if (job.state !== 'enrollment_open') throw new TRPCError({ code: 'BAD_REQUEST', message: 'Job is not accepting enrollments.' });
+
+      // Pre-check idempotency: skip the audit-log write when the row already exists.
+      const existing = await ctx.db
+        .select({ jobId: jobEnrollments.jobId })
+        .from(jobEnrollments)
+        .where(and(eq(jobEnrollments.jobId, input.jobId), eq(jobEnrollments.activeId, ctx.userId)));
+      if (existing.length > 0) return;   // ADC-01 INV-14 — no-op on re-enroll.
+
+      await recordRelationshipEvent({
+        jobId: input.jobId,
+        currentState: 'enrollment_open',
+        event: 'enroll',
+        actor: { id: ctx.userId, kind: 'user' },
+        beforeAuditWrite: async (tx) => {
+          await tx.insert(jobEnrollments)
+            .values({ jobId: input.jobId, activeId: ctx.userId })
+            .onConflictDoNothing();
+        },
+      });
     }),
 
   // CMD-05 UnenrollFromJob — PRD-004 R-03 / R-04
   unenroll: activeProcedure
     .input(z.object({ jobId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      // Reject if job not in enrollment_open
       const [job] = await ctx.db.select({ state: jobs.state }).from(jobs).where(eq(jobs.id, input.jobId));
       if (!job) throw new TRPCError({ code: 'NOT_FOUND' });
       if (job.state !== 'enrollment_open') throw new TRPCError({ code: 'BAD_REQUEST', message: 'Cannot unenroll once the job is locked.' });
-      const removed = await ctx.db
-        .delete(jobEnrollments)
-        .where(and(eq(jobEnrollments.jobId, input.jobId), eq(jobEnrollments.activeId, ctx.userId)))
-        .returning({ jobId: jobEnrollments.jobId });
-      if (removed.length > 0) {
-        await ctx.db.insert(jobStateTransitions).values({
-          jobId: input.jobId, fromState: 'enrollment_open', toState: 'enrollment_open',
-          actorId: ctx.userId, actorKind: 'user', note: 'unenroll',
-        });
-      }
+
+      // Pre-check: only write the audit-log row when an enrollment actually existed.
+      const existing = await ctx.db
+        .select({ jobId: jobEnrollments.jobId })
+        .from(jobEnrollments)
+        .where(and(eq(jobEnrollments.jobId, input.jobId), eq(jobEnrollments.activeId, ctx.userId)));
+      if (existing.length === 0) return;
+
+      await recordRelationshipEvent({
+        jobId: input.jobId,
+        currentState: 'enrollment_open',
+        event: 'unenroll',
+        actor: { id: ctx.userId, kind: 'user' },
+        beforeAuditWrite: async (tx) => {
+          await tx.delete(jobEnrollments)
+            .where(and(eq(jobEnrollments.jobId, input.jobId), eq(jobEnrollments.activeId, ctx.userId)));
+        },
+      });
     }),
 
   // CMD-06 LockJob — PRD-004 R-07/R-08/R-09
@@ -822,3 +842,4 @@ Coverage target: every PRD AC across all 6 capability PRDs maps to at least one 
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. Covers all MVP procedures across 5 routers (jobs, users, settings, admin, invites). Maps each procedure to a PRD CMD-NN / Q-NN. Auth + role + ownership middleware composable per the alumni/moderator/admin/jobPoster pattern. confirmReceipt special-cases concurrent-receipt race per PRD-006 R-04. Treasurer + admin emails fired via `afterCommit` hook (DESIGN-005 helpers). 4 design follow-up questions. |
+| 2026-05-14 | Tom Haynes | §4.4 `enroll` / `unenroll` no longer `INSERT INTO jobStateTransitions` directly — both call `recordRelationshipEvent()` (DESIGN-002 §4.1.5) so the helper module stays the sole writer of audit-log rows. Persistence + audit-log row are atomic via the helper's `beforeAuditWrite` callback. `jobs.post` now passes `afterCommit: sendModeratorQueueEmail` to `createJob()` per PRD-002 R-12. Imports updated. |

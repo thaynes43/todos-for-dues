@@ -19,7 +19,7 @@ related:
 
 ## 1. Purpose
 
-Realises ADR-008's hand-rolled TypeScript FSM. Defines the `transitionJob()` helper that mutates `jobs.state` and writes the corresponding `job_state_transitions` row in one Drizzle transaction, plus the parallel `transitionRole()` helper for the user-role transitions covered by PRD-008. **All callers across PRDs 002, 004, 005, 006, 008 funnel through these two helpers** — there are no direct `state` / `role` column writes elsewhere in the codebase.
+Realises ADR-008's hand-rolled TypeScript FSM. Defines the `transitionJob()` helper that mutates `jobs.state` and writes the corresponding `job_state_transitions` row in one Drizzle transaction, plus the parallel `transitionRole()` helper for the user-role transitions covered by PRD-008. **All callers across PRDs 002, 004, 005, 006, 008 funnel through these helpers** — there are no direct `state` / `role` column writes elsewhere in the codebase, and (per §4.1.5) no direct `INSERT INTO job_state_transitions` either: `recordRelationshipEvent()` is the single helper for non-FSM events (enroll / unenroll) that still need an audit-log row.
 
 > **Realises:** ADR-008 (atomic transition + audit-log); ADR-009 (audit-log row shape); ADR-011 (role transitions + min-Admin invariant integration); ADC-01 §3 (state transitions ST-01..ST-17); PRD-001 R-15 (audit log).
 > **Definition of success:** an implementation agent can wire any tRPC procedure that needs a state transition by calling `transitionJob({ ... })` with strongly-typed inputs; illegal transitions fail at compile time, runtime checks catch concurrent races and database-level invariants, and every successful transition leaves a corresponding audit-log row.
@@ -212,11 +212,19 @@ Two transitions write **two audit-log rows in one transaction:**
 
 1. **`PostJob` (CMD-01):** the inception event. Job row created with `state = 'awaiting_moderation'`; audit-log row has `from_state: NULL, to_state: 'awaiting_moderation', actor_kind: 'user'`. There is no separate `posted` persisted state.
 
-   Implemented via a dedicated `createJob()` function (not `transitionJob()`), since there's no prior state to verify:
+   Implemented via a dedicated `createJob()` function (not `transitionJob()`), since there's no prior state to verify. Accepts an optional `afterCommit` mirroring `transitionJob()`'s shape — used by PRD-002 R-12 to fire the moderator-queue email from `sendModeratorQueueEmail()` (DESIGN-005 §4.4) once the row is committed. Same fire-and-forget swallow-on-failure semantics.
 
    ```ts
-   export async function createJob(input: { posterId: string; description: string; duesAmount: number; recommendedPeopleCount: number }): Promise<{ jobId: string }> {
-     return db.transaction(async (tx) => {
+   export interface CreateJobInput {
+     posterId: string;
+     description: string;
+     duesAmount: number;
+     recommendedPeopleCount: number;
+     afterCommit?: (jobId: string) => Promise<void>;   // e.g., fire moderator-queue email
+   }
+
+   export async function createJob(input: CreateJobInput): Promise<{ jobId: string }> {
+     const { jobId } = await db.transaction(async (tx) => {
        const [job] = await tx.insert(jobs).values({
          postedBy: input.posterId,
          description: input.description,
@@ -235,6 +243,16 @@ Two transitions write **two audit-log rows in one transaction:**
 
        return { jobId: job.id };
      });
+
+     if (input.afterCommit) {
+       try {
+         await input.afterCommit(jobId);
+       } catch (err) {
+         console.error(`createJob.afterCommit failed for job ${jobId}:`, err);
+       }
+     }
+
+     return { jobId };
    }
    ```
 
@@ -284,6 +302,48 @@ Two transitions write **two audit-log rows in one transaction:**
 | `reject` | persist `rejection_reason` | — | (optional) fire Alumni rejection email |
 
 All hooks operate on the same `tx` Drizzle transaction handle so they are atomic with the state mutation.
+
+#### 4.1.5 The `recordRelationshipEvent()` helper — enrollment / un-enrollment
+
+Some BCC-02 events (`EnrollInJob`, `UnenrollFromJob` — CMD-04 + CMD-05) modify a child relationship (`job_enrollments` rows) without transitioning the parent Job's `state` column — but they're still observable lifecycle events that ADR-009 / PRD-001 R-15 expect to land in `job_state_transitions` so the Admin audit-log timeline (PRD-007 R-06) tells the full story. `transitionJob()` is the wrong tool because there's no FSM event to look up in `JOB_TRANSITIONS`.
+
+To keep DESIGN-002 the **single** writer of `job_state_transitions` rows, expose a sibling helper that tRPC procedures call instead of inserting rows directly:
+
+```ts
+export interface RecordRelationshipEventInput {
+  jobId: string;
+  // The job's current state at the moment of the event — both fromState and toState
+  // are set to this value so the audit-log row is self-describing as a non-FSM event.
+  currentState: JobState;
+  // 'enroll' | 'unenroll' | future relationship events (per Q-DSG-NN if added)
+  event: 'enroll' | 'unenroll';
+  actor: { id: string; kind: 'user' };
+  // Optional: persist relationship-table mutations atomically with the audit row
+  beforeAuditWrite?: (tx: typeof db) => Promise<void>;
+}
+
+export async function recordRelationshipEvent(input: RecordRelationshipEventInput): Promise<void> {
+  await db.transaction(async (tx) => {
+    if (input.beforeAuditWrite) await input.beforeAuditWrite(tx);
+
+    await tx.insert(jobStateTransitions).values({
+      jobId: input.jobId,
+      fromState: input.currentState,
+      toState: input.currentState,    // no FSM transition — same state in/out
+      actorId: input.actor.id,
+      actorKind: input.actor.kind,
+      note: input.event,               // 'enroll' or 'unenroll'
+    });
+  });
+}
+```
+
+**Why a separate helper rather than overloading `transitionJob()`:**
+1. `transitionJob()` is keyed off `JOB_TRANSITIONS` map; enroll/unenroll have no entry there. Adding `enroll`/`unenroll` to the map would muddy the FSM (they're not state changes).
+2. Keeps every `job_state_transitions` write in `packages/domain/*` — DESIGN-003 procedures never `INSERT INTO job_state_transitions` directly.
+3. Lets DESIGN-001's `job_state_transitions` table double as both the FSM audit log AND the relationship-event log without two tables — the `note` field disambiguates ("enroll" / "unenroll" vs. an FSM transition's reason/resolution-note).
+
+DESIGN-003 §4.4 `enroll` / `unenroll` procedures call `recordRelationshipEvent({ ..., beforeAuditWrite: (tx) => tx.insert/delete(jobEnrollments)... })` so the `job_enrollments` row write and the audit-log row write happen in one transaction.
 
 ### 4.2 `packages/domain/user-role-transitions.ts`
 
@@ -376,8 +436,9 @@ The helpers are **module-internal** APIs used by tRPC procedures. They are not H
 
 | Helper | Cited by tRPC procedure (DESIGN-003) | PRD CMD-NN |
 |--------|--------------------------------------|------------|
-| `createJob({ posterId, description, duesAmount, recommendedPeopleCount })` | `jobs.post` | PRD-002 CMD-01 |
+| `createJob({ posterId, description, duesAmount, recommendedPeopleCount, afterCommit: sendModeratorQueueEmail })` | `jobs.post` | PRD-002 CMD-01 + R-12 (afterCommit fires PRD-002 R-12 moderator notification) |
 | `approveJob({ jobId, moderatorId })` | `jobs.approve` | PRD-002 CMD-02 |
+| `recordRelationshipEvent({ event: 'enroll' \| 'unenroll', ..., beforeAuditWrite: writeJobEnrollmentRow })` | `jobs.enroll` / `jobs.unenroll` | PRD-004 CMD-04 / CMD-05 |
 | `transitionJob({ event: 'reject', ... })` | `jobs.reject` | PRD-002 CMD-03 |
 | `transitionJob({ event: 'lock', ... beforeStateWrite: setWorkDate })` | `jobs.lock` | PRD-004 CMD-06 |
 | `transitionJob({ event: 'reschedule', ... beforeStateWrite: clearWorkDate })` | `jobs.reschedule` | PRD-004 CMD-07 |
@@ -435,3 +496,4 @@ Coverage target: every PRD AC mapping a state transition has a corresponding int
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. Realises ADR-008 + ADR-009. `JOB_TRANSITIONS` map covers ADC-01 ST-01..ST-17 (with `posted` and `approved` as transient — see §4.1.3). `transitionJob()` is the central helper; `createJob()` and `approveJob()` are special-cased composite-transition handlers. Parallel `transitionRole()` for BCC-03 / PRD-008 with min-Admin trigger error mapping. 4 typed errors. Hooks (beforeStateWrite, afterStateWrite, afterCommit) pattern documented per-transition in §4.1.4. |
+| 2026-05-14 | Tom Haynes | §4.1.3 `createJob()` extended to accept an optional `afterCommit` callback (mirrors `transitionJob()`'s shape) so PRD-002 R-12 moderator notification can fire from `jobs.post`. §4.1.5 added: `recordRelationshipEvent()` helper — the single writer of `job_state_transitions` rows for non-FSM events (enroll / unenroll). Replaces the direct-insert pattern in DESIGN-003 §4.4 so DESIGN-002 remains the sole `job_state_transitions` writer. §1 invariant wording updated to reflect the new helper. §6 API contracts table updated. |

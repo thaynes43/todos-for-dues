@@ -10,7 +10,7 @@ size: M
 related:
   parent_prd: PRD-001
   parent_requirements: [R-03, R-04]
-  adrs: [ADR-001, ADR-003, ADR-004, ADR-005]   # web framework, API contract, DB+ORM, email (rejection notifications)
+  adrs: [ADR-001, ADR-003, ADR-004, ADR-005, ADR-010]   # web framework, API contract, DB+ORM, email (rejection + moderator-queue notifications), per-instance settings (R-12 moderators_recipient_email)
   flows: []                                     # docs/flows/walking-skeleton.md pending
   designs: []
   bounded_contexts: []                          # to be assigned during DDD modelling
@@ -257,3 +257,4 @@ No new terms anticipated for this PRD. The terms it uses (Alumni, Moderator, Job
 | 2026-05-14 | Tom Haynes | **Q-01 resolved: rejection is terminal; new posting required to retry.** Added §7.1 non-goal banning edit-and-resubmit and clone-and-edit. Confirms ADR-008's transitions map does NOT include a `rejected → posted` (or `→ awaiting moderation`) revival arrow. ACs in §5.1 will verify rejected postings have no edit / resubmit affordance. |
 | 2026-05-14 | Tom Haynes | **Q-03 resolved: Moderator self-approval permitted without restriction.** Audit log per ADR-009 captures actor on every transition; self-approval inspectable in PRD-007's Admin view. Considered-and-rejected: 4-eyes gating (bootstrap problem with 1-Mod chapters) and auto-approve (overshoots). Added a §6 UX rule for the self-approval UI and reflected in R-07. |
 | 2026-05-14 | Tom Haynes | **§5 drafted: 11 R-NN (EARS), 14 ACs (Given/When/Then), §5.2 examples for R-02/R-04 validation + R-05/R-08 audit-log row shape.** §4.2 user stories US-01..US-06 added. §6 UX rules expanded with 4 MVP-specific rules covering self-approval, rejected-view CTA, client-side validation, and queue ordering. §5 still subject to PRD-002-level review pass before promotion to Proposed. |
+| 2026-05-14 | Tom Haynes | Frontmatter fix: added ADR-010 to `related.adrs` to reflect R-12's dependency on `chapter_settings.moderators_recipient_email`. Body already cited ADR-010; the frontmatter was lagging. |

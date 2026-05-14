@@ -73,6 +73,7 @@ Personas are defined in PRD-001 §4.1. Reproduced in brief for this PRD's scope:
 | R-07 | Role escalation (Active → Moderator, any role → Admin) shall require an explicit Admin action regardless of account path. Neither SSO first-login nor invite redemption grants a privileged role. | P0 | US-04 | Consistent with PRD-001 R-02 and R-09. |
 | R-08 | Admins shall be able to deactivate or reassign the role of any account regardless of whether it was created via SSO or app-managed signup. | P0 | US-04 | Deactivation blocks login; it does not delete the account or its history. |
 | R-09 | When a user signs in via Google SSO and an app-managed account already exists with the same email address, the system shall automatically link the SSO credential to the existing account rather than creating a duplicate. | P0 | US-01 | Merge is by email, automatic, no Admin action required. Exact linking semantics (session history, which credential takes precedence) belong in the auth design doc. Better Auth's account-linking feature is the implementation path. |
+| R-10 | At account creation (app-managed signup form) or first SSO sign-in, the system shall require a display name (text, ≥ 1 non-whitespace char) and persist it on the User row. The display name is used by PRD-004 R-05 (job roster visibility), PRD-005 R-07 (treasurer email line items), PRD-007 R-06 (audit-log actor rendering), and PRD-008 R-08 / R-10 (role-change history). | P0 | US-01, US-02 | App-managed signup: required field on the signup form. SSO first-login: prefilled from the OIDC `name` / `given_name` claim where available, with a one-step confirm screen if absent or empty. Display name is editable post-signup (TBD which surface owns the editor; not blocking MVP). Stored as `users.display_name NOT NULL` per DESIGN-001 §4.2. |
 
 ### 5.1 Acceptance criteria
 
@@ -110,6 +111,16 @@ Personas are defined in PRD-001 §4.1. Reproduced in brief for this PRD's scope:
   - **Given** an Admin deactivates a SSO-created Alumni account
   - **When** that user attempts to sign in via Google SSO
   - **Then** the OAuth callback succeeds at Google, but the app rejects the session because the account is deactivated
+
+- **AC-08** — covers R-10 (app-managed signup)
+  - **Given** a user is on the signup form with a valid invite token
+  - **When** they submit without a display name (empty / whitespace-only)
+  - **Then** signup is rejected with a validation error citing the display-name field; no account is created.
+
+- **AC-09** — covers R-10 (SSO first-login with no name claim)
+  - **Given** a hosted-domain user completes Google OAuth and Google returns no `name` / `given_name` claim
+  - **When** the OIDC callback runs
+  - **Then** the user is shown a one-step "What should we call you?" form before the session is established; submitting a non-empty value persists `users.display_name` and creates the session.
 
 ## 6. User experience
 
@@ -170,3 +181,4 @@ New terms introduced by this PRD for `docs/domain/glossary.md`:
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. Reflects confirmed product decision: Workspace membership is sufficient authorization for SSO users; invite token required for app-managed only. OIDC SSO promoted to P0 / MVP scope. |
 | 2026-05-14 | Tom Haynes | Resolved Q-01 (account linking): same email = automatic link, no duplicate account, no Admin action. Added R-09. |
+| 2026-05-14 | Tom Haynes | Added R-10 (display-name capture) + AC-08 (app-managed signup validation) + AC-09 (SSO fallback prompt). Closes the gap where every downstream PRD (004 / 005 / 007 / 008) and DESIGN-001 §4.2 assumed `users.display_name NOT NULL` without any PRD-003 R-NN owning the capture flow. |

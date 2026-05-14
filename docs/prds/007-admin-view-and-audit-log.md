@@ -168,8 +168,9 @@ Style: EARS. Each R-NN cites the PRD-001 R-NN it decomposes. Audit-log table sha
 |-----|-------|-----------|-----------|
 | `admin_recipient_email` | `"admins@sigoalumni.org"` | `<admin uuid>` | 2026-05-14 18:00 |
 | `treasurer_recipient_email` | `"treasurer@sigoboard.org"` | `<admin uuid>` | 2026-05-14 18:01 |
-| `chapter_timezone` | `"America/New_York"` | `<admin uuid>` | 2026-05-14 18:02 |
-| `chapter_display_name` | `"Sigma Phi Omicron — UMass Lowell"` | `<admin uuid>` | 2026-05-14 18:03 |
+| `moderators_recipient_email` | `"mods@sigoalumni.org"` | `<admin uuid>` | 2026-05-14 18:02 |
+| `chapter_timezone` | `"America/New_York"` | `<admin uuid>` | 2026-05-14 18:03 |
+| `chapter_display_name` | `"Sigma Phi Omicron — UMass Lowell"` | `<admin uuid>` | 2026-05-14 18:04 |
 
 ## 6. User experience
 
@@ -218,7 +219,7 @@ Style: EARS. Each R-NN cites the PRD-001 R-NN it decomposes. Audit-log table sha
 
 | ID | Question / risk | Owner | Needed by |
 |----|-----------------|-------|-----------|
-| Q-01 | ~~What goes in "advanced settings" for MVP beyond the two recipient addresses?~~ **Resolved 2026-05-14: four MVP settings — `admin_recipient_email`, `treasurer_recipient_email`, `chapter_timezone` (default `America/New_York`), `chapter_display_name`** (used in email subjects). The `chapter_settings` jsonb-value table (ADR-010) is open-ended, so future settings land without schema changes. | Product | ✅ Resolved 2026-05-14 |
+| Q-01 | ~~What goes in "advanced settings" for MVP beyond the two recipient addresses?~~ **Resolved 2026-05-14: five MVP settings — `admin_recipient_email`, `treasurer_recipient_email`, `moderators_recipient_email` (added to support PRD-002 R-12 moderator-queue notifications), `chapter_timezone` (default `America/New_York`), `chapter_display_name`** (used in email subjects). The `chapter_settings` jsonb-value table (ADR-010) is open-ended, so future settings land without schema changes. | Product | ✅ Resolved 2026-05-14 |
 | Q-02 | ~~Should audit log retention have a cap or be append-forever?~~ **Resolved 2026-05-14: append-forever per ADR-009.** No retention UI in MVP; revisit if the table grows past a few hundred thousand rows (years away). | Product | ✅ Resolved 2026-05-14 |
 | Q-03 | ~~Aggregate counts as live SQL vs. cached count?~~ **Resolved 2026-05-14: live SQL** (R-02). MVP scale doesn't warrant caching. | Design | ✅ Resolved 2026-05-14 |
 | Q-04 | Should the per-job audit-log entry-point support search by `actor_id` or `note` text? Lean: **no for MVP** — find-by-job-ID + drill-in from job detail covers the realistic use case. | Design | Post-MVP |
@@ -241,3 +242,4 @@ No new terms. Uses Audit log (T-14), Admin recipient (T-13), Treasurer recipient
 | 2026-05-14 | Tom Haynes | Initial scaffold. §5 deferred to Phase 5. |
 | 2026-05-14 | Tom Haynes | **Q-01 resolved: 4 MVP settings (admin email, treasurer email, chapter timezone, chapter display name).** **Q-02 resolved: append-forever per ADR-009.** **Q-03 resolved: live SQL aggregate counts.** Added Q-04 (audit-log search by actor/note — defer post-MVP) and Q-05 (Dashboard "longest-stalled" stat — lean yes, design call). |
 | 2026-05-14 | Tom Haynes | **§5 drafted: 10 R-NN (EARS), 11 ACs, §5.2 examples for aggregate payload + audit-log entry + chapter_settings rows.** §4.2 stories US-01..US-05 covering Dashboard, Disputes drill-in + resolution, Settings edit, Audit log timeline, Users sub-route. §6 UX rules expanded with 7 (left-nav layout, dashboard landing, simple count tables, dispute count badge, per-field save on blur, chapter-local timestamps with UTC tooltip, find-by-job-ID audit-log search). §7.1 non-goals expanded with 5 (no charts, no retention cap, no caching, no bulk-edit, no export). §8 assumption added for PRD-008 sub-route renderability. Cited ADR-008 + ADR-009 + ADR-010 throughout. |
+| 2026-05-14 | Tom Haynes | Consistency fix: §5.2 example `chapter_settings` table updated to enumerate 5 rows (added `moderators_recipient_email`); §9 Q-01 wording corrected from "four MVP settings" to "five MVP settings" with the `moderators_recipient_email` rationale. R-07 itself already listed all 5; this aligns the example + Q-01 narrative. |

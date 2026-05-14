@@ -10,7 +10,7 @@ size: M
 related:
   parent_prd: PRD-001
   parent_requirements: [R-05, R-07]            # R-07 partial: enrollment-open ↔ locked subset
-  adrs: [ADR-001, ADR-003, ADR-004, ADR-008, ADR-009]
+  adrs: [ADR-001, ADR-003, ADR-004, ADR-008, ADR-009, ADR-010]   # ADR-010 added: chapter_timezone setting used for work-date display per §6 + Q-04
   flows: []
   designs: []
   bounded_contexts: []
@@ -249,3 +249,4 @@ No new terms. Uses Enrollment (T-09), Lock (T-10), Reschedule (T-11) from `docs/
 | 2026-05-14 | Tom Haynes | Initial scaffold. §5 requirements deferred to Phase 5. |
 | 2026-05-14 | Tom Haynes | **Q-01 resolved: reschedule preserves enrollments.** **Q-02 resolved: enrolled Actives see full roster, non-enrolled see count only.** **DDD-002 H-01 resolved: simple lock UI with roster + count + recommended comparison + date picker; no availability poll** (added as Q-06 in §9 for traceability). |
 | 2026-05-14 | Tom Haynes | **§5 drafted: 12 R-NN (EARS), 15 ACs (Given/When/Then), §5.2 examples for R-08 date validation + R-10 reschedule audit-log row shape.** §4.2 user stories US-01..US-08 added covering Active enroll/unenroll/list-mine/see-roster and Alumni lock/reschedule/cancel/see-roster-on-lock-UI. §6 UX rules expanded with 6 MVP-specific rules (one-click enroll/unenroll, lock-UI shape, reschedule-preserves messaging, cancel-confirmation, roster visibility tiers, timezone display). §7.1 non-goals expanded (no Admin cancel, no reschedule limit, no availability poll, no MVP notifications). §8 assumptions added single-timezone + display-name dependency. §9 added Q-03 (notifications), Q-04 (timezone config), Q-05 (reschedule limit), Q-06 (lock-UI design). Cited ADR-008 + ADR-009 + ADR-010 throughout. |
+| 2026-05-14 | Tom Haynes | Frontmatter fix: added ADR-010 to `related.adrs` to reflect §6 / §8 / Q-04 dependency on `chapter_settings.chapter_timezone`. Body already cited ADR-010 four times; the frontmatter was lagging. |

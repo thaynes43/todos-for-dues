@@ -21,7 +21,7 @@ related:
 
 Realises ADR-005 (Resend + React Email). Defines the typed `sendEmail()` adapter and the four MVP email templates that BCC-02 transitions and Better Auth (DESIGN-004) call into. Wraps Resend as a thin module so other contexts depend on a typed interface, not Resend's SDK shape — and so swapping providers later requires changing one file.
 
-> **Realises:** PRD-005 R-07 (treasurer breakdown email); PRD-006 R-07 (admin dispute notification); PRD-002 R-08 (moderator-queue notification — *not yet in the PRD-002 R-NN; flagged here as "we should add it"*); PRD-002 (Alumni rejection-reason notification — optional MVP); ADR-005 wiring; ADR-010 settings consumption (recipient addresses).
+> **Realises:** PRD-005 R-07 (treasurer breakdown email); PRD-006 R-07 (admin dispute notification); PRD-002 R-12 (moderator-queue notification — added 2026-05-14); PRD-002 (Alumni rejection-reason notification — optional MVP); ADR-005 wiring; ADR-010 settings consumption (recipient addresses).
 > **Definition of success:** an implementation agent can read this design + DESIGN-002 + DESIGN-003 + DESIGN-004 and produce a working notifications subsystem where every state-changing transition that requires an email triggers it via this adapter, with idempotent content (job_id keyed) and a clean failure mode (logs but doesn't fail the transition).
 
 ## 2. Scope
@@ -211,18 +211,45 @@ export async function sendAdminDisputeEmail(input: { jobId: string; disputerId: 
 }
 ```
 
-### 4.4 `packages/notifications/helpers/moderator-new-posting.ts` — PRD-002 (proposed addition R-08)
+### 4.4 `packages/notifications/helpers/moderator-new-posting.ts` — PRD-002 R-12
 
-> **PRD-002 gap:** R-08 covers the rejection-reason capture but not the moderator-queue notification. Adding moderator-notification here implies adding a new R-NN to PRD-002 (call it R-12 or extend R-04). Flagged in §9 Q-DSG-02.
+Mirror of `sendAdminDisputeEmail()` shape: one email per posting (no batching for MVP — see Q-DSG-04), sent to the single chapter-scoped recipient `moderators_recipient_email` (per Q-DSG-03; per-Moderator preferences are post-MVP).
 
 ```ts
+import { db } from '@app/db';
+import { jobs, users } from '@app/db/schema';
+import { eq } from 'drizzle-orm';
+import { sendEmail } from '../send-email';
+import { ModeratorNewPosting } from '../templates/ModeratorNewPosting';
+import { getSetting } from '@app/settings';
+
 export async function sendModeratorQueueEmail(input: { jobId: string }) {
-  // Fetch job
-  // Fetch all users with role IN ('Moderator', 'Admin')
-  // Send to each (or to a configured "moderators_recipient_email" if we add it)
-  // For MVP: send to admin_recipient_email as a fallback, noting it's a moderation request
+  const [job] = await db.select().from(jobs).where(eq(jobs.id, input.jobId));
+  if (!job) throw new Error(`Job ${input.jobId} not found for moderator queue email`);
+
+  const [poster] = await db.select({ displayName: users.displayName }).from(users).where(eq(users.id, job.postedBy));
+
+  const recipient = await getSetting<string>('moderators_recipient_email');
+  const chapterName = await getSetting<string>('chapter_display_name');
+  const baseUrl = process.env.PUBLIC_BASE_URL ?? 'http://localhost:3000';
+
+  return sendEmail({
+    to: recipient,
+    subject: `${chapterName} — new posting awaiting moderation: "${job.description.substring(0, 60)}"`,
+    template: ModeratorNewPosting({
+      jobDescription: job.description,
+      jobId: job.id,
+      posterDisplayName: poster?.displayName ?? '(unknown)',
+      duesAmount: job.duesAmount,
+      recommendedPeopleCount: job.recommendedPeopleCount,
+      moderationQueueUrl: `${baseUrl}/moderation-queue`,
+    }),
+    idempotencyKey: `job:${job.id}:moderation_queue`,
+  });
 }
 ```
+
+**Wiring:** invoked from `createJob()`'s `afterCommit` hook (DESIGN-002 §4.1.3 — `createJob` accepts an `afterCommit` callback symmetrical to `transitionJob`'s, with the same fire-and-forget swallow-on-failure semantics). Per Q-DSG-04, one email per posting; if MVP volume ever justifies batching, add a per-minute coalescer here without changing the call site.
 
 ### 4.5 `packages/notifications/helpers/alumni-rejection.ts` — optional MVP
 
@@ -426,3 +453,4 @@ If we later add a `suppressions` table (per §4.7's deferred call), DESIGN-001 g
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. Realises ADR-005. Typed `sendEmail()` adapter wrapping Resend with React Email rendering + idempotency-key support + dev/test skip mode. Four template helpers (treasurer, admin dispute, moderator queue, Alumni rejection). Bounce/complaint webhook receiver (log-only for MVP). 4 design follow-up questions including a flagged PRD-002 gap (moderator-queue R-NN missing). |
+| 2026-05-14 | Tom Haynes | §1 stale wording fixed: PRD-002 moderator notification is now R-12 (added 2026-05-14), no longer "we should add it." §4.4 promoted from TODO sketch to full implementation mirroring `sendAdminDisputeEmail()` — reads `moderators_recipient_email` (ADR-010, post-decision-outcome-expansion), invoked from `createJob()`'s `afterCommit` hook (DESIGN-002 §4.1.3), one email per posting per Q-DSG-04. |

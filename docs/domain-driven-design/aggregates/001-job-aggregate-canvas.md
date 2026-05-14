@@ -98,7 +98,7 @@ One Job represents a single piece of work an Alumni posts and tracks its full li
 | ST-16 | disputed | ResolveDisputeAsCancelled (with note) | cancelled (terminal) | Admin | PRD-006 |
 | ST-17 | disputed | ResolveDisputeAsPaymentSent (with note) | payment-sent | Admin | PRD-006 |
 
-> **Heuristic check:** 17 transitions across 10 states — substantial but not pathological. The FSM is the central thing this aggregate does. Number is appropriate for a Core domain; would be a smell in a Supporting context.
+> **Heuristic check:** 17 transitions across 11 states (`posted`, `awaiting moderation`, `approved`, `enrollment-open`, `locked`, `completed`, `payment-sent`, `closed`, `disputed`, `rejected`, `cancelled`) — substantial but not pathological. The FSM is the central thing this aggregate does. Number is appropriate for a Core domain; would be a smell in a Supporting context.
 
 ## 4. Enforced invariants
 
@@ -213,3 +213,4 @@ Conceptual for MVP (no event bus); used as design vocabulary and as audit-log en
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. Captures the central Core aggregate. 17 state transitions, 15 enforced invariants, 1 deferred corrective policy, 16 commands (CMD-01..CMD-14 with CMD-14 split into 3 variants), 17 conceptual events. Throughput Low; Size Low; forever-retention sustainable. 4 design follow-up questions surfaced. |
+| 2026-05-14 | Tom Haynes | Fix: §3 heuristic-check state count corrected from 10 → 11 (enumerated for clarity). PRD-001 R-07 lists 11 states; the diagram + ST-NN table already covered all 11. |

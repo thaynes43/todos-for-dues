@@ -113,7 +113,7 @@ Migrations live in `packages/db/migrations/` (Drizzle convention) with both the 
 
 - **Key behaviours:** the `JOB_STATES` array is the single source of truth that `packages/domain/job-state-machine.ts` (DESIGN-002) imports for FSM type-narrowing. Any new state must be added here AND to ADR-008's transitions map AND to a new migration that updates the CHECK constraint on `jobs.state`.
 
-> **Note on naming:** Postgres uses `snake_case`; TypeScript enum members mirror that to avoid translation in Drizzle queries.
+> **Note on naming (canonical wire form vs. display form):** the DB / TypeScript / tRPC payload form is `snake_case` — `awaiting_moderation`, `enrollment_open`, `payment_sent`. PRD-001 R-07 lists the same states in human-readable form with spaces and hyphens (`awaiting moderation`, `enrollment-open`, `payment-sent`); that is the **display** form. The two are kept in sync via the `stateDisplayName()` formatter spec'd in DESIGN-006 §4.6 (the single conversion point used by all UI badges, audit-log rendering, and email subjects). Code, queries, JSON payloads, and FSM event constants always use snake_case; only the presentation layer normalizes to PRD-001's display form.
 
 ### 4.2 `packages/db/schema/users.ts`
 
@@ -415,7 +415,25 @@ CREATE CONSTRAINT TRIGGER trg_min_one_admin
 
 ### 5.4 Bootstrap migration
 
-`0004_bootstrap_admin.sql` — empty placeholder. The actual bootstrap happens at app boot via `BOOTSTRAP_ADMIN_EMAIL` env var (per ADR-002 + ADR-011 INV-03 recovery). Migration kept empty so it doesn't drift environments.
+`0004_bootstrap_admin.sql` — empty placeholder. The actual Admin bootstrap happens at app boot via `BOOTSTRAP_ADMIN_EMAIL` env var (per ADR-002 + ADR-011 INV-03 recovery). Migration kept empty so it doesn't drift environments.
+
+### 5.5 chapter_settings bootstrap
+
+`0005_bootstrap_chapter_settings.sql` — seeds the five PRD-007 R-07 keys from env vars on first apply, so `getSetting()` calls in DESIGN-005 helpers never crash on a fresh deploy. Idempotent via `ON CONFLICT (key) DO NOTHING` — subsequent applies (e.g., re-runs in tests) are no-ops, and Admin edits via the Settings UI take precedence forever after.
+
+```sql
+-- Seeds chapter_settings from BOOTSTRAP_* env vars at first deploy.
+-- ON CONFLICT DO NOTHING keeps Admin edits (made post-bootstrap) authoritative.
+INSERT INTO chapter_settings (key, value) VALUES
+  ('admin_recipient_email',      to_jsonb(coalesce(current_setting('app.bootstrap_admin_recipient_email',      true), 'admins@example.invalid'))),
+  ('treasurer_recipient_email',  to_jsonb(coalesce(current_setting('app.bootstrap_treasurer_recipient_email',  true), 'treasurer@example.invalid'))),
+  ('moderators_recipient_email', to_jsonb(coalesce(current_setting('app.bootstrap_moderators_recipient_email', true), 'mods@example.invalid'))),
+  ('chapter_timezone',           to_jsonb(coalesce(current_setting('app.bootstrap_chapter_timezone',           true), 'America/New_York'))),
+  ('chapter_display_name',       to_jsonb(coalesce(current_setting('app.bootstrap_chapter_display_name',       true), 'Your Chapter')))
+ON CONFLICT (key) DO NOTHING;
+```
+
+> **Env-var → `current_setting()` plumbing:** drizzle-kit migrations run via a connection that sets the five `app.bootstrap_*` GUCs from process env vars (`BOOTSTRAP_ADMIN_RECIPIENT_EMAIL`, `BOOTSTRAP_TREASURER_RECIPIENT_EMAIL`, `BOOTSTRAP_MODERATORS_RECIPIENT_EMAIL`, `BOOTSTRAP_CHAPTER_TIMEZONE`, `BOOTSTRAP_CHAPTER_DISPLAY_NAME`) before applying. PLAN-002 owns this wiring. Bootstrap defaults (the `*.invalid` strings, `America/New_York`, `Your Chapter`) are deliberately recognizable as placeholders so a misconfigured deploy fails loudly on first email send rather than silently sending to a real address.
 
 ## 6. API contracts
 
@@ -459,3 +477,4 @@ Per the project test-DB rule (`feedback_doc_conventions.md` / handoff): **no SQL
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. Schema for the walking-skeleton subset across BCC-01 + BCC-02 + BCC-03 + cross-cutting tables. 8 tables, all CHECK constraints, indexes for the major query patterns (R-02 aggregate counts, R-04 disputes, R-06 / R-11 user lists, R-06 audit timeline). Min-Admin deferred-CHECK trigger from ADR-011 included as a hand-written migration. 4 design follow-up questions. |
+| 2026-05-14 | Tom Haynes | §4.1: strengthened naming note to make the snake_case (wire/code) vs. hyphenated (PRD-001 R-07 display) convention explicit and to point at DESIGN-006 §4.6's `stateDisplayName()` formatter as the single conversion point. §5.5: added `0005_bootstrap_chapter_settings.sql` migration so the five PRD-007 R-07 settings are seeded from env vars on first deploy — closes the gap where `getSetting()` would crash on a fresh instance. |

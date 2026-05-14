@@ -51,11 +51,16 @@ CREATE TABLE chapter_settings (
 );
 ```
 
-Initial keys (MVP):
+Initial keys (MVP) — the five PRD-007 R-07 enumerates:
 - `admin_recipient_email` — string, the address PRD-006 dispute notifications go to (e.g., `admins@sigoalumni.org`).
 - `treasurer_recipient_email` — string, the address PRD-005 payment-sent notifications go to (e.g., `@sigoboard.org`).
+- `moderators_recipient_email` — string, the address PRD-002 R-12 moderator-queue notifications go to (e.g., `mods@sigoalumni.org`).
+- `chapter_timezone` — IANA tz string used for chapter-local date rendering (PRD-004 timezone display; default `America/New_York`).
+- `chapter_display_name` — string used in email subjects + UI chrome (e.g., `Sigma Phi Omicron — UMass Lowell`).
 
 Future keys land here without schema migrations. Each is editable in PRD-007's "Advanced settings" UI; the value column is `jsonb` so we can grow into structured settings (object / array shapes) without altering the table.
+
+**Bootstrap:** each MVP key has an env-var fallback (`BOOTSTRAP_ADMIN_RECIPIENT_EMAIL`, `BOOTSTRAP_TREASURER_RECIPIENT_EMAIL`, etc.). A one-time bootstrap migration (DESIGN-001 §5.4) seeds the `chapter_settings` rows from those env vars at first deploy so `getSetting()` calls never crash on a fresh instance.
 
 **Resolution rule for app code:** a single `getSetting(key)` helper checks the DB first, falls back to a typed env-var default if absent. This way:
 - A fresh instance can boot with sensible env-var defaults baked into `helm-values` / `kustomization.yaml`.
@@ -120,3 +125,4 @@ See §Decision outcome.
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial Proposed. Recommendation: Option C (hybrid). |
+| 2026-05-14 | Tom Haynes | Decision-outcome: expanded "Initial keys (MVP)" from 2 → 5 (added `moderators_recipient_email`, `chapter_timezone`, `chapter_display_name`) to match PRD-007 R-07's full enumerated list and PRD-002 R-12's new moderator-notification key. Added Bootstrap paragraph pointing at DESIGN-001 §5.4 for env-var seeding. |

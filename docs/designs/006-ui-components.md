@@ -118,7 +118,7 @@ apps/web/
     TippingNudge.tsx              ← static one-line cultural-nudge per PRD-001 §6
   lib/
     trpc-client.ts                ← typed tRPC React client
-    formatters.ts                 ← chapter-local date formatting (from chapter_settings.chapter_timezone)
+    formatters.ts                 ← chapter-local date formatting + stateDisplayName() (per §4.5)
 ```
 
 ## 4. Detailed design
@@ -364,11 +364,41 @@ Every list / detail view must handle:
 - **Empty:** per-page custom empty state (e.g., "No jobs yet — be the first to post!" on `/jobs`)
 - **Not authorized (403):** redirect to `/login` if unauthenticated; render `Forbidden` page if authenticated wrong-role
 
-### 4.6 Date / timezone display
+### 4.6 State-name display formatter (`stateDisplayName`)
+
+The DB / tRPC / FSM-event form is `snake_case` per DESIGN-001 §4.1 (`awaiting_moderation`, `enrollment_open`, `payment_sent`). PRD-001 R-07 lists the **display** form with spaces and hyphens (`awaiting moderation`, `enrollment-open`, `payment-sent`). `stateDisplayName()` is the single conversion point — every place a job state is rendered (badges, audit-log rows, email subjects, aggregate-counts cards in `AggregateCountsCards.tsx`) goes through it. New states added later need one entry per state here and nowhere else.
+
+```ts
+// apps/web/lib/formatters.ts (also re-exported from packages/notifications for email subjects)
+import type { JobState } from '@app/db/schema';
+
+const JOB_STATE_DISPLAY: Record<JobState, string> = {
+  awaiting_moderation: 'awaiting moderation',
+  approved:            'approved',
+  enrollment_open:     'enrollment-open',
+  locked:              'locked',
+  completed:           'completed',
+  payment_sent:        'payment-sent',
+  closed:              'closed',
+  disputed:            'disputed',
+  rejected:            'rejected',
+  cancelled:           'cancelled',
+};
+
+export function stateDisplayName(state: JobState): string {
+  return JOB_STATE_DISPLAY[state];
+}
+```
+
+> **Why a map, not a `.replace('_', '-')` rule:** PRD-001 R-07 uses *both* a space (`"awaiting moderation"`) and a hyphen (`"enrollment-open"`). A regex transform would collapse them inconsistently. The explicit map is also the right place to add future i18n if it ever lands.
+
+`JobStateBadge.tsx` always wraps `stateDisplayName(state)` in its visible label, never the raw `state` value. Same for `AggregateCountsCards.tsx` (already references `stateDisplayName(state)` at line 342 above).
+
+### 4.7 Date / timezone display
 
 All dates are rendered via `formatChapterLocal()` from `lib/formatters.ts`, which reads `chapter_settings.chapter_timezone` (defaults to `America/New_York`) per PRD-007 §6 / DESIGN-001 §4.8. Raw UTC ISO strings are in the HTML `<time datetime>` attribute for screen readers and forensic precision.
 
-### 4.7 Tipping nudge (PRD-001 §6 + Q-06)
+### 4.8 Tipping nudge (PRD-001 §6 + Q-06)
 
 The `TippingNudge` component is a static, non-numeric one-liner shown on the job detail view when the job is in `payment_sent` or `closed`. **Never numeric** — exactly per Q-06's resolution.
 
@@ -434,3 +464,4 @@ Coverage target: every PRD AC that surfaces a UI is verifiable by an E2E or comp
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. Full route + component layout for MVP. Walking-skeleton subset called out in §4.2 (~9 routes / minimal components for the happy-path slice). Role-conditional rendering pattern in `JobDetailView` covers the cross-PRD UX rules. Server Actions for the 3 auth forms; tRPC mutations for everything else. Date / timezone formatting via `chapter_settings.chapter_timezone`. Tipping nudge static, non-numeric per PRD-001 Q-06. 5 design follow-up questions. |
+| 2026-05-14 | Tom Haynes | §4.6 added: `stateDisplayName()` formatter spec — single conversion point between DB/code snake_case (per DESIGN-001 §4.1) and PRD-001 R-07's mixed space/hyphen display form. Renumbered Date/Timezone (4.6→4.7) and Tipping nudge (4.7→4.8). §3 `formatters.ts` comment updated to mention the new formatter. |
