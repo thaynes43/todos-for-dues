@@ -1,0 +1,2 @@
+# Playwright MCP transient artifacts (snapshots, console logs from agent test runs)
+.playwright-mcp/
