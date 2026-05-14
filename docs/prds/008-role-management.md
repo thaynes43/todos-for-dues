@@ -1,7 +1,7 @@
 ---
 id: PRD-008
 title: Role management
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

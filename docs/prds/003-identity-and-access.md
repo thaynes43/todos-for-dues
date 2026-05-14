@@ -1,7 +1,7 @@
 ---
 id: PRD-003
 title: TODOs for Dues — Identity and Access
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

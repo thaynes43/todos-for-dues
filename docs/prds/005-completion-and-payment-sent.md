@@ -1,7 +1,7 @@
 ---
 id: PRD-005
 title: Completion & payment-sent
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

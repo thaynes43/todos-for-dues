@@ -1,7 +1,7 @@
 ---
 id: ADC-02
 title: User
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

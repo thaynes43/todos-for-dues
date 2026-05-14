@@ -1,7 +1,7 @@
 ---
 id: PLAN-002
 title: Database schema implementation — Drizzle declarations + initial migrations + min-Admin trigger
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

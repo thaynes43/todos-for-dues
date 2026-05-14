@@ -1,7 +1,7 @@
 ---
 id: DDD-003
 title: Ubiquitous Language
-status: Draft           # Draft | Proposed | Accepted | Superseded by DDD-XXX | Deprecated
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

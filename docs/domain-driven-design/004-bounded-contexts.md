@@ -1,7 +1,7 @@
 ---
 id: DDD-004
 title: Bounded contexts catalog
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

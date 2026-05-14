@@ -1,7 +1,7 @@
 ---
 id: PRD-002
 title: Job posting & moderation
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14
@@ -55,6 +55,7 @@ PRD-002 owns its own US-NN namespace. Stories trace back to PRD-001 US-03 (Alumn
 | US-04 | As a **Moderator**, I want to see all postings currently `awaiting moderation` in a single queue, so I can review them efficiently. | P0 |
 | US-05 | As a **Moderator**, I want to approve a posting, so it becomes visible to Actives. | P0 |
 | US-06 | As a **Moderator**, I want to reject a posting with a free-text reason, so the Alumni knows what was wrong without having to ask off-app. | P0 |
+| US-07 | As a **Moderator**, I want to be notified by email when a new posting is submitted, so I can act promptly without polling the queue. | P0 |
 
 ## 5. Requirements
 
@@ -73,6 +74,7 @@ Style: EARS (per `docs/prds/000-template.md` §5 house style). Each R-NN cites t
 | R-09 | PRD-001 R-04 | The system shall display the rejection reason to the posting Alumni on the rejected job's detail view. | P0 | US-03 | Read-only. The Alumni cannot edit the reason or any of the posting fields (R-10). |
 | R-10 | PRD-001 R-07 | The `rejected` state shall be terminal — the system shall NOT permit any FSM transition out of `rejected` for any actor (Alumni, Moderator, Admin). | P0 | US-03, US-06 | Q-01 resolved 2026-05-14. ADR-008's transitions map MUST NOT contain a `rejected → *` arrow. To retry, the Alumni creates a fresh posting per US-01. |
 | R-11 | PRD-001 R-03 | The system shall provide users with the Alumni role a list view of all jobs they posted, in any state, ordered by most-recent-first. | P0 | US-02 | Includes rejected jobs so the Alumni can revisit the rejection reason at any time. |
+| R-12 | PRD-001 R-04, R-14 | When an Alumni submits a valid posting (R-05 transition to `awaiting moderation`), the system shall send an email via the platform email provider (ADR-005 — Resend) to the chapter's configured moderators-recipient address (per ADR-010 `chapter_settings.moderators_recipient_email`) notifying that a new posting awaits review. | P0 | US-04, US-07 | Same delivery pattern as PRD-006 R-07 admin-dispute notification. Recipient is a single per-instance distribution address (e.g., `mods@sigoalumni.org`); per-Moderator preferences out of MVP. Surfaced by DESIGN-005 Q-DSG-02 + PLAN-007 Q-PLN-01. |
 
 ### 5.1 Acceptance criteria
 

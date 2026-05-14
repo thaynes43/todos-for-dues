@@ -1,7 +1,7 @@
 ---
 id: DESIGN-005
 title: Notifications adapter — Resend + React Email
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14
@@ -417,7 +417,7 @@ If we later add a `suppressions` table (per §4.7's deferred call), DESIGN-001 g
 | ID | Question | Owner | Needed by |
 |----|----------|-------|-----------|
 | Q-DSG-01 | Should we add a `suppressions` table now (proactive) or defer until bounces become a real signal? Lean: **defer** — chapter-controlled recipients should bounce-rate near zero. Resend's dashboard is sufficient for MVP visibility. | Design | Post-MVP |
-| Q-DSG-02 | PRD-002 doesn't currently include a moderator-queue notification R-NN, but DESIGN-005 §4.4 implements one. **Action:** add a new R-NN to PRD-002 (e.g., R-12 in PRD-002's namespace, "When an Alumni submits a posting, the system shall notify Moderators via email") OR drop the moderator email from MVP. **Lean: add the R-NN** — moderation latency without a notification is bad UX (Mods would have to poll). | Product | Pre-implementation |
+| Q-DSG-02 | ~~PRD-002 doesn't include a moderator-queue notification R-NN.~~ **Resolved 2026-05-14: PRD-002 R-12 added** ("When an Alumni submits a valid posting, the system shall send an email via Resend to the chapter's configured moderators-recipient address"). Plus PRD-007 R-07 + DESIGN-003 §4.6 + PLAN-007 updated to include `moderators_recipient_email` setting. | Product | ✅ Resolved 2026-05-14 |
 | Q-DSG-03 | Moderator notification recipient: per-Moderator email vs. a single "moderators_recipient_email" chapter setting? Lean: **single chapter setting** for MVP (consistent with admin/treasurer pattern); per-Moderator preferences post-MVP. | Design | Pre-implementation |
 | Q-DSG-04 | Should `sendModeratorQueueEmail` batch (one per N postings or per N minutes) or fire one per posting? Lean: **one per posting** (consistent with PRD-006 R-07 dispute pattern). MVP volume is low enough that batching is premature. | Design | Pre-implementation |
 

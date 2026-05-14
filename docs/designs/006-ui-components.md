@@ -1,7 +1,7 @@
 ---
 id: DESIGN-006
 title: UI components — pages, forms, lists, layouts (walking-skeleton + MVP)
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

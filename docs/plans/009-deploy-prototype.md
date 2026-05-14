@@ -1,7 +1,7 @@
 ---
 id: PLAN-009
 title: Deploy the prototype to the haynes-ops cluster (Phase 1.1 internal)
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

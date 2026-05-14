@@ -1,7 +1,7 @@
 ---
 id: BCC-01
 title: Identity & Access
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

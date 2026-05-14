@@ -1,7 +1,7 @@
 ---
 id: PLAN-003
 title: FSM module implementation — transitionJob + transitionRole helpers + tests
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

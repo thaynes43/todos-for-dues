@@ -1,7 +1,7 @@
 ---
 id: DESIGN-003
 title: tRPC API surface (procedures, middleware, error mapping)
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14
@@ -644,7 +644,7 @@ export const settingsRouter = router({
 
   set: adminProcedure
     .input(z.object({
-      key: z.enum(['admin_recipient_email', 'treasurer_recipient_email', 'chapter_timezone', 'chapter_display_name']),
+      key: z.enum(['admin_recipient_email', 'treasurer_recipient_email', 'moderators_recipient_email', 'chapter_timezone', 'chapter_display_name']),
       value: z.unknown(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -659,6 +659,7 @@ export const settingsRouter = router({
 const SETTING_VALIDATORS = {
   admin_recipient_email: z.string().email(),
   treasurer_recipient_email: z.string().email(),
+  moderators_recipient_email: z.string().email(),
   chapter_timezone: z.string().regex(/^[A-Za-z_]+\/[A-Za-z_]+$/),                // IANA tz format
   chapter_display_name: z.string().trim().min(1).max(120),
 };

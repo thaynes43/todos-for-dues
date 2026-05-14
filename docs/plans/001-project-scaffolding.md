@@ -1,7 +1,7 @@
 ---
 id: PLAN-001
 title: Project scaffolding — Next.js + workspaces + Drizzle + Better Auth (no business logic)
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

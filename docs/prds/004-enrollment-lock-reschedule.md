@@ -1,7 +1,7 @@
 ---
 id: PRD-004
 title: Enrollment, lock & reschedule
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

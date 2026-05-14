@@ -1,7 +1,7 @@
 ---
 id: ADC-01
 title: Job
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

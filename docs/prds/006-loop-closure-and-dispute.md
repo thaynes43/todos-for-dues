@@ -1,7 +1,7 @@
 ---
 id: PRD-006
 title: Loop closure & dispute
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

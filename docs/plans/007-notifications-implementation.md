@@ -1,7 +1,7 @@
 ---
 id: PLAN-007
 title: Notifications adapter + treasurer / admin / moderator email helpers
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14
@@ -113,8 +113,8 @@ Implement DESIGN-005 end-to-end: the `sendEmail()` adapter, four React Email tem
 
 | ID | Question | Lean / next action |
 |----|----------|--------------------|
-| Q-PLN-01 | DESIGN-005 §9 Q-DSG-02 flagged that PRD-002 needs an R-NN added for moderator-queue notification. Should we add it to PRD-002 before implementing Step 5's `sendModeratorQueueEmail`, or skip moderator notification in MVP? | Lean: **add the R-NN to PRD-002** (e.g., R-12: "When a posting is submitted, the system shall notify Moderators via email"). One-line PRD addition; significant UX win (Mods don't have to poll). |
-| Q-PLN-02 | Moderator notification recipient: per-Mod email vs. a single chapter setting? Lean: **single chapter setting `moderators_recipient_email`** (consistent with admin/treasurer pattern; per-Mod preferences post-MVP). | Add `moderators_recipient_email` to the `chapter_settings` validators in DESIGN-003 §4.6 + PLAN-005 settings router. |
+| Q-PLN-01 | ~~PRD-002 missing moderator-queue notification R-NN.~~ **Resolved 2026-05-14: PRD-002 R-12 added.** Implementation can proceed. |
+| Q-PLN-02 | ~~Moderator notification recipient: per-Mod email vs. single chapter setting?~~ **Resolved 2026-05-14: single setting `moderators_recipient_email`** (added to PRD-007 R-07 + DESIGN-003 §4.6 + DESIGN-005). |
 
 ## 10. Changelog
 

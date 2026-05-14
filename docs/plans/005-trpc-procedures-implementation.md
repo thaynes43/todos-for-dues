@@ -1,7 +1,7 @@
 ---
 id: PLAN-005
 title: tRPC procedures implementation — all 5 routers per DESIGN-003
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

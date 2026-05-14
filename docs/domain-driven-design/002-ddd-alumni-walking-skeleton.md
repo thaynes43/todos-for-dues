@@ -1,7 +1,7 @@
 ---
 id: DDD-002
 title: Alumni walking skeleton — happy-path event timeline
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

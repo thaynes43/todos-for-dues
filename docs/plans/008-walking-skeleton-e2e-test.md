@@ -1,7 +1,7 @@
 ---
 id: PLAN-008
 title: Walking-skeleton E2E test — full happy-path click-through via Playwright
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

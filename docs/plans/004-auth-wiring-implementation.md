@@ -1,7 +1,7 @@
 ---
 id: PLAN-004
 title: Auth wiring implementation — Better Auth + Workspace OIDC + invite tokens + 3 Server Actions
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

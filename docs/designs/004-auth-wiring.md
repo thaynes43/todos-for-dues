@@ -1,7 +1,7 @@
 ---
 id: DESIGN-004
 title: Auth wiring — Better Auth + Workspace OIDC + invite tokens
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

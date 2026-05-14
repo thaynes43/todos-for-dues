@@ -1,7 +1,7 @@
 ---
 id: PLAN-006
 title: Walking-skeleton UI implementation (subset of DESIGN-006)
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

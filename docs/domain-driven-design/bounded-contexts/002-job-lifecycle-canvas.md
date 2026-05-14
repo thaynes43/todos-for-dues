@@ -1,7 +1,7 @@
 ---
 id: BCC-02
 title: Job Lifecycle
-status: Draft
+status: Proposed
 author: Tom Haynes
 reviewers: []
 created: 2026-05-14

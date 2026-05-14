@@ -1,7 +1,7 @@
 ---
 id: ADR-007
 title: Use Better Auth OIDC client with hosted-domain restriction for Google Workspace SSO
-status: Draft
+status: Proposed
 date: 2026-05-14
 deciders: [Tom Haynes]
 consulted: []
