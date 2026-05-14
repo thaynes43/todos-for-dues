@@ -81,6 +81,120 @@ Past tense, ordered. Two starting branches converge at E-04 (logged-in Alumni).
 | E-21 | Active or Admin confirmed receipt | Active-initiated OR Admin-initiated | A-02 / A-04 | DDD-001 E-12 is the Active variant. Job state `payment-sent → closed`. (PRD-001 R-08, PRD-006.) |
 | E-22 | Loop closed | system, on E-21 | (system) | Terminal state `closed`. Audit log records every transition. |
 
+### 3.3 Sequence diagram
+
+The diagram below visualises the §3 event timeline as a sequence of messages between actors and systems. **Use it to trace where each event lands** when implementing or debugging — every E-NN annotation matches a row above.
+
+Conventions:
+
+- **Solid arrow `->>`**: a command, query, or out-of-band action initiated by the source.
+- **Dashed arrow `-->>`**: a response or returned value.
+- **`alt` / `else` blocks**: alternative branches (signup path A vs B; loop closure by Active vs Admin).
+- **`Note`**: contextual annotation; pure-system events, off-app activity, or events sourced from DDD-001.
+- **Coloured `rect` blocks**: phase grouping (Signup → Login + Post → Moderation + visibility → Lock + work → Completion + payment-sent → Loop closure).
+
+```mermaid
+sequenceDiagram
+    participant Admin
+    participant Alumni
+    participant App as App<br/>(Next.js + tRPC)
+    participant DB as Postgres
+    participant Workspace as Google Workspace<br/>(OIDC)
+    participant Auth as Better Auth
+    participant Email as Email<br/>(Resend)
+    participant Moderator
+    participant Active
+    participant Venmo
+    participant Treasurer as Chapter Treasurer<br/>(off-app)
+
+    rect rgb(240, 248, 255)
+        Note over Admin,Treasurer: Phase 1 — Signup (pick one branch)
+        alt Branch A — Invite link [E-01a..E-03a]
+            Admin->>App: Generate Alumni invite link [E-01a]
+            App->>DB: INSERT invite_token
+            DB-->>App: token
+            App-->>Admin: Invite URL
+            Note over Admin,Alumni: Admin shares URL out-of-band (alumni newsletter)
+            Alumni->>App: Open invite link [E-02a]
+            Alumni->>App: Submit signup (email, password) [E-03a]
+            App->>Auth: Create account (role = Alumni)
+            Auth->>DB: INSERT user
+            DB-->>Auth: user
+            Auth-->>App: session
+        else Branch B — Workspace SSO [E-01b..E-02b]
+            Admin->>App: Configure OIDC env vars [E-01b]
+            Note over App,Workspace: One-time per-instance setup (ADR-007)
+            Alumni->>App: Click "Sign in with Google" (@chapter-domain) [E-02b]
+            App->>Workspace: OAuth redirect
+            Workspace-->>App: code
+            App->>Workspace: Exchange code (HD-restriction at callback)
+            Workspace-->>App: user claims
+            App->>Auth: Create or link account (role = Alumni)
+            Auth->>DB: INSERT or UPDATE user
+            DB-->>Auth: user
+            Auth-->>App: session
+        end
+    end
+
+    rect rgb(240, 255, 240)
+        Note over Alumni,Moderator: Phase 2 — Login + Post job
+        Alumni->>App: Login (or session resume after SSO) [E-04]
+        Alumni->>App: GET /jobs/new [E-05]
+        App-->>Alumni: Posting form
+        Alumni->>App: Fill description, dues, recommended count [E-06]
+        Alumni->>App: Submit posting [E-07]
+        App->>DB: INSERT job (state='awaiting moderation') + audit_log
+        DB-->>App: ok
+        App->>Email: Notify Moderators of new posting [E-08]
+        Email->>Moderator: Email arrives
+    end
+
+    rect rgb(255, 250, 240)
+        Note over Alumni,Active: Phase 3 — Moderation + visibility
+        Moderator->>App: Open moderation queue, view job [E-09]
+        Moderator->>App: Approve [E-10]
+        App->>DB: UPDATE state='approved' + audit_log (PRD-002 R-07)
+        App->>DB: UPDATE state='enrollment-open' + audit_log (PRD-004 R-01) [E-11]
+        Note over App,DB: Two audit-log rows for one Mod approval —<br/>user-actor for E-10, system-actor for E-11
+        Active->>App: Browse + enroll (DDD-001 E-05..E-06) [E-12]
+        App->>DB: INSERT enrollment(s) + audit_log
+    end
+
+    rect rgb(255, 245, 250)
+        Note over Alumni,Active: Phase 4 — Lock + work
+        Alumni->>App: View job (roster + count + recommended comparison) [E-13]
+        Note right of Alumni: Judgment moment — not an in-app event;<br/>Alumni decides date is set
+        Alumni->>App: Lock with confirmed date [E-14]
+        App->>DB: UPDATE state='locked' + persist date + audit_log
+        Note over Alumni,Active: Off-app: work performed [E-15]
+    end
+
+    rect rgb(248, 240, 255)
+        Note over Alumni,Treasurer: Phase 5 — Completion + payment-sent
+        Alumni->>App: Mark complete + confirm attendees subset [E-16]
+        App->>DB: UPDATE state='completed', persist attendees + audit_log
+        Note over App: System computes per-Active dues split<br/>(total ÷ confirmed-attendees) [E-17]
+        Alumni->>Venmo: Send single transfer for full dues amount [E-18]
+        Venmo-->>Treasurer: Funds arrive (off-app)
+        Alumni->>App: Mark payment-sent [E-19]
+        App->>DB: UPDATE state='payment-sent' + audit_log
+        App->>Email: Treasurer breakdown (job, total, per-Active split) [E-20]
+        Email->>Treasurer: Breakdown email arrives
+    end
+
+    rect rgb(240, 255, 255)
+        Note over Alumni,Treasurer: Phase 6 — Loop closure
+        alt Closed by Active
+            Active->>App: POST /jobs/:id/confirm-received [E-21] (DDD-001 E-12)
+        else Closed by Admin
+            Admin->>App: POST /jobs/:id/confirm-received [E-21]
+        end
+        App->>DB: UPDATE state='closed' + audit_log (first-write-wins per PRD-006 R-04)
+        DB-->>App: ok
+        Note over Alumni,Treasurer: Loop closed [E-22] — terminal
+    end
+```
+
 ## 4. Hotspots / open questions
 
 | ID | Hotspot | Why it's hot | Owner | Needed by |
@@ -119,3 +233,4 @@ Past tense, ordered. Two starting branches converge at E-04 (logged-in Alumni).
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. 22 events (with two signup branches) covering the happy-path Alumni flow from signup (invite-link or Workspace SSO) to closing a paid job. 4 hotspots, 5 candidate bounded-context boundaries. Pairs with DDD-001 (Active walking skeleton). |
+| 2026-05-14 | Tom Haynes | Added §3.3 Mermaid sequence diagram visualising the 22-event timeline as messages between Admin, Alumni, App, DB, Workspace OIDC, Better Auth, Email, Moderator, Active, Venmo, Treasurer. Phase-grouped via `rect` blocks; signup branches A/B and closure-by-Active-vs-Admin via `alt`/`else`; each E-NN annotated for traceability. |

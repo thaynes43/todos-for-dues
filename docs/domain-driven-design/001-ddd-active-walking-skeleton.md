@@ -67,6 +67,86 @@ Past tense, ordered. Each row is one event in the Active's experience of the job
 | E-12 | Active confirmed payment received in-app | Active-initiated | A-01 | Active checks the chapter books, sees their balance is paid down, returns to the app and clicks "received." Job state `payment-sent → closed`. (PRD-001 R-08, PRD-006.) |
 | E-13 | Loop closed | system, on E-12 | (system) | Job is in terminal state `closed`; audit log records all transitions. |
 
+### 3.1 Sequence diagram
+
+The diagram below visualises the §3 event timeline as a sequence of messages between actors and systems. **Use it to trace where each event lands** when implementing or debugging — every E-NN annotation matches a row above.
+
+Conventions:
+
+- **Solid arrow `->>`**: a command, query, or out-of-band action initiated by the source.
+- **Dashed arrow `-->>`**: a response or returned value.
+- **`Note`**: contextual annotation; pure-system events, off-app activity, or upstream events sourced from DDD-002 (Alumni walking skeleton).
+- **Coloured `rect` blocks**: phase grouping (Account creation → Browse + enroll → Lock → Completion + payment-sent → Loop closure).
+
+```mermaid
+sequenceDiagram
+    participant Admin
+    participant Active
+    participant App as App<br/>(Next.js + tRPC)
+    participant DB as Postgres
+    participant Email as Email<br/>(Resend)
+    participant Alumni
+    participant Treasurer as Chapter Treasurer<br/>(off-app)
+
+    rect rgb(240, 248, 255)
+        Note over Admin,Treasurer: Phase 1 — Account creation
+        Admin->>App: Generate Active invite link [E-01]
+        App->>DB: INSERT invite_token
+        DB-->>App: token
+        App-->>Admin: Invite URL
+        Note over Admin,Active: Admin shares URL out-of-band (group chat / email)
+        Active->>App: Open invite link [E-02]
+        Active->>App: Submit signup (email, password) [E-03]
+        App->>DB: INSERT user (role = Active)
+        DB-->>App: user
+        App-->>Active: Account created + session
+        Active->>App: Subsequent visit (login) [E-04]
+    end
+
+    rect rgb(240, 255, 240)
+        Note over Active,Alumni: Phase 2 — Browse + enroll
+        Note right of App: Approved job already exists<br/>(set by DDD-002 E-09..E-11)
+        Active->>App: GET /jobs (browse) [E-05]
+        App->>DB: SELECT jobs WHERE state='enrollment-open'
+        DB-->>App: jobs
+        App-->>Active: Job list
+        Active->>App: POST /jobs/:id/enroll [E-06]
+        App->>DB: INSERT enrollment + audit_log row
+        DB-->>App: ok
+        App-->>Active: Enrolled
+    end
+
+    rect rgb(255, 250, 240)
+        Note over Active,Alumni: Phase 3 — Lock (Alumni-driven; Active observes)
+        Alumni->>App: Lock job (see DDD-002 E-14)
+        App->>DB: UPDATE state='locked' + audit_log row
+        Active->>App: View job [E-07]
+        App-->>Active: Confirmed work date + roster
+        Note over Active,Alumni: Off-app: work performed [E-08]
+    end
+
+    rect rgb(255, 245, 250)
+        Note over Active,Treasurer: Phase 4 — Completion + payment-sent (Alumni-driven; Active observes)
+        Alumni->>App: Confirm attendees (DDD-002 E-16) [E-09]
+        App->>DB: UPDATE state='completed' + persist attendees + audit_log
+        Alumni->>App: Mark payment-sent (DDD-002 E-19) [E-10]
+        App->>DB: UPDATE state='payment-sent' + audit_log
+        App->>Email: Treasurer breakdown
+        Email->>Treasurer: Breakdown email arrives
+        Note over Treasurer: E-11: Treasurer credits Active's<br/>dues balance in chapter books (off-app)
+    end
+
+    rect rgb(248, 240, 255)
+        Note over Active,Treasurer: Phase 5 — Loop closure
+        Active->>Treasurer: Check chapter books (off-app)
+        Treasurer-->>Active: Balance credited ✓
+        Active->>App: POST /jobs/:id/confirm-received [E-12]
+        App->>DB: UPDATE state='closed' + audit_log
+        DB-->>App: ok
+        App-->>Active: Loop closed [E-13]
+    end
+```
+
 ## 4. Hotspots / open questions
 
 | ID | Hotspot | Why it's hot | Owner | Needed by |
@@ -103,3 +183,4 @@ Events that mark a meaningful transition in business state — they tend to fall
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. 13 events covering the happy-path Active flow from invite-link signup to closing a paid job. 3 hotspots, 4 candidate bounded-context boundaries surfaced for `004-bounded-contexts.md`. Pairs with DDD-002 (Alumni walking skeleton). |
+| 2026-05-14 | Tom Haynes | Added §3.1 Mermaid sequence diagram visualising the 13-event timeline as messages between Admin, Active, App, DB, Email, Alumni, Treasurer. Phase-grouped via `rect` blocks; each E-NN annotated for traceability. |

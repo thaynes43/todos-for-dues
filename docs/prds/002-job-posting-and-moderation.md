@@ -45,27 +45,141 @@ Inherited from PRD-001 §4.1 — no new personas introduced.
 
 ### 4.2 Scenarios / user stories
 
-*(To be drafted during Phase 5 decomposition. Will trace back to PRD-001 US-03, US-04 with this PRD's own US-NN namespace.)*
+PRD-002 owns its own US-NN namespace. Stories trace back to PRD-001 US-03 (Alumni post) and US-04 (Moderator approve/reject).
 
 | ID | Story | Priority |
 |----|-------|----------|
-| *(TBD)* | | |
+| US-01 | As an **Alumni**, I want to post a job with a description, dues amount, and recommended people count, so it can be reviewed and become available to Actives. | P0 |
+| US-02 | As an **Alumni**, I want to see all my postings (current and historical) with their states, so I know where each one stands. | P0 |
+| US-03 | As an **Alumni**, I want to see the rejection reason on a rejected posting, so I understand what to fix in my next attempt. | P0 |
+| US-04 | As a **Moderator**, I want to see all postings currently `awaiting moderation` in a single queue, so I can review them efficiently. | P0 |
+| US-05 | As a **Moderator**, I want to approve a posting, so it becomes visible to Actives. | P0 |
+| US-06 | As a **Moderator**, I want to reject a posting with a free-text reason, so the Alumni knows what was wrong without having to ask off-app. | P0 |
 
 ## 5. Requirements
 
-*(To be drafted during Phase 5 decomposition. Each R-NN cites a PRD-001 R-NN in the `Decomposes` column. Targets: ~6–10 R-NN total for this PRD; if growing beyond ~15, that's a signal to split.)*
+Style: EARS (per `docs/prds/000-template.md` §5 house style). Each R-NN cites the PRD-001 R-NN it decomposes.
 
 | ID | Decomposes | Requirement | Priority | Linked stories | Notes |
 |----|-----------|-------------|----------|----------------|-------|
-| *(TBD)* | | | | | |
+| R-01 | PRD-001 R-03 | The system shall provide a posting form for users with the Alumni role, capturing: description (text, required), dues contribution amount (numeric, required), recommended people count (integer, required). | P0 | US-01 | No tip field per PRD-001 Q-06. Other fields are explicitly out of scope (PRD-001 §7); add via a future PRD if needed. |
+| R-02 | PRD-001 R-03 | If the dues contribution amount is not a positive number, the system shall reject the posting submission with a validation error citing the dues field. | P0 | US-01 | Q-02 resolved 2026-05-14. No upper bound. See AC-02, AC-03 + §5.2. |
+| R-03 | PRD-001 R-03 | If the description field is empty or contains only whitespace, the system shall reject the posting submission with a validation error citing the description field. | P0 | US-01 | Min length: ≥ 1 non-whitespace character for MVP. Tightening to a more meaningful min (e.g., ≥ 20 chars) deferred to design unless evidence demands. |
+| R-04 | PRD-001 R-03 | If the recommended people count is not a positive integer, the system shall reject the posting submission with a validation error citing the count field. | P0 | US-01 | The count is non-binding (PRD-001 R-03 / R-05); recommending zero people is meaningless. |
+| R-05 | PRD-001 R-03, R-07, R-15 | When an Alumni submits a valid posting, the system shall create the job record in state `awaiting moderation` and write an audit-log row (per ADR-009) recording the inception transition with the Alumni as actor. | P0 | US-01 | The intermediate `posted` state in PRD-001 R-07 is treated as the transient act of submission — the persisted post-submit state is `awaiting moderation`. The inception audit-log row uses `from_state: null`. |
+| R-06 | PRD-001 R-04 | The system shall provide users with the Moderator role a queue view listing all jobs in state `awaiting moderation`, ordered by creation timestamp ascending (oldest-first). | P0 | US-04 | No per-Moderator assignment; no claim-locking on the queue (see §8 assumption). Non-Moderator access returns 403. |
+| R-07 | PRD-001 R-04, R-15 | When a Moderator approves a job in state `awaiting moderation`, the system shall transition the job to `approved` via the FSM defined in ADR-008 and record the transition in the audit log with the Moderator as actor. The Moderator may approve a posting they themselves submitted. | P0 | US-05 | Q-03 resolved 2026-05-14: self-approval permitted; the audit log captures actor on every transition, making the pattern inspectable in PRD-007's Admin view. |
+| R-08 | PRD-001 R-04, R-15 | When a Moderator rejects a job in state `awaiting moderation`, the system shall require a free-text rejection reason of at least 1 non-whitespace character, transition the job to `rejected` via the FSM, and record the transition in the audit log with the Moderator as actor and the rejection reason captured in the audit-log `note` field. | P0 | US-06 | The rejection reason is the same string surfaced on the rejected-posting view per R-09. |
+| R-09 | PRD-001 R-04 | The system shall display the rejection reason to the posting Alumni on the rejected job's detail view. | P0 | US-03 | Read-only. The Alumni cannot edit the reason or any of the posting fields (R-10). |
+| R-10 | PRD-001 R-07 | The `rejected` state shall be terminal — the system shall NOT permit any FSM transition out of `rejected` for any actor (Alumni, Moderator, Admin). | P0 | US-03, US-06 | Q-01 resolved 2026-05-14. ADR-008's transitions map MUST NOT contain a `rejected → *` arrow. To retry, the Alumni creates a fresh posting per US-01. |
+| R-11 | PRD-001 R-03 | The system shall provide users with the Alumni role a list view of all jobs they posted, in any state, ordered by most-recent-first. | P0 | US-02 | Includes rejected jobs so the Alumni can revisit the rejection reason at any time. |
 
 ### 5.1 Acceptance criteria
 
-*(TBD — Given/When/Then, drafted alongside each requirement.)*
+- **AC-01** — covers R-01, R-05
+  - **Given** an Alumni is logged in and on the post-job form
+  - **When** they submit with description "Help me move a couch", dues 50, recommended count 2
+  - **Then** the system creates the job in state `awaiting moderation` AND writes an audit-log row with `from_state: null, to_state: awaiting moderation, actor_id: <Alumni>, actor_kind: user`.
+
+- **AC-02** — covers R-02
+  - **Given** an Alumni is on the post-job form
+  - **When** they submit with dues 0
+  - **Then** the system rejects the submission with a validation error citing the dues field, AND no job record is created.
+
+- **AC-03** — covers R-02 (negative case)
+  - **Given** an Alumni is on the post-job form
+  - **When** they submit with dues -5
+  - **Then** the system rejects the submission with a validation error citing the dues field.
+
+- **AC-04** — covers R-03
+  - **Given** an Alumni is on the post-job form
+  - **When** they submit with description "" (empty)
+  - **Then** the system rejects the submission with a validation error citing the description field.
+
+- **AC-05** — covers R-04
+  - **Given** an Alumni is on the post-job form
+  - **When** they submit with recommended people count 0
+  - **Then** the system rejects the submission with a validation error citing the count field.
+
+- **AC-06** — covers R-06 (ordering)
+  - **Given** there are 3 jobs in state `awaiting moderation`, created at T1 < T2 < T3
+  - **When** a Moderator opens the queue view
+  - **Then** the queue lists them in order [T1, T2, T3] (oldest-first).
+
+- **AC-07** — covers R-06 (access control)
+  - **Given** an Active user (no Moderator role) is logged in
+  - **When** they navigate to the moderation queue URL
+  - **Then** the system returns 403 Forbidden.
+
+- **AC-08** — covers R-07
+  - **Given** a job in state `awaiting moderation` posted by Alumni A
+  - **When** Moderator M approves it
+  - **Then** the job is in state `approved` AND an audit-log row exists with `from_state: awaiting moderation, to_state: approved, actor_id: M, actor_kind: user`.
+
+- **AC-09** — covers R-07 (self-approval, Q-03)
+  - **Given** Moderator M (also having Alumni capability) posts a job, putting it in state `awaiting moderation`
+  - **When** M approves their own posting
+  - **Then** the system permits the approval; the job is in state `approved`; the audit log shows `actor_id: M`; the job's `posted_by` is also M.
+
+- **AC-10** — covers R-08
+  - **Given** a job in state `awaiting moderation`
+  - **When** Moderator M rejects it with reason "Dues too low for the scope"
+  - **Then** the job is in state `rejected` AND an audit-log row exists with `from_state: awaiting moderation, to_state: rejected, actor_id: M, note: "Dues too low for the scope"`.
+
+- **AC-11** — covers R-08 (validation)
+  - **Given** a job in state `awaiting moderation`
+  - **When** a Moderator attempts to reject it with an empty reason
+  - **Then** the system rejects the moderation action with a validation error AND the job remains in `awaiting moderation`.
+
+- **AC-12** — covers R-09
+  - **Given** a job in state `rejected` posted by Alumni A with rejection reason R
+  - **When** Alumni A views the job's detail page
+  - **Then** the page displays R prominently in a read-only format.
+
+- **AC-13** — covers R-10 (terminal state)
+  - **Given** a job in state `rejected`
+  - **When** any actor (Alumni A, another Moderator, an Admin) attempts any state transition on the job (approve, edit, repost-as-edit, etc.)
+  - **Then** the system rejects the attempt with an FSM-violation error AND the job remains in `rejected`.
+
+- **AC-14** — covers R-11
+  - **Given** Alumni A has posted 3 jobs (in states `approved`, `awaiting moderation`, `rejected`)
+  - **When** Alumni A views their own postings list
+  - **Then** all 3 are shown, in most-recent-first order, with their current state visible.
 
 ### 5.2 Examples
 
-*(TBD — concrete inputs/outputs for the posting form's validation rules and the rejection-reason flow.)*
+**R-02 (dues validation):**
+
+| Input dues | Expected behaviour |
+|------------|---------------------|
+| 0 | REJECTED (validation error: "Dues amount must be positive.") |
+| -10 | REJECTED (validation error: "Dues amount must be positive.") |
+| 0.01 | ACCEPTED |
+| 50 | ACCEPTED |
+| 9999.99 | ACCEPTED (no upper bound enforced) |
+
+**R-04 (recommended count validation):**
+
+| Input count | Expected behaviour |
+|-------------|---------------------|
+| 0 | REJECTED (validation error: "Recommended people count must be at least 1.") |
+| 1 | ACCEPTED |
+| 2.5 | REJECTED (validation error: "Recommended people count must be a positive integer.") |
+| 50 | ACCEPTED |
+
+**R-05 / R-08 audit-log row shape** (per ADR-009 schema):
+
+```json
+{
+  "job_id": "9f1a3c8e-...",
+  "from_state": "awaiting moderation",
+  "to_state": "rejected",
+  "actor_id": "5d2b1f4a-...",
+  "actor_kind": "user",
+  "note": "Description doesn't say where the work would happen.",
+  "created_at": "2026-05-14T18:23:11.392Z"
+}
+```
 
 ## 6. User experience
 
@@ -76,7 +190,10 @@ Inherited from PRD-001 §4.1 — no new personas introduced.
   - Posting form shows the dues amount and the recommended people count explicitly — no hidden math, no tip field.
   - Static cultural nudge encouraging tipping appears on the job-details view (Q-06 outcome).
   - All transitions are recorded in the audit log (PRD-007 R-NN, pending).
-- *(MVP-specific UX rules to be drafted in Phase 5.)*
+- **Self-approval is permitted** (Q-03). When a Moderator views their own posting in the moderation queue, the approve and reject controls are present without restriction. The audit log records the actor on every transition, so self-approvals are inspectable in PRD-007's Admin view.
+- **Rejected-posting view shows the rejection reason prominently** and offers a "Post a new job" CTA that opens a *blank* form (Q-01). No edit-in-place affordance, no clone-and-pre-fill — the new posting starts from scratch, with its own ID and audit trail.
+- **Posting-form validation runs client-side as the user types** (e.g., "must be positive" on the dues field), to avoid confusing post-submit errors. Server-side validation (the EARS unwanted-behaviour rules R-02..R-04) is the source of truth; client-side is a UX courtesy only.
+- **Moderation queue ordering: oldest-first.** Postings that have waited longest get reviewed first, reducing the worst-case wait. (Reversible if Moderators ask for newest-first or "by Alumni" later.)
 
 ## 7. Scope boundaries
 
@@ -86,6 +203,8 @@ Inherited from PRD-001 §4.1 — no new personas introduced.
 - This PRD does **not** define the moderation queue's Admin-view aggregate counts — that's PRD-007.
 - This PRD does **not** introduce a tip field, tip percentage, or any tip-related UI element (Q-06 resolved 2026-05-14 in PRD-001).
 - This PRD does **not** support job templates, drafts that span sessions, or scheduled-publish — out of MVP scope unless evidence demands.
+- This PRD does **not** allow volunteer / $0-dues postings. Every posting requires a positive dues contribution amount (Q-02 resolved 2026-05-14). The product's value proposition is routing dues to the chapter; help-without-dues belongs in the chapter's group chat, not here. Reversible — relaxing this later is a single-requirement change.
+- This PRD does **not** allow editing or resubmitting a rejected posting. `rejected` is terminal; the Alumni reads the rejection reason and creates a fresh posting from scratch (Q-01 resolved 2026-05-14). No `rejected → posted` state transition; no edit affordance on the rejected view; no clone-and-edit. The fresh posting carries its own ID and starts a new audit trail.
 
 ### 7.2 DO NOT CHANGE *(scope-locks owned by other PRDs/ADRs)*
 
@@ -111,9 +230,9 @@ Inherited from PRD-001 §4.1 — no new personas introduced.
 
 | ID | Question / risk | Owner | Needed by |
 |----|-----------------|-------|-----------|
-| Q-01 | Should rejected jobs be re-postable as edits (preserves discussion + history) or only as new postings (simpler, no edit-vs-resubmit ambiguity)? | Product | Phase 5 |
-| Q-02 | What's the floor for the dues-amount field? $0 allowed (volunteer postings) or > $0 enforced? | Product | Phase 5 |
-| Q-03 | When a Moderator approves their own posting (Moderators are Alumni), is that allowed, gated, or auto-approved? | Product | Phase 5 |
+| Q-01 | ~~Should rejected jobs be re-postable as edits (preserves discussion + history) or only as new postings (simpler, no edit-vs-resubmit ambiguity)?~~ **Resolved 2026-05-14: new posting only.** `rejected` is a terminal state alongside `closed` / `cancelled` — no revival transition. Alumni reads the rejection reason on the rejected posting's view, then creates a fresh posting (no pre-fill). Considered-and-rejected: edit-and-resubmit (state-machine + audit-log churn for an MVP edge case) and clone-and-edit (real complexity for a use case we have no evidence will be common). | Product | ✅ Resolved 2026-05-14 |
+| Q-02 | ~~What's the floor for the dues-amount field? $0 allowed (volunteer postings) or > $0 enforced?~~ **Resolved 2026-05-14: > $0 enforced.** Posting requires a positive dues amount. Volunteer / $0 postings are explicitly out of scope (§7.1) — chapter group chats serve that need. Reflected as a forthcoming EARS unwanted-behaviour R-NN in §5 during Phase 5 drafting. | Product | ✅ Resolved 2026-05-14 |
+| Q-03 | ~~When a Moderator approves their own posting (Moderators are Alumni), is that allowed, gated, or auto-approved?~~ **Resolved 2026-05-14: allowed without restriction.** Moderators may approve their own postings. The audit log per ADR-009 captures actor on every transition, making "self-approval" computable as `actor_id == job.posted_by` and surfaceable in PRD-007's Admin view if a pattern emerges. Considered-and-rejected: 4-eyes gating (creates a bootstrap problem when a chapter has only 1 Moderator — no min-Mod invariant in PRD-001 R-16) and auto-approve (overshoots — removes the Mod's optional self-review step). | Product | ✅ Resolved 2026-05-14 |
 
 ## 10. Release plan
 
@@ -132,3 +251,7 @@ No new terms anticipated for this PRD. The terms it uses (Alumni, Moderator, Job
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial scaffold. Repurposed file (was the abandoned PRD-002 "MVP scope" mega-doc). Frontmatter, §1 objective, §2 background, §7.2 scope-locks, §10 release-plan skeleton. §5 requirements + ACs + examples + §4.2 stories deferred to Phase 5 decomposition. Three open questions (Q-01..Q-03) seeded for Phase 5 discussion. |
+| 2026-05-14 | Tom Haynes | **Q-02 resolved: > $0 dues amount enforced** at posting time. Added §7.1 non-goal banning volunteer / $0 postings. EARS unwanted-behaviour requirement to be drafted in §5 during full Phase 5 decomposition (will read approximately: *"If the dues contribution amount is not a positive number, the system shall reject the posting submission with a validation error citing the field."*) |
+| 2026-05-14 | Tom Haynes | **Q-01 resolved: rejection is terminal; new posting required to retry.** Added §7.1 non-goal banning edit-and-resubmit and clone-and-edit. Confirms ADR-008's transitions map does NOT include a `rejected → posted` (or `→ awaiting moderation`) revival arrow. ACs in §5.1 will verify rejected postings have no edit / resubmit affordance. |
+| 2026-05-14 | Tom Haynes | **Q-03 resolved: Moderator self-approval permitted without restriction.** Audit log per ADR-009 captures actor on every transition; self-approval inspectable in PRD-007's Admin view. Considered-and-rejected: 4-eyes gating (bootstrap problem with 1-Mod chapters) and auto-approve (overshoots). Added a §6 UX rule for the self-approval UI and reflected in R-07. |
+| 2026-05-14 | Tom Haynes | **§5 drafted: 11 R-NN (EARS), 14 ACs (Given/When/Then), §5.2 examples for R-02/R-04 validation + R-05/R-08 audit-log row shape.** §4.2 user stories US-01..US-06 added. §6 UX rules expanded with 4 MVP-specific rules covering self-approval, rejected-view CTA, client-side validation, and queue ordering. §5 still subject to PRD-002-level review pass before promotion to Proposed. |
