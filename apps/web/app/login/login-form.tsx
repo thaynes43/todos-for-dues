@@ -1,13 +1,31 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { signIn, type LoginActionResult } from './actions';
 
 const initialState: LoginActionResult | undefined = undefined;
 
+async function startSsoSignIn(): Promise<void> {
+  // Better Auth's genericOAuth plugin exposes /sign-in/oauth2 as POST with JSON body,
+  // returning { url } for the authorization redirect. A plain <a href> would GET and 404.
+  const res = await fetch('/api/auth/sign-in/oauth2', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ providerId: 'google-workspace', callbackURL: '/' }),
+    credentials: 'same-origin',
+  });
+  if (!res.ok) {
+    window.location.href = '/login?error=sso_unavailable';
+    return;
+  }
+  const data = (await res.json()) as { url?: string };
+  window.location.href = data.url ?? '/login?error=sso_unavailable';
+}
+
 export function LoginForm({ ssoEnabled }: { ssoEnabled: boolean }) {
   const [state, action, pending] = useActionState(signIn, initialState);
+  const [ssoPending, setSsoPending] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -49,13 +67,21 @@ export function LoginForm({ ssoEnabled }: { ssoEnabled: boolean }) {
         </button>
       </form>
       {ssoEnabled ? (
-        <a
-          href="/api/auth/sign-in/oauth2?providerId=google-workspace&callbackURL=/"
-          className="block w-full rounded border px-4 py-2 text-center"
+        <button
+          type="button"
+          disabled={ssoPending}
+          onClick={() => {
+            setSsoPending(true);
+            void startSsoSignIn().catch(() => {
+              setSsoPending(false);
+              window.location.href = '/login?error=sso_unavailable';
+            });
+          }}
+          className="block w-full rounded border px-4 py-2 text-center disabled:opacity-50"
           data-testid="sso-button"
         >
-          Sign in with Google
-        </a>
+          {ssoPending ? 'Redirecting…' : 'Sign in with Google'}
+        </button>
       ) : null}
       <p className="text-sm">
         Have an invite link?{' '}

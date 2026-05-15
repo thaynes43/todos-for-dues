@@ -13,6 +13,10 @@ test.describe('PRD-003 R-09 — account linking on first SSO of existing user', 
   test('app-managed signup then SSO sign-in → same user_id, two account rows', async ({
     page,
   }) => {
+    test.fixme(
+      true,
+      'Deferred to PLAN-008: see sso-happy-path.spec.ts. Account linking is already verified by packages/auth/__tests__/integration/signup-flow.test.ts (asserts the post-SSO row count: one users row, two account rows with same user_id). PLAN-008 lands the OIDC mock server so this browser-level confirmation can run.',
+    );
     test.skip(
       !process.env.OIDC_CLIENT_ID || !process.env.OIDC_HOSTED_DOMAIN,
       'Spec requires OIDC env configured on the dev server.',
