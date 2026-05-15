@@ -1,2 +1,32 @@
 # Playwright MCP transient artifacts (snapshots, console logs from agent test runs)
 .playwright-mcp/
+.zprompt.md
+
+# Node / pnpm
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# Tests
+coverage/
+playwright-report/
+test-results/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
