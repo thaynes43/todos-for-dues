@@ -111,6 +111,7 @@ Deploy the walking-skeleton build to the haynes-ops cluster per ADR-006 Phase 1.
 
 ## 7. Risks & gotchas
 
+- **Risk:** `pnpm --filter web build` inside the Dockerfile (Step 1) requires `DATABASE_URL` to be set at build time if `packages/db/src/index.ts` throws eagerly at module load (Next.js's build-time module trace executes top-level code in API route imports). **Mitigation:** PLAN-002 Step 0 refactors the db client to a Proxy-based lazy `db` — the throw is deferred to first DB access, so the Docker build stage works without `DATABASE_URL`. **Confirm before building the image:** `unset DATABASE_URL && pnpm --filter web build` exits 0 locally (the VALIDATION-002 §6 gate). If for any reason that gate has regressed, pass a dummy `DATABASE_URL=postgres://dummy:dummy@dummy:5432/dummy` to the Docker build arg as a fallback — but the lazy-Proxy fix should make that unnecessary.
 - **Risk:** Drizzle migrate init container fails (e.g., DB unreachable on first boot). **Mitigation:** init container retries with exponential backoff; pod startup probe includes a "migrations applied" check.
 - **Risk:** Workspace OIDC requires the redirect URI to match exactly. **Mitigation:** configure `OIDC_REDIRECT_URI=https://todos-for-dues.haynesops.com/api/auth/callback/oauth/google-workspace` in Workspace admin AND the env var.
 - **Risk:** Better Auth's secret rotation / cookie domain. **Mitigation:** verify `BETTER_AUTH_SECRET` set via External Secrets; cookie domain matches IngressRoute hostname.
@@ -137,3 +138,4 @@ Deploy the walking-skeleton build to the haynes-ops cluster per ADR-006 Phase 1.
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. 8 steps from Dockerfile to a running internal deploy + smoke-tested walking skeleton. |
 | 2026-05-14 | Tom Haynes | Plan-decomposition pass: frontmatter `related.plans` reshaped to `{prerequisite, lateral}` with VALIDATION-009 paired. PLAN-009 deploys the walking-skeleton (PLAN-001..008); PLAN-010/011/012 (MVP UI rest) ship via the same CI pipeline as subsequent deploys without separate plans. |
+| 2026-05-14 | Tom Haynes | Added §7 risk + mitigation for the `pnpm --filter web build` requires `DATABASE_URL` issue surfaced during VALIDATION-001. PLAN-002 Step 0 now refactors `packages/db/src/index.ts` to a lazy Proxy so the Docker build stage works without env vars. Fallback documented if the gate regresses. |

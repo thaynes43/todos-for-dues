@@ -107,6 +107,7 @@ All integration-style; PG16 via testcontainers per ADR-004. Test files PLAN-002 
 - [ ] `pnpm --filter @app/db drizzle-kit migrate` against a freshly-spun-up testcontainers PG16 applies all migrations in order with no errors; running migrations a second time is a no-op (idempotent).
 - [ ] After migrations, in a psql session: `\dt` shows 7 application tables; `\df assert_min_one_admin` shows the trigger function; `SELECT count(*) FROM chapter_settings` returns 5.
 - [ ] No new TypeScript errors (`pnpm typecheck` repo-wide).
+- [ ] **VALIDATION-001 follow-up:** `unset DATABASE_URL && pnpm --filter web build` exits 0 (proves PLAN-002 Step 0's Proxy refactor of `packages/db/src/index.ts` defers the throw past build-time). With `DATABASE_URL` set, `pnpm dev` boots and any tRPC call exercising `db.<method>` still works (the Proxy is functionally invisible to consumers).
 - [ ] One PLAN-002 commit on the branch.
 
 ## 7. Resume notes
@@ -118,3 +119,4 @@ Tests are independent and each spins up its own testcontainer (or shares one via
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. Pairs with PLAN-002. Covers every CHECK in DESIGN-001 §4, the min-Admin trigger + atomic-swap edge case, and the chapter_settings bootstrap migration from §5.5. PG16 via testcontainers per ADR-004. |
+| 2026-05-14 | Tom Haynes | Added §6 gate for PLAN-002 Step 0's lazy-Proxy refactor of `packages/db/src/index.ts` (carry-over from VALIDATION-001's flagged build-without-env issue). Gate: `unset DATABASE_URL && pnpm --filter web build` exits 0. |
