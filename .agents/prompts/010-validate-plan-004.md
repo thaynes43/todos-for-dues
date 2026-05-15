@@ -56,6 +56,54 @@ Every box in VALIDATION-004 §6 green, verified by running the commands:
 
 Report back (under 200 words): which gates passed, any implementation fixes you made (with new commit hash), anything escalated, **and explicit confirmation that PLAN-003's static-analysis test still passes**.
 
+## Known gap from PLAN-004 execution: Playwright auth specs not yet run
+
+The PLAN-004 execution agent authored the 9 Playwright auth specs at `apps/web/__e2e__/auth/` but **did not run them**. Reason: `apps/web/playwright.config.ts` has `webServer: { command: 'pnpm dev' }`, which needs a running Postgres on `DATABASE_URL` — and the execution agent's environment didn't have a Docker daemon configured beyond testcontainers (testcontainers spins up containers for *tests*, not for the dev server Playwright launches). PLAN-008 Step 1 already plans to address this with a Playwright `globalSetup` that bootstraps Postgres + migrations + chapter_settings before `pnpm dev` starts — the specs PLAN-004 wrote just landed a plan early.
+
+**Your job is to run those specs one way or another.** Two acceptable paths; pick whichever your environment supports:
+
+### Path A — bring your own Postgres (quick unblock)
+
+1. `docker run -d --rm -p 5432:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=t4d_e2e --name t4d-e2e-pg postgres:16`
+2. Export the connection string + the 5 `BOOTSTRAP_*` env vars for `chapter_settings` seeding (or accept the `*.invalid` placeholders for non-email-asserting specs):
+   ```
+   export DATABASE_URL=postgres://postgres:postgres@localhost:5432/t4d_e2e
+   export BETTER_AUTH_SECRET=test-secret-32-chars-min-padding-xxx
+   # plus OIDC_CLIENT_ID / OIDC_CLIENT_SECRET / OIDC_HOSTED_DOMAIN if the SSO specs need them set
+   ```
+3. `pnpm --filter @app/db migrate` to apply the 6 migrations.
+4. `pnpm --filter web e2e -- --grep auth/` runs the specs against `pnpm dev` (auto-launched by Playwright's `webServer` block).
+5. `docker rm -f t4d-e2e-pg` to clean up.
+
+Document this manual setup in your validation report. **No code commit required.**
+
+### Path B — wire Playwright globalSetup (value-additive; landing PLAN-008 Step 1 early)
+
+If you can do this cleanly, ship a small `fix(e2e): wire Postgres for Playwright dev-server` commit:
+
+1. Add `apps/web/__e2e__/global-setup.ts` that uses `@app/test-utils.startPostgres()` (PLAN-001's helper) to start a PG16 testcontainer, calls `runMigrations` from `@app/db/migrate` against it, and writes the connection URL + `BOOTSTRAP_*` vars to a `process.env` mutation that Playwright passes to `webServer`. Persist the container handle so `globalTeardown` can stop it.
+2. Add `apps/web/__e2e__/global-teardown.ts` to stop the container.
+3. Update `playwright.config.ts`:
+   ```ts
+   globalSetup: require.resolve('./__e2e__/global-setup.ts'),
+   globalTeardown: require.resolve('./__e2e__/global-teardown.ts'),
+   webServer: {
+     command: 'pnpm dev',
+     url: 'http://localhost:3000',
+     env: {
+       DATABASE_URL: process.env.DATABASE_URL ?? '',   // populated by globalSetup
+       BETTER_AUTH_SECRET: 'test-secret-...',
+       // ... etc
+     },
+     ...
+   },
+   ```
+4. Run the specs: `pnpm --filter web e2e -- --grep auth/`. Commit as `fix(e2e): wire Postgres for Playwright dev-server` so PLAN-008 inherits the infra.
+
+**Either path is acceptable.** Path A is faster + leaves no doc-debt; Path B is the cleaner long-term shape and shortens PLAN-008's runway. If you choose Path B, mention in your report that you've landed PLAN-008 Step 1 early so the user can adjust PLAN-008's scope.
+
+What you must NOT do: skip the specs. The full validation gate per VALIDATION-004 §6 requires every auth Playwright spec passes — the integration tests cover the wiring but Playwright is the only thing that verifies the form-submit / redirect / cookie story end-to-end through the browser.
+
 ## Specific things to look hard at
 
 1. **Bootstrap-admin hook uses `transitionRole`:** open `packages/auth/src/hooks/bootstrap-admin.ts`. Look for `import { transitionRole } from '@app/domain'`. The hook should: read current role, no-op if already Admin, otherwise call `transitionRole({ targetUserId, expectedFromRole, toRole: 'Admin', initiator: { id: null, kind: 'system' }, note: 'BOOTSTRAP_ADMIN_EMAIL promotion' })`. If you see `await tx.update(users).set({ role: 'Admin' })` or `await tx.insert(userRoleTransitions)` in this file, the implementation is wrong (and PLAN-003's static-analysis test should have caught it — re-run it as a tripwire).
