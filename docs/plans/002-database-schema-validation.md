@@ -41,7 +41,7 @@ Verify PLAN-002's schema implementation: 8 tables with the constraints + indexes
 | PRD-002 R-02 (positive dues) | `INSERT … dues_amount = 0` → ERRCODE `23514` (CHECK `jobs_dues_positive`) | `packages/db/__tests__/constraints.test.ts` |
 | PRD-002 R-03 (non-empty description) | `INSERT … description = ''` → ERRCODE `23514` (CHECK `jobs_description_non_empty`) | same |
 | PRD-002 R-04 (recommended count ≥ 1) | `INSERT … recommended_people_count = 0` → ERRCODE `23514` | same |
-| PRD-003 R-09 (account linking — INV-04 from ADC-02) | `INSERT users WITH password_hash=NULL AND oidc_subject=NULL` → ERRCODE `23514` (`users_account_kind`) | same |
+| ~~PRD-003 R-09 (account linking — INV-04 from ADC-02)~~ | ~~`INSERT users WITH password_hash=NULL AND oidc_subject=NULL` → ERRCODE `23514` (`users_account_kind`)~~ — **Superseded by PLAN-004:** Better Auth 1.6.x stores credentials in its own `account` table (per provider), so the `users_account_kind` CHECK is incorrect and was dropped during PLAN-004. INV-04 is now satisfied by the presence of an `account` row post-signup (asserted in `packages/auth/__tests__/integration/`) — not by a CHECK on the `users` table. | n/a (assertion removed) |
 | PRD-003 R-10 (display name required) | `INSERT users WITH display_name=NULL` → NOT NULL violation `23502` | same |
 | PRD-004 R-02 (idempotent enroll — INV-14) | `INSERT job_enrollments` twice with same `(job_id, active_id)` → PK violation `23505`; `ON CONFLICT DO NOTHING` succeeds | `packages/db/__tests__/idempotency.test.ts` |
 | PRD-007 R-07 (chapter_settings shape + bootstrap) | after applying all migrations, `SELECT key FROM chapter_settings` returns the 5 MVP keys (per DESIGN-001 §5.5) | `packages/db/__tests__/chapter-settings-bootstrap.test.ts` |
@@ -70,7 +70,7 @@ All integration-style; PG16 via testcontainers per ADR-004. Test files PLAN-002 
 - `it('creates the min-Admin trigger')` — `SELECT tgname FROM pg_trigger WHERE tgname = 'trg_min_one_admin'` returns 1 row; `tgdeferrable = true`.
 
 **`packages/db/__tests__/constraints.test.ts`**
-- Per-CHECK: one test per CHECK in DESIGN-001 §4 — assert ERRCODE `23514` on violating insert.
+- Per-CHECK: one test per CHECK in DESIGN-001 §4 — assert ERRCODE `23514` on violating insert. **Note:** the `users_account_kind` CHECK assertion was removed in PLAN-004 (the constraint itself was dropped — Better Auth's `account` table owns credentials per provider; see §3 row above).
 - `it('rejects duplicate user email')` — ERRCODE `23505`.
 - `it('cascades job_enrollments on user delete')` — delete user → enrollment row gone.
 - `it('cascades job_enrollments on job delete')` — delete job → enrollment row gone.
@@ -120,3 +120,4 @@ Tests are independent and each spins up its own testcontainer (or shares one via
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. Pairs with PLAN-002. Covers every CHECK in DESIGN-001 §4, the min-Admin trigger + atomic-swap edge case, and the chapter_settings bootstrap migration from §5.5. PG16 via testcontainers per ADR-004. |
 | 2026-05-14 | Tom Haynes | Added §6 gate for PLAN-002 Step 0's lazy-Proxy refactor of `packages/db/src/index.ts` (carry-over from VALIDATION-001's flagged build-without-env issue). Gate: `unset DATABASE_URL && pnpm --filter web build` exits 0. |
+| 2026-05-14 | Tom Haynes | §3 + §4: marked the `users_account_kind` CHECK assertion as superseded by PLAN-004. PLAN-004's execution surfaced that Better Auth 1.6.x stores credentials in its own `account` table (per provider row), so the CHECK on `users.password_hash IS NOT NULL OR oidc_subject IS NOT NULL` is incorrect and was dropped. ADC-02 INV-04 (app-managed has password, SSO has linkage) is now satisfied by the presence of an `account` row post-signup — asserted by the new PLAN-004 integration tests in `packages/auth/__tests__/integration/`. DESIGN-001 §2.2 already ceded Better Auth's table layout to DESIGN-004; this update aligns the validation with that boundary. |

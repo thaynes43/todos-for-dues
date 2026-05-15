@@ -48,15 +48,19 @@ Defines the complete Postgres schema for the walking-skeleton subset (BCC-01 Ide
 ```
 postgres (CloudNative-PG cluster16, dedicated DB per ADR-006)
 └── public schema
-    ├── users                       (BCC-01 ADC-02; extended by Better Auth)
+    ├── users                       (BCC-01 ADC-02 — chapter identity fields; credentials live in `account`)
     ├── invite_tokens               (BCC-01)
+    ├── session                     (Better Auth — declared in our schema; library writes)
+    ├── account                     (Better Auth — credentials per provider; library writes)
+    ├── verification                (Better Auth — email-verification + reset tokens; library writes)
     ├── jobs                        (BCC-02 ADC-01)
     ├── job_enrollments             (BCC-02 — child of jobs)
     ├── job_state_transitions       (cross-cutting audit; BCC-02 writes; PRD-007 reads)
     ├── user_role_transitions       (cross-cutting audit; BCC-03 writes; PRD-007 reads)
-    ├── chapter_settings            (cross-cutting infra; ADR-010)
-    └── (Better Auth's own tables: sessions, accounts, verification — managed by the library)
+    └── chapter_settings            (cross-cutting infra; ADR-010)
 ```
+
+> Better Auth's `session` / `account` / `verification` tables are declared in our Drizzle schema (§4.10) because Better Auth's `drizzleAdapter` does NOT auto-create tables — it expects the schema to exist. The library writes to them at runtime; the source of truth for the table shape is Better Auth's docs at the installed version.
 
 Drizzle schema declarations live in `packages/db/schema/` (one file per table, plus an `index.ts` barrel):
 
@@ -65,6 +69,7 @@ packages/db/schema/
   index.ts                       (barrel export)
   users.ts
   invite-tokens.ts
+  better-auth.ts                 (session, account, verification — §4.10)
   jobs.ts
   job-enrollments.ts
   job-state-transitions.ts
@@ -117,39 +122,40 @@ Migrations live in `packages/db/migrations/` (Drizzle convention) with both the 
 
 ### 4.2 `packages/db/schema/users.ts`
 
-- **Purpose:** the User aggregate (ADC-02). Extends Better Auth's user table with the chapter-specific `role` column.
+- **Purpose:** the User aggregate (ADC-02). The `users` table holds chapter-specific identity fields (`id`, `email`, `displayName`, `role`) and `emailVerified` (consumed by Better Auth's account-linking check). Per the wrapped-library boundary already declared in §2.2, credentials (password hash for app-managed users, OIDC subject/provider linkage for SSO users) are NOT on `users` — they live on Better Auth's `account` table (§4.10).
+
+  > **Reconciliation note (2026-05-14, after PLAN-004 execution):** an earlier draft of this section had `password_hash` + `oidc_subject` + `oidc_provider` columns on `users` plus a `users_account_kind` CHECK constraint. That was a scope-boundary leak — Better Auth 1.6.x stores credentials in its own `account` table per provider, and never writes to those `users` columns. The columns + CHECK have been dropped during PLAN-004; the `users.email_verified` column was added in the same reshape. §2.2's "Better Auth's internal session table layout is owned by DESIGN-004" already ceded this region; this update makes §4.2 consistent with that boundary.
+
 - **Drizzle declaration:**
 
   ```ts
-  import { pgTable, uuid, text, timestamp, check } from 'drizzle-orm/pg-core';
+  import { pgTable, uuid, text, timestamp, boolean, check } from 'drizzle-orm/pg-core';
   import { sql } from 'drizzle-orm';
   import { ROLES, type Role } from './enums';
 
   export const users = pgTable(
     'users',
     {
-      id: uuid('id').primaryKey().defaultRandom(),                           // INV-01 BCC-02; gen_random_uuid()
+      id: uuid('id').primaryKey().defaultRandom(),                           // gen_random_uuid()
       email: text('email').notNull().unique(),                                // ADC-02 INV-01 (unique)
       displayName: text('display_name').notNull(),                            // ADC-02 INV-05
       role: text('role').$type<Role>().notNull().default('Active'),           // ADR-011 + ADC-02 INV-02
-      passwordHash: text('password_hash'),                                    // app-managed only; nullable
-      oidcSubject: text('oidc_subject'),                                      // SSO only; nullable; null OR (provider, sub) pair below
-      oidcProvider: text('oidc_provider'),                                    // e.g. 'google-workspace'
+      emailVerified: boolean('email_verified').notNull().default(false),      // Better Auth account-linking gate (PRD-003 R-09)
       createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
       updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     },
     (table) => [
       check('users_role_enum', sql`${table.role} = ANY (ARRAY['Active','Alumni','Moderator','Admin'])`),
-      check('users_account_kind', sql`(${table.passwordHash} IS NOT NULL OR ${table.oidcSubject} IS NOT NULL)`),  // ADC-02 INV-04
     ]
   );
   ```
 
 - **Key behaviours:**
   1. `role` defaults to `'Active'` so SSO-created accounts (no token to pre-select role) get a safe non-privileged default — the Admin can promote via PRD-008.
-  2. `passwordHash` and `oidcSubject` are both nullable, but the CHECK ensures at least one is present (ADC-02 INV-04).
-  3. Display name is required at the row level to match PRD-003 design + downstream assumptions in ADC-02 INV-05.
-- **Dependencies:** `enums.ts`, Drizzle ORM. Better Auth manages `sessions`, `accounts`, `verification` tables on its own; we don't declare them here.
+  2. **ADC-02 INV-04** (app-managed has password, SSO has linkage) is now satisfied by the presence of at least one `account` row per user, NOT by a CHECK on the `users` table. The new Better Auth integration tests in `packages/auth/__tests__/integration/` assert: invite-token signup → user row + `account` row with `providerId: 'credential'`; SSO sign-in → user row + `account` row with `providerId: 'google-workspace'`; account linking → one user row + TWO `account` rows. The `users_account_kind` CHECK from the earlier draft has been dropped.
+  3. `emailVerified` is consumed by Better Auth's transparent account-linking (PRD-003 R-09): the existing user must have `emailVerified = true` before an SSO sign-in for the same email auto-links to the existing row. Without this column we'd be forced onto Better Auth's deprecated `accountLinking.requireLocalEmailVerified: false` flag.
+  4. Display name is required at the row level to match PRD-003 R-10 + downstream assumptions in ADC-02 INV-05.
+- **Dependencies:** `enums.ts`, Drizzle ORM. Better Auth's `session`, `account`, `verification` tables are declared in `packages/db/src/schema/` alongside this file (see §4.10) — same Drizzle barrel — so the rest of the codebase has typed access.
 - **Notes:**
   - The min-Admin invariant trigger lives in §5.3 (migration), not here — Drizzle doesn't model triggers directly.
   - `drizzle-zod` derives a `userInsertSchema` and `userSelectSchema` from this declaration; tRPC procedures import them directly.
@@ -369,7 +375,19 @@ Migrations live in `packages/db/migrations/` (Drizzle convention) with both the 
   export * from './job-state-transitions';
   export * from './user-role-transitions';
   export * from './chapter-settings';
+  export * from './better-auth';     // session, account, verification — see §4.10
   ```
+
+### 4.10 `packages/db/schema/better-auth.ts` — `session`, `account`, `verification`
+
+- **Purpose:** Better Auth's three managed tables, declared in Drizzle so the rest of the codebase has typed access (especially `account` for credential introspection during the integration tests in `packages/auth/__tests__/integration/`).
+- **Why declared here:** Better Auth's `drizzleAdapter` does NOT auto-create tables — it expects the schema to exist. Declaring them in `packages/db/src/schema/better-auth.ts` keeps the source of truth in one place and lets `drizzle-kit generate` emit the migrations.
+- **Shape:** matches Better Auth 1.6.x's drizzle adapter exactly — refer to Better Auth's current docs at the version installed; do NOT improvise field names. Both `session.user_id` and `account.user_id` are `uuid REFERENCES users(id) ON DELETE CASCADE` so user deletion cleans up. `account.provider_id` is the discriminator (`'credential'` for app-managed users, `'google-workspace'` for SSO users); `account.account_id` is the provider-side identifier (the OIDC subject for SSO, the user's own id for app-managed); `account.password` holds the hash for `providerId: 'credential'` rows.
+- **Key behaviours:**
+  1. ADC-02 INV-04 (app-managed has password, SSO has linkage) is satisfied by the presence of an `account` row per user, NOT by any CHECK on `users`. PLAN-004's integration tests assert this.
+  2. PRD-003 R-09 transparent account-linking: a returning SSO user whose email matches an existing app-managed user gets a new `account` row added (same `user_id`), provided the existing user's `users.email_verified` is `true`.
+  3. `verification` holds Better Auth's email-verification + password-reset tokens; we don't read from it directly.
+- **Dependencies:** `users.ts` (for the `user_id` FKs).
 
 ## 5. Migration / data shape
 
@@ -468,7 +486,7 @@ Per the project test-DB rule (`feedback_doc_conventions.md` / handoff): **no SQL
 | ID | Question | Owner | Needed by |
 |----|----------|-------|-----------|
 | Q-DSG-01 | Should `jobs.state` migrate to a Postgres enum type post-walking-skeleton? Lean: **yes** once states stabilise — better introspection in psql, slightly tighter constraints. Migration is a few lines. | Design | Post-walking-skeleton |
-| Q-DSG-02 | Should the Better Auth tables (`sessions`, `accounts`, `verification`) live in a separate schema (e.g., `auth.*`) for clarity, or in `public.*` for simplicity? Lean: **public for MVP** — Better Auth defaults; revisit if cross-schema isolation becomes valuable. | Design | Before initial migration |
+| Q-DSG-02 | ~~Should the Better Auth tables (`sessions`, `accounts`, `verification`) live in a separate schema (e.g., `auth.*`) for clarity, or in `public.*` for simplicity?~~ **Resolved 2026-05-14 during PLAN-004 execution: `public.*`** — Better Auth's drizzleAdapter doesn't auto-namespace, our integration tests need direct access to `account` rows, and the table-count is small enough that schema isolation buys nothing. Declared in `packages/db/schema/better-auth.ts` (§4.10). | Design | ✅ Resolved 2026-05-14 |
 | Q-DSG-03 | The `chapter_settings` table is currently chapter-wide with no chapter-scoping column. When we add multi-chapter support (post-MVP), this needs a `chapter_id` column or per-chapter schema. **Out of MVP scope** but flagged. | Design | When second chapter onboards |
 | Q-DSG-04 | `jobs.per_active_dues_credit` as `jsonb` map vs. promoting to a join table (`job_dues_credits` rows)? Mirror of ADC-01 Q-AGG-04. Lean: **join table** for queryability ("show me all credits for Active A"). Will revise §4.4 if/when this lands. | Design | Before implementing PRD-005 |
 
@@ -478,3 +496,4 @@ Per the project test-DB rule (`feedback_doc_conventions.md` / handoff): **no SQL
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. Schema for the walking-skeleton subset across BCC-01 + BCC-02 + BCC-03 + cross-cutting tables. 8 tables, all CHECK constraints, indexes for the major query patterns (R-02 aggregate counts, R-04 disputes, R-06 / R-11 user lists, R-06 audit timeline). Min-Admin deferred-CHECK trigger from ADR-011 included as a hand-written migration. 4 design follow-up questions. |
 | 2026-05-14 | Tom Haynes | §4.1: strengthened naming note to make the snake_case (wire/code) vs. hyphenated (PRD-001 R-07 display) convention explicit and to point at DESIGN-006 §4.6's `stateDisplayName()` formatter as the single conversion point. §5.5: added `0005_bootstrap_chapter_settings.sql` migration so the five PRD-007 R-07 settings are seeded from env vars on first deploy — closes the gap where `getSetting()` would crash on a fresh instance. |
+| 2026-05-14 | Tom Haynes | **§4.2 reconciliation with Better Auth's actual data model.** Earlier draft had `password_hash` + `oidc_subject` + `oidc_provider` columns on `users` plus a `users_account_kind` CHECK — a scope-boundary leak past §2.2 which already cedes Better Auth's internal table layout to DESIGN-004. PLAN-004's execution surfaced that Better Auth 1.6.x stores credentials in its own `account` table (per provider row) and never writes to those `users` columns, so the CHECK would fail on every signup. Reshape: drop the three legacy columns + the CHECK; add `users.email_verified` (consumed by Better Auth's transparent account-linking check per PRD-003 R-09); declare Better Auth's `session` / `account` / `verification` tables in `packages/db/schema/better-auth.ts` (new §4.10) since the drizzleAdapter does NOT auto-create tables. ADC-02 INV-04 (app-managed has password, SSO has linkage) is now satisfied by the presence of an `account` row per user, asserted by PLAN-004's `packages/auth/__tests__/integration/`. §3 architecture diagram + schema-folder listing updated. Q-DSG-02 resolved (public.* schema for Better Auth tables). |

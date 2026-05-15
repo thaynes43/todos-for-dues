@@ -87,7 +87,14 @@ All against `pnpm dev` at `http://localhost:3000`. Workspace OIDC mocked via `pa
 - [ ] `pnpm --filter @app/auth typecheck && test` passes all unit + integration tests.
 - [ ] `pnpm --filter web e2e -- --grep auth/` passes every spec listed in §5.
 - [ ] No console errors in the OIDC happy-path spec.
-- [ ] After running the SSO + account-linking specs, the DB contains exactly the expected `users` and `user_role_transitions` rows (assertions inside specs).
+- [ ] After running the SSO + account-linking specs, the DB contains exactly the expected `users`, `account`, and `user_role_transitions` rows (assertions inside specs).
+- [ ] **Schema reshape gates (Better Auth ↔ DESIGN-001 reconciliation):**
+  - The four PLAN-004 schema-reshape migrations apply cleanly to a fresh PG16: (a) `session` / `account` / `verification` tables created per Better Auth 1.6.x's drizzle adapter shape with `ON DELETE CASCADE` from both `session.user_id` and `account.user_id` to `users(id)`; (b) `users.email_verified BOOLEAN NOT NULL DEFAULT false` added; (c) `users_account_kind` CHECK constraint dropped; (d) legacy `users.password_hash` / `users.oidc_subject` / `users.oidc_provider` columns dropped.
+  - Drizzle schema declarations under `packages/db/src/schema/` include typed exports for `session`, `account`, `verification`; the barrel exports them.
+  - `packages/db/__tests__/constraints.test.ts` no longer asserts the `users_account_kind` CHECK (the assertion was removed because the constraint no longer exists). Re-run `pnpm --filter @app/db test` — green.
+  - Integration test in `packages/auth/__tests__/integration/` asserts: invite-token signup → `users` row + `account` row with `providerId: 'credential'` + `password: <hash>`; SSO sign-in → `users` row with `role: 'Alumni'` + `account` row with `providerId: 'google-workspace'` + `accountId: <oidc sub>`; account linking → one `users` row + TWO `account` rows (one per provider) with same `user_id`.
+- [ ] **Cross-plan invariant:** `pnpm --filter @app/domain test` still exits 0, especially `no-direct-state-writes.test.ts`. The bootstrap-admin hook from Trap 1 must route through `transitionRole` from `@app/domain`.
+- [ ] Repo-wide `pnpm -r typecheck` exit code 0.
 - [ ] One PLAN-004 commit on the branch.
 
 ## 7. Resume notes
@@ -99,3 +106,4 @@ Specs are independent. If a spec hangs, kill the dev server and re-run. The mock
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. Pairs with PLAN-004. Maps every PRD-003 AC to a unit + Playwright spec. Workspace OIDC mocked at the callback URL; no real Workspace traffic in tests. |
+| 2026-05-14 | Tom Haynes | §6: added the Better-Auth ↔ DESIGN-001 reconciliation gates. PLAN-004's execution surfaced that Better Auth 1.6.x stores credentials in its own `account` table — incompatible with DESIGN-001 §4.2's `users.password_hash` / `oidc_subject` + `users_account_kind` CHECK (DESIGN-001 §2.2 already ceded Better Auth's internal layout to DESIGN-004, but §4.2 had drifted). PLAN-004 now also ships: Better Auth's session/account/verification tables, a `users.email_verified` column, drops the `users_account_kind` CHECK + the legacy `password_hash` / `oidc_subject` / `oidc_provider` columns, and updates `packages/db/__tests__/constraints.test.ts` to remove the now-stale CHECK assertion. New integration tests in `packages/auth/__tests__/integration/` assert the post-signup row shapes (users + account) and the linking behavior (two account rows per user). Cross-plan invariant (PLAN-003's `no-direct-state-writes.test.ts`) remains hard-required. |
