@@ -13,7 +13,9 @@ related:
   bounded_contexts: [BCC-01, BCC-02, BCC-03]
   aggregates: [ADC-01, ADC-02]
   designs: [DESIGN-001]
-  plans: [PLAN-001]
+  plans:
+    prerequisite: [PLAN-001]
+    lateral: [VALIDATION-002]
   parent_plan: null
   supersedes: null
 ---
@@ -248,3 +250,4 @@ After this plan completes:
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. 7 steps from schema declarations to committed migrations + tests. Reorders migrations to put extensions first per the `gen_random_uuid()` dependency. Includes the atomic-swap test for the min-Admin invariant per PRD-008 AC-05. |
+| 2026-05-14 | Tom Haynes | Plan-decomposition pass: frontmatter `related.plans` reshaped to `{prerequisite, lateral}` with VALIDATION-002 paired. |

@@ -13,16 +13,18 @@ related:
   bounded_contexts: [BCC-02, BCC-03]
   aggregates: [ADC-01, ADC-02]
   designs: [DESIGN-001, DESIGN-002]
-  plans: [PLAN-001, PLAN-002]
+  plans:
+    prerequisite: [PLAN-001, PLAN-002]
+    lateral: [VALIDATION-003]
   parent_plan: null
   supersedes: null
 ---
 
 ## 1. Goal
 
-Implement DESIGN-002 verbatim: `JOB_TRANSITIONS` map + `transitionJob()` + `createJob()` + `approveJob()` + `transitionRole()` + the typed error classes. Comprehensive test suite covering type-narrowing, atomic transactions, optimistic concurrency, and the deferred-CHECK min-Admin invariant integration.
+Implement DESIGN-002 verbatim: `JOB_TRANSITIONS` map + `transitionJob()` + `createJob()` (with `afterCommit` parameter per DESIGN-002 §4.1.3) + `approveJob()` + `recordRelationshipEvent()` (per DESIGN-002 §4.1.5 — the single writer for enroll/unenroll audit-log rows) + `transitionRole()` + the typed error classes. Comprehensive test suite covering type-narrowing, atomic transactions, optimistic concurrency, and the deferred-CHECK min-Admin invariant integration.
 
-> **Produces:** `packages/domain/job-state-machine.ts` + `user-role-transitions.ts` + `errors.ts` + a test suite that exercises every transition path and every typed error.
+> **Produces:** `packages/domain/job-state-machine.ts` + `user-role-transitions.ts` + `errors.ts` + a test suite that exercises every transition path, every typed error, AND the relationship-event helper that PLAN-005's `jobs.enroll` / `jobs.unenroll` depend on.
 > **Definition of success:** `pnpm --filter @app/domain test` passes; the type-narrowing smoke test (`@ts-expect-error` block) compiles; concurrent-transition race tests reliably show first-write-wins; min-Admin atomic-swap test passes.
 
 ## 2. Inputs
@@ -38,7 +40,7 @@ PLAN-002 complete: schema + migrations + min-Admin trigger in place.
 
 ## 3. Outputs
 
-- `packages/domain/src/job-state-machine.ts` — JOB_TRANSITIONS const + transitionJob<S, E>() + createJob() + approveJob().
+- `packages/domain/src/job-state-machine.ts` — JOB_TRANSITIONS const + transitionJob<S, E>() + createJob() (with optional `afterCommit` callback per DESIGN-002 §4.1.3) + approveJob() + recordRelationshipEvent() (per DESIGN-002 §4.1.5).
 - `packages/domain/src/user-role-transitions.ts` — transitionRole().
 - `packages/domain/src/errors.ts` — FsmViolationError, ConcurrentTransitionError, MinAdminInvariantError + isPostgresCheckViolation helper.
 - `packages/domain/src/index.ts` — barrel exporting the public API.
@@ -58,10 +60,11 @@ PLAN-002 complete: schema + migrations + min-Admin trigger in place.
 
 - **Action:**
   - Copy DESIGN-002 §4.1.1 (the `JOB_TRANSITIONS` const) verbatim.
-  - Copy DESIGN-002 §4.1.2 (the `transitionJob()` function) verbatim.
-  - Copy DESIGN-002 §4.1.3 (`createJob()` and `approveJob()`) verbatim.
+  - Copy DESIGN-002 §4.1.2 (the `transitionJob()` function) verbatim, including the `afterCommit?: () => Promise<void>` field on `TransitionJobInput` and the post-commit try/log/swallow block.
+  - Copy DESIGN-002 §4.1.3 (`createJob()` — with the `afterCommit?: (jobId) => Promise<void>` parameter the PRD-002 R-12 moderator-queue notification depends on) and `approveJob()` verbatim.
+  - Copy DESIGN-002 §4.1.5 (`recordRelationshipEvent()` — the single writer for non-FSM audit-log rows from `jobs.enroll` / `jobs.unenroll`; PLAN-005 imports this) verbatim.
   - Verify the `JOB_TRANSITIONS` const compiles with the `satisfies Record<JobState, ...>` clause — every state in the enum must have an entry (terminals: `{}`).
-- **Verification:** `pnpm --filter @app/domain typecheck` passes.
+- **Verification:** `pnpm --filter @app/domain typecheck` passes; `recordRelationshipEvent` is exported from `packages/domain/src/index.ts`.
 
 ### Step 3 — Create `user-role-transitions.ts`
 
@@ -100,6 +103,9 @@ PLAN-002 complete: schema + migrations + min-Admin trigger in place.
   - **Transaction rollback:** force a failure inside `afterStateWrite` (e.g., `beforeStateWrite` throws); assert `jobs.state` unchanged AND no audit-log row written.
   - **`afterCommit` failure:** force `afterCommit` to throw; assert `transitionJob` resolves successfully (transition committed), the error is logged.
   - **Two-row pattern:** invoke `approveJob` and assert exactly two `job_state_transitions` rows: one with `actor_kind: 'user'` and one with `actor_kind: 'system'`, both inside the same transaction (their `created_at` deltas are < 100ms, both visible after the same `pg_advisory_lock` cycle).
+  - **`createJob.afterCommit`:** provide an `afterCommit` callback; assert it runs once with the new jobId after the row commits; on callback throw, assert the row is still present (the callback failure is logged, not propagated).
+  - **`recordRelationshipEvent` happy path:** insert a `jobs` row in `enrollment_open`; call `recordRelationshipEvent({ event: 'enroll', currentState: 'enrollment_open', beforeAuditWrite: insert-job_enrollments-row })`; assert (a) the job_enrollments row exists, (b) one `job_state_transitions` row with `from_state == to_state == 'enrollment_open'` and `note: 'enroll'`, (c) both writes were transactional (force `beforeAuditWrite` to throw → no enrollment AND no audit row).
+  - **`recordRelationshipEvent` unenroll:** parallel test for `event: 'unenroll'` with `beforeAuditWrite` deleting the enrollment row.
 - **Verification:** all integration tests pass.
 
 ### Step 7 — Integration tests for `transitionRole` (min-Admin)
@@ -168,3 +174,4 @@ PLAN-002 complete: schema + migrations + min-Admin trigger in place.
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. 8 steps from errors.ts to committed FSM module. Comprehensive integration tests for type narrowing, all ST-01..ST-17 transitions, optimistic concurrency, two-row approval pattern, and min-Admin atomic-swap. |
+| 2026-05-14 | Tom Haynes | Plan-decomposition pass: §1 + §3 + Step 2 + Step 6 extended to cover the post-doc-review additions to DESIGN-002 — `createJob.afterCommit` parameter (§4.1.3) and `recordRelationshipEvent()` helper (§4.1.5). Frontmatter `related.plans` reshaped to `{prerequisite, lateral}` with VALIDATION-003 paired. PLAN-005's `jobs.enroll` / `jobs.unenroll` + `jobs.post` afterCommit depend on these. |

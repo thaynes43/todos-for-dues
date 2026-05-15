@@ -13,7 +13,9 @@ related:
   bounded_contexts: []
   aggregates: []
   designs: [DESIGN-001, DESIGN-002, DESIGN-003, DESIGN-004, DESIGN-005, DESIGN-006]
-  plans: []
+  plans:
+    prerequisite: []
+    lateral: [VALIDATION-001]
   parent_plan: null
   supersedes: null
 ---
@@ -276,3 +278,4 @@ After this plan completes, the repo contains:
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. 9 steps from `pnpm init` to a runnable scaffold with passing smoke test + clean commit. No business logic. |
+| 2026-05-14 | Tom Haynes | Plan-decomposition pass: frontmatter `related.plans` reshaped to `{prerequisite, lateral}` with VALIDATION-001 paired. |

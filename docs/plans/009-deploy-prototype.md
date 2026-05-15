@@ -13,7 +13,9 @@ related:
   bounded_contexts: []
   aggregates: []
   designs: []
-  plans: [PLAN-001, PLAN-002, PLAN-003, PLAN-004, PLAN-005, PLAN-006, PLAN-007, PLAN-008]
+  plans:
+    prerequisite: [PLAN-001, PLAN-002, PLAN-003, PLAN-004, PLAN-005, PLAN-006, PLAN-007, PLAN-008]
+    lateral: [VALIDATION-009]
   parent_plan: null
   supersedes: null
 ---
@@ -134,3 +136,4 @@ Deploy the walking-skeleton build to the haynes-ops cluster per ADR-006 Phase 1.
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. 8 steps from Dockerfile to a running internal deploy + smoke-tested walking skeleton. |
+| 2026-05-14 | Tom Haynes | Plan-decomposition pass: frontmatter `related.plans` reshaped to `{prerequisite, lateral}` with VALIDATION-009 paired. PLAN-009 deploys the walking-skeleton (PLAN-001..008); PLAN-010/011/012 (MVP UI rest) ship via the same CI pipeline as subsequent deploys without separate plans. |

@@ -13,7 +13,9 @@ related:
   bounded_contexts: [BCC-01]
   aggregates: [ADC-02]
   designs: [DESIGN-004]
-  plans: [PLAN-001, PLAN-002, PLAN-003]
+  plans:
+    prerequisite: [PLAN-001, PLAN-002, PLAN-003]
+    lateral: [VALIDATION-004]
   parent_plan: null
   supersedes: null
 ---
@@ -136,3 +138,4 @@ Implement DESIGN-004 end-to-end: Better Auth instance with `genericOAuth` plugin
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. 8 steps from Better Auth config to passing E2E auth tests. |
+| 2026-05-14 | Tom Haynes | Plan-decomposition pass: frontmatter `related.plans` reshaped to `{prerequisite, lateral}` with VALIDATION-004 paired. |

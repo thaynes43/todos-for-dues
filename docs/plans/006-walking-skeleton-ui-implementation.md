@@ -13,7 +13,9 @@ related:
   bounded_contexts: [BCC-01, BCC-02]
   aggregates: [ADC-01, ADC-02]
   designs: [DESIGN-006]
-  plans: [PLAN-001, PLAN-004, PLAN-005]
+  plans:
+    prerequisite: [PLAN-001, PLAN-004, PLAN-005]
+    lateral: [VALIDATION-006]
   parent_plan: null
   supersedes: null
 ---
@@ -133,3 +135,4 @@ Implement the walking-skeleton subset of DESIGN-006 (per §4.2 of that design): 
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. 7 steps to land the walking-skeleton subset of DESIGN-006. Defers full MVP UI to a follow-up plan. |
+| 2026-05-14 | Tom Haynes | Plan-decomposition pass: frontmatter `related.plans` reshaped to `{prerequisite, lateral}` with VALIDATION-006 paired. Walking-skeleton-only scope confirmed; rest of MVP UI is owned by PLAN-010 (job-loop UI rest), PLAN-011 (Admin view), PLAN-012 (Role management UI). |

@@ -13,7 +13,9 @@ related:
   bounded_contexts: [BCC-01, BCC-02]
   aggregates: [ADC-01]
   designs: [DESIGN-006]
-  plans: [PLAN-001, PLAN-002, PLAN-003, PLAN-004, PLAN-005, PLAN-006, PLAN-007]
+  plans:
+    prerequisite: [PLAN-001, PLAN-002, PLAN-003, PLAN-004, PLAN-005, PLAN-006, PLAN-007]
+    lateral: [VALIDATION-008]
   parent_plan: null
   supersedes: null
 ---
@@ -125,3 +127,4 @@ Write the canonical Playwright E2E test that proves the walking-skeleton happy p
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. 4 steps to land the canonical walking-skeleton E2E test. |
+| 2026-05-14 | Tom Haynes | Plan-decomposition pass: frontmatter `related.plans` reshaped to `{prerequisite, lateral}` with VALIDATION-008 paired. PLAN-008 is the walking-skeleton happy-path; non-happy-path E2E specs (dispute, min-Admin, role-management, Admin view) are owned by VALIDATION-010 / VALIDATION-011 / VALIDATION-012. |

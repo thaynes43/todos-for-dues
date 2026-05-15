@@ -13,7 +13,9 @@ related:
   bounded_contexts: [BCC-01, BCC-02, BCC-03]
   aggregates: [ADC-01, ADC-02]
   designs: [DESIGN-003]
-  plans: [PLAN-001, PLAN-002, PLAN-003, PLAN-004]
+  plans:
+    prerequisite: [PLAN-001, PLAN-002, PLAN-003, PLAN-004]
+    lateral: [VALIDATION-005]
   parent_plan: null
   supersedes: null
 ---
@@ -143,3 +145,4 @@ Implement DESIGN-003 end-to-end: 5 routers (jobs, users, settings, admin, invite
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. 9 steps to land all 5 routers + E2E + Next.js wiring. Notifications stubbed; PLAN-007 swaps in. |
+| 2026-05-14 | Tom Haynes | Plan-decomposition pass: frontmatter `related.plans` reshaped to `{prerequisite, lateral}` with VALIDATION-005 paired. No scope change — PLAN-005 already covers all 5 routers including admin + users.changeRole. VALIDATION-005's coverage matrix requires per-procedure integration tests for admin.* and users.changeRole (not exercised by PLAN-008's happy-path E2E). |

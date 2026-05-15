@@ -13,7 +13,9 @@ related:
   bounded_contexts: [BCC-02]
   aggregates: [ADC-01]
   designs: [DESIGN-005]
-  plans: [PLAN-001, PLAN-002, PLAN-005]
+  plans:
+    prerequisite: [PLAN-001, PLAN-002, PLAN-005]
+    lateral: [VALIDATION-007]
   parent_plan: null
   supersedes: null
 ---
@@ -121,3 +123,4 @@ Implement DESIGN-005 end-to-end: the `sendEmail()` adapter, four React Email tem
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. 7 steps to land notifications. Flags two product follow-ups (PRD-002 R-NN addition + moderators_recipient_email setting) before Step 5 can complete. |
+| 2026-05-14 | Tom Haynes | Plan-decomposition pass: frontmatter `related.plans` reshaped to `{prerequisite, lateral}` with VALIDATION-007 paired. |
