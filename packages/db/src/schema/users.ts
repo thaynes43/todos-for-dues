@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, check } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, boolean, check } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { ROLES, type Role } from './enums';
 
@@ -11,9 +11,7 @@ export const users = pgTable(
     email: text('email').notNull().unique(),
     displayName: text('display_name').notNull(),
     role: text('role').$type<Role>().notNull().default('Active'),
-    passwordHash: text('password_hash'),
-    oidcSubject: text('oidc_subject'),
-    oidcProvider: text('oidc_provider'),
+    emailVerified: boolean('email_verified').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -21,10 +19,6 @@ export const users = pgTable(
     check(
       'users_role_enum',
       sql`${table.role} = ANY (ARRAY[${sql.raw(ROLES_SQL_LIST)}])`,
-    ),
-    check(
-      'users_account_kind',
-      sql`(${table.passwordHash} IS NOT NULL OR ${table.oidcSubject} IS NOT NULL)`,
     ),
   ],
 );

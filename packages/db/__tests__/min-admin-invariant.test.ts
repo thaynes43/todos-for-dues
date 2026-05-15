@@ -38,8 +38,8 @@ async function resetUsers(pool: Pool, opts: { adminEmail?: string } = {}): Promi
   return withTx(pool, async (client) => {
     await client.query(`DELETE FROM users`);
     const { rows } = await client.query<{ id: string }>(
-      `INSERT INTO users (email, display_name, role, password_hash)
-       VALUES ($1, 'Admin User', 'Admin', 'pw') RETURNING id`,
+      `INSERT INTO users (email, display_name, role)
+       VALUES ($1, 'Admin User', 'Admin') RETURNING id`,
       [opts.adminEmail ?? 'admin@test.invalid'],
     );
     return rows[0]!.id;
@@ -48,8 +48,8 @@ async function resetUsers(pool: Pool, opts: { adminEmail?: string } = {}): Promi
 
 async function insertActive(client: PoolClient | Pool, email: string): Promise<string> {
   const { rows } = await client.query<{ id: string }>(
-    `INSERT INTO users (email, display_name, role, password_hash)
-     VALUES ($1, 'Active User', 'Active', 'pw') RETURNING id`,
+    `INSERT INTO users (email, display_name, role)
+     VALUES ($1, 'Active User', 'Active') RETURNING id`,
     [email],
   );
   return rows[0]!.id;
@@ -92,7 +92,7 @@ describe('min-Admin invariant trigger', () => {
   it('allows demote when 2+ Admins exist', async () => {
     // Insert a second Admin first (count becomes 2), then demote one.
     await pool.query(
-      `INSERT INTO users (email, display_name, role, password_hash) VALUES ('admin2@test.invalid', 'Admin Two', 'Admin', 'pw')`,
+      `INSERT INTO users (email, display_name, role) VALUES ('admin2@test.invalid', 'Admin Two', 'Admin')`,
     );
     await pool.query(
       `UPDATE users SET role = 'Active' WHERE email = 'admin2@test.invalid'`,
@@ -141,8 +141,8 @@ describe('min-Admin invariant trigger', () => {
     await withTx(pool, async (client) => {
       await client.query(`DELETE FROM users WHERE role = 'Admin'`);
       await client.query(
-        `INSERT INTO users (email, display_name, role, password_hash)
-         VALUES ('rescued@test.invalid', 'Rescue Admin', 'Admin', 'pw')`,
+        `INSERT INTO users (email, display_name, role)
+         VALUES ('rescued@test.invalid', 'Rescue Admin', 'Admin')`,
       );
     });
     const { rows } = await pool.query<{ count: string }>(

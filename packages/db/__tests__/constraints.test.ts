@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Pool } from 'pg';
 import { startPostgres, type StartedPostgres } from '@app/test-utils';
 import { runMigrations } from '../src/migrate';
@@ -24,19 +24,15 @@ async function insertUser(
     email: string;
     displayName: string;
     role: string;
-    passwordHash: string | null;
-    oidcSubject: string | null;
   }> = {},
 ): Promise<string> {
   const email = overrides.email ?? `user-${Math.random().toString(36).slice(2, 10)}@test.invalid`;
   const displayName = overrides.displayName ?? 'Test User';
   const role = overrides.role ?? 'Active';
-  const passwordHash = overrides.passwordHash === undefined ? 'pw-hash' : overrides.passwordHash;
-  const oidcSubject = overrides.oidcSubject === undefined ? null : overrides.oidcSubject;
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO users (email, display_name, role, password_hash, oidc_subject)
-     VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-    [email, displayName, role, passwordHash, oidcSubject],
+    `INSERT INTO users (email, display_name, role)
+     VALUES ($1, $2, $3) RETURNING id`,
+    [email, displayName, role],
   );
   return rows[0]!.id;
 }
@@ -66,27 +62,11 @@ describe('schema constraints', () => {
       );
     });
 
-    it('rejects user with both password_hash and oidc_subject null', async () => {
-      await expectPgError(
-        insertUser(pool, { email: 'no-creds@test.invalid', passwordHash: null, oidcSubject: null }),
-        '23514',
-      );
-    });
-
-    it('accepts user with only oidc_subject set', async () => {
-      const id = await insertUser(pool, {
-        email: 'sso@test.invalid',
-        passwordHash: null,
-        oidcSubject: 'google|abc123',
-      });
-      expect(id).toMatch(/^[0-9a-f-]{36}$/);
-    });
-
     it('rejects null display_name (NOT NULL)', async () => {
       await expectPgError(
         pool.query(
-          `INSERT INTO users (email, display_name, password_hash) VALUES ($1, NULL, $2)`,
-          ['no-name@test.invalid', 'pw'],
+          `INSERT INTO users (email, display_name) VALUES ($1, NULL)`,
+          ['no-name@test.invalid'],
         ),
         '23502',
       );

@@ -19,13 +19,13 @@ describe('idempotency / composite PK on job_enrollments', () => {
     await runMigrations({ databaseUrl: pg.url, env: {} });
     pool = new Pool({ connectionString: pg.url });
     const { rows: u1 } = await pool.query<{ id: string }>(
-      `INSERT INTO users (email, display_name, role, password_hash)
-       VALUES ('admin@test.invalid', 'Admin', 'Admin', 'pw') RETURNING id`,
+      `INSERT INTO users (email, display_name, role)
+       VALUES ('admin@test.invalid', 'Admin', 'Admin') RETURNING id`,
     );
     adminId = u1[0]!.id;
     const { rows: u2 } = await pool.query<{ id: string }>(
-      `INSERT INTO users (email, display_name, role, password_hash)
-       VALUES ('active@test.invalid', 'Active', 'Active', 'pw') RETURNING id`,
+      `INSERT INTO users (email, display_name, role)
+       VALUES ('active@test.invalid', 'Active', 'Active') RETURNING id`,
     );
     activeId = u2[0]!.id;
     const { rows: jobRows } = await pool.query<{ id: string }>(

@@ -49,8 +49,8 @@ describe('enum values round-trip via insert', () => {
     await runMigrations({ databaseUrl: pg.url, env: {} });
     pool = new Pool({ connectionString: pg.url });
     const { rows } = await pool.query<{ id: string }>(
-      `INSERT INTO users (email, display_name, role, password_hash)
-       VALUES ('enum-admin@test.invalid', 'Admin', 'Admin', 'pw') RETURNING id`,
+      `INSERT INTO users (email, display_name, role)
+       VALUES ('enum-admin@test.invalid', 'Admin', 'Admin') RETURNING id`,
     );
     adminId = rows[0]!.id;
   }, 120_000);
@@ -64,8 +64,8 @@ describe('enum values round-trip via insert', () => {
     for (const role of ROLES) {
       if (role === 'Admin') continue;
       await pool.query(
-        `INSERT INTO users (email, display_name, role, password_hash)
-         VALUES ($1, 'Test', $2, 'pw')`,
+        `INSERT INTO users (email, display_name, role)
+         VALUES ($1, 'Test', $2)`,
         [`role-${role}@test.invalid`, role],
       );
     }

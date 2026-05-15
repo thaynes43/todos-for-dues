@@ -1,11 +1,14 @@
-import { betterAuth } from 'better-auth';
-import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { db } from '@app/db';
+export { auth, oidcEnabled, type Auth } from './config';
+export { enforceHdRestriction } from './hooks/hd-restriction';
+export { getSessionRole } from './hooks/session-extension';
+export { bootstrapAdminOnSignin } from './hooks/bootstrap-admin';
+export { verifyInviteToken, findActiveInviteToken } from './invite-tokens/verify';
+export { HdRestrictionError, InviteTokenError } from './errors';
 
-export const auth = betterAuth({
-  database: drizzleAdapter(db, { provider: 'pg' }),
-  emailAndPassword: { enabled: true },
-});
+import { auth } from './config';
 
-export type Auth = typeof auth;
 export type Session = Awaited<ReturnType<typeof auth.api.getSession>>;
+
+export async function getServerSession(headers: Headers): Promise<Session> {
+  return auth.api.getSession({ headers });
+}

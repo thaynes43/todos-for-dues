@@ -18,7 +18,7 @@ describe('migrations', () => {
     await pg?.stop();
   });
 
-  it('creates the 7 application tables', async () => {
+  it('creates the application + Better Auth tables', async () => {
     const { rows } = await pool.query<{ tablename: string }>(`
       SELECT tablename FROM pg_tables
       WHERE schemaname = 'public'
@@ -27,13 +27,16 @@ describe('migrations', () => {
       ORDER BY tablename
     `);
     expect(rows.map((r) => r.tablename)).toEqual([
+      'account',
       'chapter_settings',
       'invite_tokens',
       'job_enrollments',
       'job_state_transitions',
       'jobs',
+      'session',
       'user_role_transitions',
       'users',
+      'verification',
     ]);
   });
 

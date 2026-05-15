@@ -130,8 +130,9 @@ Implement DESIGN-004 end-to-end: Better Auth instance with `genericOAuth` plugin
 
 | ID | Question | Lean / next action |
 |----|----------|--------------------|
-| Q-PLN-01 | Does Better Auth's account-linking (PRD-003 R-09) work transparently? | Test with integration test in Step 6 — write the test to find out; if not transparent, add the custom hook from DESIGN-004 §4.9. |
-| Q-PLN-02 | Workspace SSO mock for E2E — what library or pattern? | Lean: Playwright `page.route()` interception of the OAuth callback URL with a stubbed JSON payload. |
+| Q-PLN-01 | Does Better Auth's account-linking (PRD-003 R-09) work transparently? | Better Auth 1.6.x: yes, with `account.accountLinking.enabled = true` + `trustedProviders: ['google-workspace']` + `users.email_verified` populated on signup. Verified via Playwright `account-linking.spec.ts` (Step 7). |
+| Q-PLN-02 | Workspace SSO mock for E2E — what library or pattern? | Lean: Playwright `page.route()` interception of the OIDC discovery + token + userinfo URLs with stubbed JSON payloads. See `apps/web/__e2e__/support/oauth-mock.ts`. |
+| Q-PLN-03 | DESIGN-001 §4.2's stale columns (`password_hash`, `oidc_subject`, `oidc_provider`) + `users_account_kind` CHECK were removed by PLAN-004's schema reshape (migrations 0005–0006) per the wrapped-library contract (DESIGN-001 §2.2). Should DESIGN-001 be updated to reflect the new reality, or left as a historical artifact with the commit log carrying the record? | Lean: design doc update follow-up (coordinator-owned, separate commit). |
 
 ## 10. Changelog
 
@@ -139,3 +140,4 @@ Implement DESIGN-004 end-to-end: Better Auth instance with `genericOAuth` plugin
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. 8 steps from Better Auth config to passing E2E auth tests. |
 | 2026-05-14 | Tom Haynes | Plan-decomposition pass: frontmatter `related.plans` reshaped to `{prerequisite, lateral}` with VALIDATION-004 paired. |
+| 2026-05-15 | Tom Haynes | Q-PLN-01 resolved (Better Auth 1.6.x accountLinking config); Q-PLN-02 resolved (page.route() mock pattern); Q-PLN-03 added (DESIGN-001 §4.2 stale columns + CHECK superseded by PLAN-004 schema reshape; doc update follow-up). |
