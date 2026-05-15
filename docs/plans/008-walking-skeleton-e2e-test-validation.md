@@ -71,6 +71,9 @@ The single canonical `apps/web/e2e/walking-skeleton.spec.ts` from PLAN-008.
 - [ ] Run 5x in a row — all 5 pass (PLAN-008 §5 "no flake" gate).
 - [ ] The final audit-log assertion exactly matches the expected sequence — no extra rows, no missing rows (modulo enroll/unenroll which may or may not be enumerated per the §5 note above).
 - [ ] The mocked Resend SDK recorded exactly one TreasurerBreakdown call with the expected line items.
+- [ ] **PLAN-004 SSO specs un-fixme'd and passing:** `pnpm --filter web e2e -- --grep "PRD-003 (AC-01|AC-02|R-09)"` runs the three SSO specs (`sso-happy-path`, `hd-restriction`, `account-linking`) against the OIDC mock server from PLAN-008 Step 1, and all three pass. The `test.fixme(true, ...)` blocks have been removed from each spec.
+- [ ] **`OIDC_DISCOVERY_URL` env override** is honored by `packages/auth/src/config.ts` — verified by setting it to the mock and observing the OIDC flow hit the mock instead of real Google (network capture or mock-server access log).
+- [ ] **OIDC mock server lifecycle** — Playwright's `globalTeardown` cleanly stops the mock server's port; running `pnpm --filter web e2e` twice in a row succeeds (port not stuck open).
 - [ ] One PLAN-008 commit on the branch.
 
 ## 7. Resume notes
@@ -82,3 +85,4 @@ If the test fails on a fresh run, do NOT modify the test — fix the implementat
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. Pairs with PLAN-008. Meta-validation of the canonical walking-skeleton spec; documents the expected 7-row audit-log assertion explicitly so future agents can verify it intact. |
+| 2026-05-15 | Tom Haynes | §6: added three gates inherited from PLAN-008's expanded Step 1 + new Step 3.5 — the three SSO Playwright specs PLAN-004 deferred (`sso-happy-path`, `hd-restriction`, `account-linking`) must now run + pass against the OIDC mock server; `OIDC_DISCOVERY_URL` override honored by `packages/auth/src/config.ts`; mock-server lifecycle clean across consecutive runs. |

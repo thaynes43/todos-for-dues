@@ -45,10 +45,14 @@ Write the canonical Playwright E2E test that proves the walking-skeleton happy p
 ### Step 1 — Test environment setup
 
 - **Action:** `playwright.config.ts` configures:
-  - `webServer` running `pnpm dev` against a test Postgres (testcontainers-managed via the test runner OR a docker-compose-managed test DB on a dedicated port).
-  - `globalSetup` that: spins up Postgres (if not already), runs migrations, seeds `chapter_settings` (admin/treasurer recipients = test inboxes; chapter_timezone = America/New_York), seeds the bootstrap Admin via `BOOTSTRAP_ADMIN_EMAIL` env var.
-  - `globalTeardown` that: tears everything down.
-- **Verification:** `pnpm --filter web e2e --list` shows the test discoverable.
+  - `globalSetup` that performs in order:
+    1. **Spin up Postgres 16** via testcontainers (reuse `@app/test-utils.startPostgres()`), apply migrations via `@app/db/migrate`'s `runMigrations`, and seed `chapter_settings` (admin/treasurer/moderators recipients = test inboxes; chapter_timezone = America/New_York; chapter_display_name = test).
+    2. **Launch a local in-process OIDC mock server** on a fixed port (e.g., `127.0.0.1:9999`) that responds to the four canonical paths Better Auth fetches server-side: `/.well-known/openid-configuration` (returns the issuer + the URLs below), `/oauth/authorize` (browser-facing — redirects back to `/api/auth/callback/oauth/google-workspace?code=test-code&state=<state>`), `/oauth/token` (POST — returns an access token + id_token), `/userinfo` (returns the test profile keyed by the bearer). Keep the mock dependency-light: a tiny Express or raw `http.createServer` is enough; alternatively use a maintained library like [`oidc-provider-mock`](https://github.com/panva/node-oidc-provider) if it's lightweight. **Why this is needed:** Playwright's `page.route()` only intercepts browser-context requests; Better Auth's OIDC client uses `betterFetch` from the Next.js server process, which bypasses `page.route()`. The 3 SSO Playwright specs PLAN-004 authored (`sso-happy-path`, `hd-restriction`, `account-linking` — currently `test.fixme()`'d) need this mock to run.
+    3. **Override the OIDC config for tests:** set env vars before `pnpm dev` launches so Better Auth points at the mock — `OIDC_CLIENT_ID=test-client`, `OIDC_CLIENT_SECRET=test-secret`, `OIDC_HOSTED_DOMAIN=test.example`, **`OIDC_DISCOVERY_URL=http://127.0.0.1:9999/.well-known/openid-configuration`** (new env var — PLAN-008 also lands the corresponding `discoveryUrl: process.env.OIDC_DISCOVERY_URL ?? 'https://accounts.google.com/.well-known/openid-configuration'` override in `packages/auth/src/config.ts`'s OIDC plugin config).
+    4. **Seed the bootstrap Admin** via `BOOTSTRAP_ADMIN_EMAIL` env var.
+  - `webServer` block: `command: 'pnpm dev'` with `env: { DATABASE_URL, BETTER_AUTH_SECRET, OIDC_*, BOOTSTRAP_* }` populated by globalSetup. `reuseExistingServer: !process.env.CI` (developer convenience).
+  - `globalTeardown`: stop the OIDC mock server, stop the Postgres testcontainer.
+- **Verification:** `pnpm --filter web e2e --list` shows the walking-skeleton test PLUS the 3 previously-fixme'd SSO specs from PLAN-004 (`sso-happy-path`, `hd-restriction`, `account-linking`) — once they're un-fixme'd in PLAN-008 (see Step 3 below).
 
 ### Step 2 — Persona helpers
 
@@ -74,13 +78,25 @@ Write the canonical Playwright E2E test that proves the walking-skeleton happy p
   12. Asserts: job state is `closed`; the `job_state_transitions` table has the expected sequence of rows (verified via a tRPC `jobs.getHistory` call as Admin).
 - **Verification:** test passes consistently (run 5x to check for flake).
 
+### Step 3.5 — Un-fixme PLAN-004's deferred SSO specs + rewrite the mock
+
+PLAN-004 shipped three SSO Playwright specs that were `test.fixme()`'d pending the Step 1 OIDC mock server. With that server now live, this step re-enables them.
+
+- **Action:**
+  1. In each of `apps/web/__e2e__/auth/sso-happy-path.spec.ts`, `hd-restriction.spec.ts`, `account-linking.spec.ts`: remove the `test.fixme(true, '...')` block. Leave the env-conditional `test.skip(!OIDC_CLIENT_ID, ...)` in place — it still serves the "OIDC config not present" path.
+  2. Rewrite `apps/web/__e2e__/support/oauth-mock.ts`: the existing `mockOidc(page, ...)` helper uses `page.route()` (browser-only) and DOES NOT WORK against Better Auth's server-side OAuth fetches. Replace it with a small helper that **seeds the in-process OIDC mock server (Step 1) with the profile to return** for the next sign-in (e.g., `await setMockProfile({ email, name, hd })` which POSTs to a control endpoint on the mock server like `http://127.0.0.1:9999/_test/profile`). The spec then clicks the SSO button; Better Auth's server-side flow hits the mock; the mock returns the seeded profile via /userinfo; the callback completes server-side; the browser sees the redirect back to `/`.
+- **Verification:** all three previously-fixme'd specs now pass:
+  - `sso-happy-path.spec.ts` — Alumni user created with `role: 'Alumni'`; user lands on `/`.
+  - `hd-restriction.spec.ts` — non-HD profile → redirect to `/login?error=hd_restriction`; zero `users` rows for that email.
+  - `account-linking.spec.ts` — same email signed up via invite-token then SSO → one `users` row, two `account` rows (one `credential`, one `google-workspace`).
+
 ### Step 4 — Commit
 
 - **Action:** commit per Outputs.
 
 ## 5. Verification
 
-- [ ] `pnpm --filter web e2e` passes.
+- [ ] `pnpm --filter web e2e` passes — both the new `walking-skeleton.spec.ts` AND the three previously-fixme'd SSO specs from PLAN-004 (`sso-happy-path`, `hd-restriction`, `account-linking`) now run + pass against the OIDC mock server from Step 1.
 - [ ] Run the test 5x in a row; all 5 pass (no flake).
 - [ ] The audit-log assertion at the end correctly identifies the 7 expected transitions:
   - `null → awaiting_moderation` (Alumni, on PostJob)
@@ -90,6 +106,7 @@ Write the canonical Playwright E2E test that proves the walking-skeleton happy p
   - `locked → completed` (Alumni, on Complete)
   - `completed → payment_sent` (Alumni, on MarkPaymentSent)
   - `payment_sent → closed` (Active, on ConfirmReceipt)
+- [ ] `OIDC_DISCOVERY_URL` env-var override is honored by `packages/auth/src/config.ts` — confirmed by the SSO specs hitting the local mock, not real Google.
 - [ ] One commit.
 
 ## 6. Out of scope
@@ -128,3 +145,4 @@ Write the canonical Playwright E2E test that proves the walking-skeleton happy p
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. 4 steps to land the canonical walking-skeleton E2E test. |
 | 2026-05-14 | Tom Haynes | Plan-decomposition pass: frontmatter `related.plans` reshaped to `{prerequisite, lateral}` with VALIDATION-008 paired. PLAN-008 is the walking-skeleton happy-path; non-happy-path E2E specs (dispute, min-Admin, role-management, Admin view) are owned by VALIDATION-010 / VALIDATION-011 / VALIDATION-012. |
+| 2026-05-15 | Tom Haynes | Step 1 rewritten + Step 3.5 added: PLAN-004's validation surfaced that `page.route()` only intercepts browser-context requests, so Better Auth's server-side OIDC fetches (discovery, token, userinfo) bypass it entirely — the 3 SSO Playwright specs PLAN-004 authored were marked `test.fixme()` pending this plan. Step 1 now lands a local in-process OIDC mock server (4 endpoints: `.well-known/openid-configuration`, `/oauth/authorize`, `/oauth/token`, `/userinfo`) on a fixed port, plus an `OIDC_DISCOVERY_URL` env var override in `packages/auth/src/config.ts` so tests can point Better Auth at the mock. Step 3.5 un-fixme's the three specs and replaces the broken `oauth-mock.ts` `page.route()` helper with one that seeds the mock server's "next profile to return" via a control endpoint. §5 verification updated to require all four specs (walking-skeleton + 3 SSO) pass. |
