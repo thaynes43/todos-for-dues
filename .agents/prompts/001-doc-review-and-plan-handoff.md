@@ -35,15 +35,14 @@ You will:
 In this order — earlier files give context for later ones:
 
 1. **`docs/PROCESS.md`** — the docs-first SDLC the project follows.
-2. **`.agents/HANDOFF.md`** — agent-handoff notes from the original agent. Some bits are stale (it predates the doc explosion of 2026-05-14); cross-check against the docs themselves.
-3. **`docs/prds/001-todos-for-dues-overview.md`** — overview PRD with all the capability-level R-NN. **The contract everything else cites.** Resolved questions are marked ✅ in §9.
-4. **`docs/releases/001-mvp.md`** — the MVP release manifest listing which PRDs gate the MVP ship. Reference for "what's in scope."
-5. **`docs/domain-driven-design/README.md`** — DDD modelling sequence + ID-prefix convention.
-6. **`docs/domain-driven-design/001-ddd-active-walking-skeleton.md`** + **`002-ddd-alumni-walking-skeleton.md`** — the persona walking skeletons (event timelines + Mermaid sequence diagrams). The happy-path job loop end-to-end.
-7. **`docs/domain-driven-design/004-bounded-contexts.md`** — the catalog of MVP bounded contexts + cross-cutting capabilities + reconciliation notes for the 5–7 candidate contexts the walking skeletons surfaced.
-8. **`docs/prds/000-template.md`** — the **revised** PRD template (post-2026-05-14 research-driven revision). Note: PRD-001 + PRD-003 stay in **legacy form** (no backfill); other PRDs (002, 004–008) follow the revised template.
-9. **`docs/adrs/000-template.md`** — MADR 3.0 + project frontmatter conventions for ADRs.
-10. **`docs/designs/000-template.md`** + **`docs/plans/000-template.md`** — design + plan templates.
+2. **`docs/prds/001-todos-for-dues-overview.md`** — overview PRD with all the capability-level R-NN. **The contract everything else cites.** Resolved questions are marked ✅ in §9.
+3. **`docs/releases/001-mvp.md`** — the MVP release manifest listing which PRDs gate the MVP ship. Reference for "what's in scope."
+4. **`docs/domain-driven-design/README.md`** — DDD modelling sequence + ID-prefix convention.
+5. **`docs/domain-driven-design/001-ddd-active-walking-skeleton.md`** + **`002-ddd-alumni-walking-skeleton.md`** — the persona walking skeletons (event timelines + Mermaid sequence diagrams). The happy-path job loop end-to-end.
+6. **`docs/domain-driven-design/004-bounded-contexts.md`** — the catalog of MVP bounded contexts + cross-cutting capabilities + reconciliation notes for the 5–7 candidate contexts the walking skeletons surfaced.
+7. **`docs/prds/000-template.md`** — the **revised** PRD template (post-2026-05-14 research-driven revision). Note: PRD-001 + PRD-003 stay in **legacy form** (no backfill); other PRDs (002, 004–008) follow the revised template.
+8. **`docs/adrs/000-template.md`** — MADR 3.0 + project frontmatter conventions for ADRs.
+9. **`docs/designs/000-template.md`** + **`docs/plans/000-template.md`** — design + plan templates.
 
 ## 4. Doc inventory at a glance
 

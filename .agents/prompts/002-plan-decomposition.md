@@ -97,7 +97,6 @@ In this order — earlier files give context for later ones:
 21. **`docs/designs/006-ui-components.md`** — DESIGN-006. Note **§4.6 `stateDisplayName()` formatter** (added 2026-05-14) is the single conversion point between code (snake_case) and PRD-001 R-07 display form.
 22. **`docs/plans/000-template.md`** — plan template.
 23. **`docs/plans/001-project-scaffolding.md` … `009-deploy-prototype.md`** — all 9 existing plans. Read in order. These are the draft you refine.
-24. **`.agents/HANDOFF.md`** — original agent handoff. **Stale** (predates the doc explosion of 2026-05-14); cross-check against the docs themselves.
 
 ## 5. Implementation plan template (recap)
 
