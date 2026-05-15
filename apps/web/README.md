@@ -17,7 +17,14 @@ This is the scaffolded MVP shell from PLAN-001 — placeholder home page, Better
    ```
 
 4. Copy `.env.example` → `.env.local` at the repo root and fill in `DATABASE_URL` + `BETTER_AUTH_SECRET` (≥ 32 chars).
-5. From the repo root:
+5. Apply migrations:
+
+   ```sh
+   pnpm --filter @app/db migrate
+   ```
+
+   The migrate script reads `DATABASE_URL` from env and forwards `BOOTSTRAP_ADMIN_RECIPIENT_EMAIL`, `BOOTSTRAP_TREASURER_RECIPIENT_EMAIL`, `BOOTSTRAP_MODERATORS_RECIPIENT_EMAIL`, `BOOTSTRAP_CHAPTER_TIMEZONE`, `BOOTSTRAP_CHAPTER_DISPLAY_NAME` into `app.bootstrap_*` GUCs so the `chapter_settings` seed migration picks them up. Re-running is a no-op (`ON CONFLICT DO NOTHING`).
+6. From the repo root:
 
    ```sh
    pnpm --filter web dev          # http://localhost:3000

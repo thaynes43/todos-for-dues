@@ -156,9 +156,15 @@ importers:
       drizzle-orm:
         specifier: ^0.36.4
         version: 0.36.4(@types/pg@8.20.0)(@types/react@19.2.14)(kysely@0.28.17)(pg@8.20.0)(react@19.2.4)
+      drizzle-zod:
+        specifier: ^0.5.1
+        version: 0.5.1(drizzle-orm@0.36.4(@types/pg@8.20.0)(@types/react@19.2.14)(kysely@0.28.17)(pg@8.20.0)(react@19.2.4))(zod@3.25.76)
       pg:
         specifier: ^8.13.1
         version: 8.20.0
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@app/test-utils':
         specifier: workspace:*
@@ -169,6 +175,9 @@ importers:
       drizzle-kit:
         specifier: ^0.30.1
         version: 0.30.6
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
       vitest:
         specifier: ^4.1.6
         version: 4.1.6(@types/node@25.7.0)(@vitest/coverage-v8@4.1.6)(msw@2.14.6(@types/node@25.7.0)(typescript@5.9.3))(vite@8.0.12(@types/node@25.7.0)(esbuild@0.19.12)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
@@ -2576,6 +2585,12 @@ packages:
         optional: true
       sqlite3:
         optional: true
+
+  drizzle-zod@0.5.1:
+    resolution: {integrity: sha512-C/8bvzUH/zSnVfwdSibOgFjLhtDtbKYmkbPbUCq46QZyZCH6kODIMSOgZ8R7rVjoI+tCj3k06MRJMDqsIeoS4A==}
+    peerDependencies:
+      drizzle-orm: '>=0.23.13'
+      zod: '*'
 
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
@@ -6243,7 +6258,7 @@ snapshots:
       obug: 2.1.1
       std-env: 4.1.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.6(@types/node@25.7.0)(@vitest/coverage-v8@4.1.6)(msw@2.14.6(@types/node@25.7.0)(typescript@5.9.3))(vite@8.0.12(@types/node@25.7.0)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
+      vitest: 4.1.6(@types/node@25.7.0)(@vitest/coverage-v8@4.1.6)(msw@2.14.6(@types/node@25.7.0)(typescript@5.9.3))(vite@8.0.12(@types/node@25.7.0)(esbuild@0.19.12)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
 
   '@vitest/expect@4.1.6':
     dependencies:
@@ -6903,6 +6918,11 @@ snapshots:
       kysely: 0.28.17
       pg: 8.20.0
       react: 19.2.4
+
+  drizzle-zod@0.5.1(drizzle-orm@0.36.4(@types/pg@8.20.0)(@types/react@19.2.14)(kysely@0.28.17)(pg@8.20.0)(react@19.2.4))(zod@3.25.76):
+    dependencies:
+      drizzle-orm: 0.36.4(@types/pg@8.20.0)(@types/react@19.2.14)(kysely@0.28.17)(pg@8.20.0)(react@19.2.4)
+      zod: 3.25.76
 
   dunder-proto@1.0.1:
     dependencies:
