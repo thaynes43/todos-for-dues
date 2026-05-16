@@ -11,6 +11,9 @@ test.describe('PRD-006 R-01 — confirmReceipt closes the loop', () => {
     page,
     context,
   }) => {
+    const pageErrors: Error[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err));
+
     const pool = createPool();
     try {
       await truncateWalkingSkeleton(pool);
@@ -38,6 +41,11 @@ test.describe('PRD-006 R-01 — confirmReceipt closes the loop', () => {
         .toBe('closed');
       await page.goto(`/jobs/${jobId}`);
       await expect(page.getByTestId('job-state-badge')).toHaveText(/closed/);
+      // VALIDATION-006 §5 — walking-skeleton shows only the state badge;
+      // <ClosedJobBanner> is PLAN-010 scope and must not render.
+      await expect(page.getByTestId('closed-job-banner')).toHaveCount(0);
+
+      expect(pageErrors, pageErrors.map((e) => e.message).join('\n')).toEqual([]);
     } finally {
       await pool.end();
     }
