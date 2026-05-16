@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { __setResendForTests } from '@app/notifications';
 import {
   caller,
   getAuditRows,
@@ -13,22 +14,50 @@ import {
   type TestDb,
 } from './_setup';
 
+const mockSend = vi.fn();
+
 let testDb: TestDb;
 let users: SeedUsers;
 
 const FUTURE_DATE = () => new Date(Date.now() + 7 * 86_400_000).toISOString();
+const ORIGINAL_API_KEY = process.env.RESEND_API_KEY;
 
 beforeAll(async () => {
   testDb = await startTestDb();
+  process.env.RESEND_API_KEY = 'test-key';
+  __setResendForTests({ emails: { send: mockSend as never } });
 }, 180_000);
 
 afterAll(async () => {
+  __setResendForTests(undefined);
   await testDb?.stop();
+  if (ORIGINAL_API_KEY === undefined) {
+    delete process.env.RESEND_API_KEY;
+  } else {
+    process.env.RESEND_API_KEY = ORIGINAL_API_KEY;
+  }
 });
 
 beforeEach(async () => {
   users = await resetAndSeedUsers(testDb.pool);
+  mockSend.mockReset();
+  mockSend.mockResolvedValue({ data: { id: 'mocked-id' }, error: null });
 });
+
+async function seedNotificationSettings(): Promise<void> {
+  for (const [key, value] of [
+    ['admin_recipient_email', 'admins@chapter.invalid'],
+    ['treasurer_recipient_email', 'treasurer@chapter.invalid'],
+    ['moderators_recipient_email', 'mods@chapter.invalid'],
+    ['chapter_display_name', 'Test Chapter'],
+  ] as const) {
+    await testDb.pool.query(
+      `INSERT INTO chapter_settings (key, value) VALUES ($1, to_jsonb($2::text))
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [key, value],
+    );
+  }
+}
 
 describe('jobs router', () => {
   // ─── post ──────────────────────────────────────────────────────────
@@ -965,6 +994,99 @@ describe('jobs router', () => {
       await expect(
         caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).jobs.listModerationQueue(),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+  });
+
+  // ─── PLAN-007: afterCommit fires the right Resend helper ─────────────
+  describe('afterCommit notification helpers (PLAN-007)', () => {
+    it('post → afterCommit fires sendModeratorQueueEmail once', async () => {
+      await seedNotificationSettings();
+      await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).jobs.post({
+        description: 'Plant some shrubs',
+        duesAmount: 25,
+        recommendedPeopleCount: 2,
+      });
+
+      expect(mockSend).toHaveBeenCalledTimes(1);
+      const payload = mockSend.mock.calls[0]![0];
+      expect(payload.to).toBe('mods@chapter.invalid');
+      expect(payload.subject).toContain('Test Chapter');
+      expect(payload.subject).toContain('moderation');
+      expect(payload.headers?.['Idempotency-Key']).toMatch(/^job:.+:moderation_queue$/);
+    });
+
+    it('markPaymentSent → afterCommit fires sendTreasurerEmail once', async () => {
+      await seedNotificationSettings();
+      const jobId = await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'completed',
+        duesAmount: '100.00',
+        perActiveDuesCredit: {
+          [users.active1]: '50.00',
+          [users.active2]: '50.00',
+        },
+      });
+
+      await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).jobs.markPaymentSent({
+        jobId,
+      });
+
+      expect(mockSend).toHaveBeenCalledTimes(1);
+      const payload = mockSend.mock.calls[0]![0];
+      expect(payload.to).toBe('treasurer@chapter.invalid');
+      expect(payload.subject).toContain('Test Chapter');
+      expect(payload.subject).toContain('payment-sent');
+      expect(payload.headers?.['Idempotency-Key']).toBe(`job:${jobId}:payment_sent`);
+    });
+
+    it('dispute → afterCommit fires sendAdminDisputeEmail once', async () => {
+      await seedNotificationSettings();
+      const jobId = await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'payment_sent',
+      });
+      await insertEnrollment(testDb.pool, jobId, users.active1);
+
+      await caller(makeCtx({ userId: users.active1, role: 'Active' })).jobs.dispute({
+        jobId,
+        reason: 'never received',
+      });
+
+      expect(mockSend).toHaveBeenCalledTimes(1);
+      const payload = mockSend.mock.calls[0]![0];
+      expect(payload.to).toBe('admins@chapter.invalid');
+      expect(payload.subject).toContain('Test Chapter');
+      expect(payload.subject).toContain('DISPUTE');
+      // No idempotency key for dispute — re-disputes are legitimately separate.
+      expect(payload.headers).toBeUndefined();
+    });
+
+    it('afterCommit failure does not roll back the FSM transition', async () => {
+      await seedNotificationSettings();
+      mockSend.mockRejectedValue(new Error('Resend down for maintenance'));
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const jobId = await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'completed',
+        duesAmount: '50.00',
+        perActiveDuesCredit: { [users.active1]: '50.00' },
+      });
+
+      // The mutation should succeed despite Resend rejecting; afterCommit
+      // failures are swallowed by the domain layer.
+      await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).jobs.markPaymentSent({
+        jobId,
+      });
+
+      expect(await getJobState(testDb.pool, jobId)).toBe('payment_sent');
+      const audit = await getAuditRows(testDb.pool, jobId);
+      expect(audit.map((r) => r.toState)).toContain('payment_sent');
+      expect(errSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/afterCommit hook failed/i),
+        expect.anything(),
+      );
+      errSpy.mockRestore();
     });
   });
 });

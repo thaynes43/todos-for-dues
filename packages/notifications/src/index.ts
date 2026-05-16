@@ -1,8 +1,28 @@
+export { sendEmail, __setResendForTests } from './send-email';
+export type { SendEmailInput, SendEmailResult } from './send-email';
+
+export {
+  sendTreasurerEmail,
+  type SendTreasurerEmailInput,
+} from './helpers/treasurer-breakdown';
+export {
+  sendAdminDisputeEmail,
+  type SendAdminDisputeEmailInput,
+} from './helpers/admin-dispute';
 export {
   sendModeratorQueueEmail,
-  sendTreasurerEmail,
-  sendAdminDisputeEmail,
-  type ModeratorQueueEmailInput,
-  type TreasurerEmailInput,
-  type AdminDisputeEmailInput,
-} from './stubs';
+  type SendModeratorQueueEmailInput,
+} from './helpers/moderator-new-posting';
+export {
+  sendAlumniRejectionEmail,
+  type SendAlumniRejectionEmailInput,
+} from './helpers/alumni-rejection';
+
+export { TreasurerBreakdown } from './templates/TreasurerBreakdown';
+export type { TreasurerBreakdownProps } from './templates/TreasurerBreakdown';
+export { AdminDispute } from './templates/AdminDispute';
+export type { AdminDisputeProps } from './templates/AdminDispute';
+export { ModeratorNewPosting } from './templates/ModeratorNewPosting';
+export type { ModeratorNewPostingProps } from './templates/ModeratorNewPosting';
+export { AlumniRejection } from './templates/AlumniRejection';
+export type { AlumniRejectionProps } from './templates/AlumniRejection';

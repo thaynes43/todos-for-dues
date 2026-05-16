@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import {
-  chapterSettings,
   jobs,
   jobEnrollments,
   jobStateTransitions,
@@ -21,12 +20,7 @@ import {
   sendModeratorQueueEmail,
   sendTreasurerEmail,
 } from '@app/notifications';
-import {
-  authedProcedure,
-  mapDomainErrors,
-  router,
-  type TRPCContext,
-} from '../trpc';
+import { authedProcedure, mapDomainErrors, router } from '../trpc';
 import {
   activeProcedure,
   adminProcedure,
@@ -35,17 +29,6 @@ import {
 } from '../middleware/role';
 import { jobPosterProcedure } from '../middleware/job';
 import { computeDuesSplit } from '../dues';
-
-async function getSettingValue<T>(
-  ctx: Pick<TRPCContext, 'db'>,
-  key: string,
-): Promise<T | null> {
-  const [row] = await ctx.db
-    .select({ value: chapterSettings.value })
-    .from(chapterSettings)
-    .where(eq(chapterSettings.key, key));
-  return (row?.value as T | undefined) ?? null;
-}
 
 const jobIdInput = z.object({ jobId: z.string().uuid() });
 
@@ -406,11 +389,7 @@ export const jobsRouter = router({
           event: 'payment_sent',
           actor: { id: ctx.userId, kind: 'user' },
           afterCommit: async () => {
-            const recipient = await getSettingValue<string>(
-              ctx,
-              'treasurer_recipient_email',
-            );
-            await sendTreasurerEmail({ jobId: input.jobId, recipient });
+            await sendTreasurerEmail({ jobId: input.jobId });
           },
         });
       });
@@ -523,15 +502,10 @@ export const jobsRouter = router({
               .where(eq(jobs.id, input.jobId));
           },
           afterCommit: async () => {
-            const recipient = await getSettingValue<string>(
-              ctx,
-              'admin_recipient_email',
-            );
             await sendAdminDisputeEmail({
               jobId: input.jobId,
               disputerId: ctx.userId!,
               reason: input.reason,
-              recipient,
             });
           },
         });

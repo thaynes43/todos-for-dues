@@ -4,8 +4,7 @@
     "outDir": "./dist",
     "noEmit": true,
     "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "jsx": "react-jsx"
+    "moduleResolution": "Bundler"
   },
   "include": ["src/**/*", "__tests__/**/*"]
 }

@@ -1,5 +1,5 @@
 {
-  "name": "@app/notifications",
+  "name": "@app/settings",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -15,18 +15,12 @@
   },
   "dependencies": {
     "@app/db": "workspace:*",
-    "@app/settings": "workspace:*",
-    "@react-email/components": "^1.0.12",
-    "@react-email/render": "^2.0.8",
-    "drizzle-orm": "^0.36.4",
-    "react": "19.2.4",
-    "resend": "^6.12.3"
+    "drizzle-orm": "^0.36.4"
   },
   "devDependencies": {
     "@app/test-utils": "workspace:*",
-    "@types/pg": "^8.20.0",
-    "@types/react": "^19.2.14",
-    "pg": "^8.20.0",
+    "pg": "^8.13.1",
+    "@types/pg": "^8.11.10",
     "vitest": "^4.1.6"
   }
 }
