@@ -1,0 +1,155 @@
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { rmSync } from 'node:fs';
+import { join } from 'node:path';
+import type { FullConfig } from '@playwright/test';
+import {
+  PostgreSqlContainer,
+  type StartedPostgreSqlContainer,
+} from '@testcontainers/postgresql';
+import { startOidcMockServer, type OidcMockServer } from './oidc-mock-server';
+import { seedFixtures } from './seed-chapter';
+import { writeRuntimeEnv, type RuntimeEnv } from './runtime-env';
+
+const TMP_DIR = join(process.cwd(), '.playwright-tmp');
+const DEV_URL = 'http://localhost:3000';
+const DEV_READY_TIMEOUT_MS = 180_000;
+
+interface GlobalState {
+  pg?: StartedPostgreSqlContainer;
+  oidc?: OidcMockServer;
+  dev?: ChildProcess;
+}
+
+const state: GlobalState = {};
+(globalThis as unknown as { __PLAYWRIGHT_E2E_STATE__?: GlobalState }).__PLAYWRIGHT_E2E_STATE__ =
+  state;
+
+const PASSWORD = 'correct-horse-battery';
+const ADMIN_EMAIL = 'admin@chapter.test';
+const MODERATOR_EMAIL = 'standing-mod@chapter.test';
+const HOSTED_DOMAIN = 'chapter.test';
+
+const TREASURER_EMAIL = 'treasurer@chapter.test';
+const MODERATORS_RECIPIENT_EMAIL = 'mods@chapter.test';
+const ADMIN_RECIPIENT_EMAIL = 'admins@chapter.test';
+const CHAPTER_DISPLAY_NAME = 'Test Chapter';
+const CHAPTER_TIMEZONE = 'America/New_York';
+
+async function waitForReady(url: string, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let lastErr: unknown = undefined;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(url, { method: 'GET' });
+      // Any response (including 5xx from missing routes) means the server
+      // process is up and accepting connections.
+      if (res.status < 600) return;
+    } catch (err) {
+      lastErr = err;
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error(
+    `Timed out (${timeoutMs}ms) waiting for ${url}; last error: ${String(
+      lastErr,
+    )}`,
+  );
+}
+
+export default async function globalSetup(_config: FullConfig): Promise<void> {
+  try {
+    rmSync(TMP_DIR, { recursive: true, force: true });
+  } catch {
+    // ignore
+  }
+
+  // ── Postgres testcontainer ────────────────────────────────────────────
+  // Direct testcontainers import (not @app/test-utils) so Playwright's CJS
+  // TS loader doesn't have to traverse our ESM workspace packages.
+  const pg = await new PostgreSqlContainer('postgres:16').start();
+  state.pg = pg;
+  const databaseUrl = pg.getConnectionUri();
+
+  // ── Migrations as subprocess ─────────────────────────────────────────
+  const migrate = spawnSync('pnpm', ['--filter', '@app/db', 'migrate'], {
+    env: {
+      ...process.env,
+      DATABASE_URL: databaseUrl,
+      BOOTSTRAP_ADMIN_RECIPIENT_EMAIL: ADMIN_RECIPIENT_EMAIL,
+      BOOTSTRAP_TREASURER_RECIPIENT_EMAIL: TREASURER_EMAIL,
+      BOOTSTRAP_MODERATORS_RECIPIENT_EMAIL: MODERATORS_RECIPIENT_EMAIL,
+      BOOTSTRAP_CHAPTER_TIMEZONE: CHAPTER_TIMEZONE,
+      BOOTSTRAP_CHAPTER_DISPLAY_NAME: CHAPTER_DISPLAY_NAME,
+    },
+    stdio: 'inherit',
+  });
+  if (migrate.status !== 0) {
+    throw new Error(`Migrations failed (exit ${migrate.status})`);
+  }
+
+  await seedFixtures({
+    databaseUrl,
+    adminEmail: ADMIN_EMAIL,
+    moderatorEmail: MODERATOR_EMAIL,
+    password: PASSWORD,
+  });
+
+  // ── OIDC mock ────────────────────────────────────────────────────────
+  const oidc = await startOidcMockServer();
+  state.oidc = oidc;
+
+  // ── Persist runtime env for workers ──────────────────────────────────
+  const runtimeEnv: RuntimeEnv = {
+    DATABASE_URL: databaseUrl,
+    OIDC_DISCOVERY_URL: oidc.discoveryUrl,
+    OIDC_BASE_URL: oidc.baseUrl,
+    OIDC_CLIENT_ID: 'test-client',
+    OIDC_CLIENT_SECRET: 'test-secret',
+    OIDC_HOSTED_DOMAIN: HOSTED_DOMAIN,
+    BETTER_AUTH_SECRET:
+      'test-better-auth-secret-not-for-prod-not-for-prod-not-for-prod',
+    BETTER_AUTH_URL: DEV_URL,
+    BOOTSTRAP_ADMIN_EMAIL: ADMIN_EMAIL,
+    BOOTSTRAP_TREASURER_RECIPIENT_EMAIL: TREASURER_EMAIL,
+    BOOTSTRAP_MODERATORS_RECIPIENT_EMAIL: MODERATORS_RECIPIENT_EMAIL,
+    BOOTSTRAP_ADMIN_RECIPIENT_EMAIL: ADMIN_RECIPIENT_EMAIL,
+    BOOTSTRAP_CHAPTER_DISPLAY_NAME: CHAPTER_DISPLAY_NAME,
+    BOOTSTRAP_CHAPTER_TIMEZONE: CHAPTER_TIMEZONE,
+    RESEND_TEST_MODE: 'true',
+    E2E_SEED_PASSWORD: PASSWORD,
+    E2E_SEED_MODERATOR_EMAIL: MODERATOR_EMAIL,
+  };
+  for (const [k, v] of Object.entries(runtimeEnv)) {
+    process.env[k] = v;
+  }
+  writeRuntimeEnv(runtimeEnv);
+
+  // ── Dev server ───────────────────────────────────────────────────────
+  // Playwright's `webServer` plugin setup runs BEFORE globalSetup (see the
+  // ordering in runner createGlobalSetupTasks), so it would launch with a
+  // stale env. We manage the dev server here instead, fed the testcontainer's
+  // DATABASE_URL and the OIDC mock's discovery URL.
+  //
+  // Spawn `node_modules/.bin/next dev` directly rather than going through
+  // pnpm — some pnpm versions filter env vars between script and child.
+  const dev = spawn(join(process.cwd(), 'node_modules', '.bin', 'next'), ['dev'], {
+    env: { ...process.env, ...runtimeEnv },
+    cwd: process.cwd(),
+    stdio: 'inherit',
+    detached: false,
+  });
+  state.dev = dev;
+  dev.on('exit', (code, signal) => {
+    if (code !== 0 && code !== null) {
+      // eslint-disable-next-line no-console
+      console.error(`[e2e] dev server exited unexpectedly (code=${code}, signal=${signal ?? 'none'})`);
+    }
+  });
+
+  await waitForReady(DEV_URL, DEV_READY_TIMEOUT_MS);
+
+  // eslint-disable-next-line no-console
+  console.log(
+    `[e2e] globalSetup ready: pg=${databaseUrl} oidc=${oidc.baseUrl} dev=${DEV_URL}`,
+  );
+}

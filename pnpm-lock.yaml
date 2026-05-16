@@ -120,6 +120,9 @@ importers:
       '@tailwindcss/postcss':
         specifier: ^4
         version: 4.3.0
+      '@testcontainers/postgresql':
+        specifier: ^10.13.0
+        version: 10.28.0
       '@testing-library/jest-dom':
         specifier: ^6.9.1
         version: 6.9.1
@@ -153,6 +156,9 @@ importers:
       happy-dom:
         specifier: ^15.11.7
         version: 15.11.7
+      jose:
+        specifier: ^6.2.3
+        version: 6.2.3
       pg:
         specifier: ^8.13.1
         version: 8.20.0

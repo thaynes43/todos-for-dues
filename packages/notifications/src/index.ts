@@ -1,5 +1,14 @@
-export { sendEmail, __setResendForTests } from './send-email';
-export type { SendEmailInput, SendEmailResult } from './send-email';
+export {
+  sendEmail,
+  __setResendForTests,
+  getRecordedEmails,
+  clearRecordedEmails,
+} from './send-email';
+export type {
+  SendEmailInput,
+  SendEmailResult,
+  RecordedEmail,
+} from './send-email';
 
 export {
   sendTreasurerEmail,

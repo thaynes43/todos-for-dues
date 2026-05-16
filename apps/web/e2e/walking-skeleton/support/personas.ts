@@ -1,23 +1,25 @@
 import type { BrowserContext, Page } from '@playwright/test';
 
 /**
- * Authenticate by calling Better Auth's REST endpoint and letting Playwright's
- * APIRequestContext capture Set-Cookie headers. The Server Action signin path
- * loses cookies in this configuration (no nextCookies plugin) — calling the
- * REST endpoint directly avoids that.
+ * Authenticate by driving the actual `<form action={signInAction}>` flow on
+ * `/login`. Before PLAN-008's nextCookies plugin, this lost the session
+ * cookie (Server Actions did not propagate Better Auth's Set-Cookie back to
+ * the browser), so PLAN-006 worked around it by POSTing directly to
+ * `/api/auth/sign-in/email`. With nextCookies wired in `@app/auth/config`,
+ * the form path now persists the session cookie correctly.
  */
 export async function signInAs(
   page: Page,
   email: string,
   password: string,
 ): Promise<void> {
-  const res = await page.request.post('/api/auth/sign-in/email', {
-    headers: { 'Content-Type': 'application/json' },
-    data: { email, password },
-  });
-  if (!res.ok()) {
-    throw new Error(`signIn failed: ${res.status()} ${await res.text()}`);
-  }
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.locator('button[type=submit]').click();
+  // Successful sign-in redirects to /. If credentials are wrong the form
+  // renders an inline error and we'll fail below.
+  await page.waitForURL('**/', { timeout: 15_000 });
 }
 
 export async function signOut(context: BrowserContext): Promise<void> {

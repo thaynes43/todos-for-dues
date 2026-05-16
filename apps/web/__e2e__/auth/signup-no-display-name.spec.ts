@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { test, expect } from '@playwright/test';
 import {
   createTestPool,
@@ -11,15 +12,16 @@ test.describe('PRD-003 AC-08 — app-managed display name required', () => {
     const pool = createTestPool();
     try {
       await truncateAll(pool);
-      const adminId = await seedBootstrapAdmin(pool);
-      await seedInviteToken(pool, {
+      const { id: adminId } = await seedBootstrapAdmin(pool);
+      const token = await seedInviteToken(pool, {
         token: 'needs-name',
         preselectedRole: 'Active',
         createdBy: adminId,
       });
+      const email = `noname+${randomUUID()}@chapter.test`;
 
-      await page.goto('/signup?token=needs-name');
-      await page.getByLabel('Email').fill('noname@chapter.test');
+      await page.goto(`/signup?token=${encodeURIComponent(token)}`);
+      await page.getByLabel('Email').fill(email);
       // Skip display name
       await page.getByLabel('Password').fill('correct-horse-battery');
       // Browser may block native form submission with empty `required` input.
@@ -31,10 +33,10 @@ test.describe('PRD-003 AC-08 — app-managed display name required', () => {
       await page.locator('button[type=submit]').click();
 
       // Either browser-validation prevented submit OR Server Action rejected.
-      // In both cases, no user row is created.
+      // In both cases, no user row is created for THIS email.
       const { rows } = await pool.query<{ count: string }>(
         `SELECT COUNT(*)::text AS count FROM users WHERE email = $1`,
-        ['noname@chapter.test'],
+        [email],
       );
       expect(rows[0]?.count).toBe('0');
     } finally {

@@ -28,7 +28,50 @@ export function __setResendForTests(client: ResendLike | undefined): void {
   injectedResend = client;
 }
 
+/**
+ * Out-of-process Playwright test seam (PLAN-008 Trap 7). The in-process
+ * `__setResendForTests` hook above can't reach the separate Next.js dev
+ * server, so when `RESEND_TEST_MODE === 'true'` we record every send into an
+ * in-memory store that the dev server exposes via the test-only
+ * `/api/_test/resend-calls` route. No-ops in production (the env var is set
+ * only by Playwright's globalSetup).
+ */
+export interface RecordedEmail {
+  to: string;
+  subject: string;
+  from: string;
+  html: string;
+  text: string;
+  idempotencyKey?: string;
+  recordedAt: string;
+}
+const recordedEmails: RecordedEmail[] = [];
+
+export function getRecordedEmails(): readonly RecordedEmail[] {
+  return [...recordedEmails];
+}
+
+export function clearRecordedEmails(): void {
+  recordedEmails.length = 0;
+}
+
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
+  if (process.env.RESEND_TEST_MODE === 'true') {
+    const from = process.env.RESEND_FROM_ADDRESS ?? FROM_ADDRESS_DEFAULT;
+    const html = await render(input.template);
+    const text = await render(input.template, { plainText: true });
+    recordedEmails.push({
+      to: input.to,
+      subject: input.subject,
+      from,
+      html,
+      text,
+      idempotencyKey: input.idempotencyKey,
+      recordedAt: new Date().toISOString(),
+    });
+    return { id: `test-${recordedEmails.length}` };
+  }
+
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.log(`[email:dev] to=${input.to} subject="${input.subject}"`);

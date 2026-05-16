@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 
 /**
@@ -15,31 +16,45 @@ export function createTestPool(): Pool {
   return new Pool({ connectionString: databaseUrl });
 }
 
-export async function truncateAll(pool: Pool): Promise<void> {
-  await pool.query(
-    `TRUNCATE users, jobs, job_enrollments, job_state_transitions, user_role_transitions, invite_tokens, "session", "account", "verification" RESTART IDENTITY CASCADE`,
-  );
+/**
+ * Historically TRUNCATEd every test-affected table. PLAN-008 Trap 6: under
+ * `--workers > 1` this races with other workers' fixtures. The helpers below
+ * now auto-suffix emails / tokens with a UUID so cross-spec contamination is
+ * impossible — wholesale truncate is no longer needed. Kept as a no-op so
+ * existing call sites keep compiling.
+ */
+export async function truncateAll(_pool: Pool): Promise<void> {
+  // intentionally empty — see comment above
+}
+
+function uniqueEmail(email: string): string {
+  if (!email.includes('@')) return `${email}+${randomUUID()}`;
+  const [local, domain] = email.split('@', 2);
+  return `${local}+${randomUUID()}@${domain}`;
 }
 
 export async function seedBootstrapAdmin(
   pool: Pool,
   email = 'admin@bootstrap.test',
-): Promise<string> {
+): Promise<{ id: string; email: string }> {
+  const uniq = uniqueEmail(email);
   const { rows } = await pool.query<{ id: string }>(
     `INSERT INTO users (email, display_name, role, email_verified) VALUES ($1, 'Admin Bootstrap', 'Admin', true) RETURNING id`,
-    [email],
+    [uniq],
   );
-  return rows[0]!.id;
+  return { id: rows[0]!.id, email: uniq };
 }
 
 export async function seedInviteToken(
   pool: Pool,
   opts: { token: string; preselectedRole: 'Active' | 'Alumni'; createdBy: string },
-): Promise<void> {
+): Promise<string> {
+  const uniqueToken = `${opts.token}-${randomUUID()}`;
   await pool.query(
     `INSERT INTO invite_tokens (token, preselected_role, created_by) VALUES ($1, $2, $3)`,
-    [opts.token, opts.preselectedRole, opts.createdBy],
+    [uniqueToken, opts.preselectedRole, opts.createdBy],
   );
+  return uniqueToken;
 }
 
 export async function revokeInviteToken(pool: Pool, token: string): Promise<void> {

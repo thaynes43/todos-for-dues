@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { hashPassword } from '@better-auth/utils/password';
 
@@ -19,25 +20,31 @@ export function createPool(): Pool {
   return new Pool({ connectionString: url });
 }
 
-export async function truncateWalkingSkeleton(pool: Pool): Promise<void> {
-  await pool.query(
-    `TRUNCATE users, jobs, job_enrollments, job_state_transitions, user_role_transitions, invite_tokens, chapter_settings, "session", "account", "verification" RESTART IDENTITY CASCADE`,
-  );
-  // Seed a sentinel Admin so the DEFERRED min-Admin trigger doesn't fire when
-  // subsequent inserts commit (PLAN-003 invariant: >= 1 Admin at all times).
-  await pool.query(
-    `INSERT INTO users (email, display_name, role, email_verified) VALUES ('sentinel-admin@walking.test', 'Sentinel', 'Admin', true)
-     ON CONFLICT (email) DO NOTHING`,
-  );
+/**
+ * Historically a TRUNCATE of the walking-skeleton tables. PLAN-008 Trap 6:
+ * truncating between specs breaks `--workers > 1` because other workers'
+ * fixtures get wiped mid-flight. Each spec now uses UUID-suffixed identifiers
+ * (handled inside `seedPersona`), so wholesale truncation is unnecessary —
+ * this stays as a no-op to preserve the existing call sites.
+ */
+export async function truncateWalkingSkeleton(_pool: Pool): Promise<void> {
+  // intentionally empty — see comment above
+}
+
+function uniqueEmail(email: string): string {
+  if (!email.includes('@')) return `${email}+${randomUUID()}`;
+  const [local, domain] = email.split('@', 2);
+  return `${local}+${randomUUID()}@${domain}`;
 }
 
 export async function seedPersona(
   pool: Pool,
   opts: { email: string; displayName: string; role: Role; password: string },
 ): Promise<SeededPersona> {
+  const email = uniqueEmail(opts.email);
   const { rows } = await pool.query<{ id: string }>(
     `INSERT INTO users (email, display_name, role, email_verified) VALUES ($1, $2, $3, true) RETURNING id`,
-    [opts.email, opts.displayName, opts.role],
+    [email, opts.displayName, opts.role],
   );
   const userId = rows[0]!.id;
   const passwordHash = await hashPassword(opts.password);
@@ -47,7 +54,7 @@ export async function seedPersona(
   );
   return {
     id: userId,
-    email: opts.email,
+    email,
     displayName: opts.displayName,
     role: opts.role,
     password: opts.password,

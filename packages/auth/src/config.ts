@@ -1,12 +1,13 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { nextCookies } from 'better-auth/next-js';
 import { genericOAuth } from 'better-auth/plugins/generic-oauth';
 import { eq } from 'drizzle-orm';
 import { db, users, session, account, verification } from '@app/db';
 import { enforceHdRestriction } from './hooks/hd-restriction';
 import { bootstrapAdminOnSignin } from './hooks/bootstrap-admin';
 
-const OIDC_DISCOVERY_URL =
+const DEFAULT_OIDC_DISCOVERY_URL =
   'https://accounts.google.com/.well-known/openid-configuration';
 const OIDC_PROVIDER_ID = 'google-workspace';
 
@@ -26,7 +27,8 @@ const oidcPlugins = oidcEnabled
             providerId: OIDC_PROVIDER_ID,
             clientId: oidcClientId!,
             clientSecret: oidcClientSecret!,
-            discoveryUrl: OIDC_DISCOVERY_URL,
+            discoveryUrl:
+              process.env.OIDC_DISCOVERY_URL ?? DEFAULT_OIDC_DISCOVERY_URL,
             scopes: ['openid', 'email', 'profile'],
             authorizationUrlParams: { hd: oidcHostedDomain! },
             mapProfileToUser: (profile) => {
@@ -88,9 +90,20 @@ export const auth = betterAuth({
     accountLinking: {
       enabled: true,
       trustedProviders: [OIDC_PROVIDER_ID],
+      // Our credential-signup flow has no email-verification UI (out of MVP
+      // scope), so credential users persist with `email_verified=false`.
+      // Without this override Better Auth would refuse to auto-link a
+      // trusted OIDC sign-in to an existing unverified credential user
+      // (link-account.mjs: `requireLocalEmailVerified ?? true`), even though
+      // the design intent (PRD-003 R-09) is that trustedProviders just-works.
+      requireLocalEmailVerified: false,
     },
   },
-  plugins: oidcPlugins,
+  // nextCookies MUST be the last plugin — it captures Set-Cookie headers from
+  // Better Auth's internal responses and forwards them through Next.js's
+  // cookies() API so Server Action sign-in/up flows actually persist the
+  // session cookie back to the browser (PLAN-006 follow-up).
+  plugins: [...oidcPlugins, nextCookies()],
   session: {
     expiresIn: 60 * 60 * 24 * 7,
     updateAge: 60 * 60 * 24,
