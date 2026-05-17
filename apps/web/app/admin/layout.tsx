@@ -16,13 +16,7 @@ export default async function AdminLayout({
   if (role !== 'Admin') redirect('/');
 
   const caller = await getServerCaller();
-  let disputedCount = 0;
-  try {
-    const disputes = await caller.admin.listDisputed();
-    disputedCount = disputes.length;
-  } catch {
-    disputedCount = 0;
-  }
+  const disputedCount = (await caller.admin.listDisputed()).length;
 
   return (
     <div className="flex flex-col gap-6 md:flex-row" data-testid="admin-layout">
