@@ -36,4 +36,34 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
       - run: pnpm --filter web exec playwright install --with-deps chromium
-      - run: pnpm --filter web e2e
+
+      # Suite isolation: each suite runs in its own Playwright invocation
+      # (fresh globalSetup → fresh testcontainer DB) so cross-suite state
+      # pollution doesn't surface here. See .zprompt.md "E2E isolation
+      # follow-ups" for the per-spec details.
+
+      - name: e2e — walking-skeleton (PLAN-006 per-page + PLAN-008 chained)
+        run: pnpm --filter web e2e -- e2e/walking-skeleton/ e2e/walking-skeleton.spec.ts
+
+      - name: e2e — SSO / auth (PLAN-008)
+        run: pnpm --filter web e2e -- __e2e__/auth/
+
+      - name: e2e — mvp (PLAN-010)
+        run: pnpm --filter web e2e -- e2e/mvp/
+
+      - name: e2e — admin (PLAN-011 + PLAN-014 invites)
+        run: pnpm --filter web e2e -- e2e/admin/
+
+      # Roles specs share GLOBAL chapter admin state — `demoteAllOtherAdmins`
+      # in last-admin-blocked / admin-swap clobbers other concurrent specs'
+      # seeded admins. Each spec file gets its own playwright invocation
+      # (fresh DB) until the test architecture is reshaped.
+      - name: e2e — roles (PLAN-012, per-spec for isolation)
+        run: |
+          set -e
+          for f in apps/web/e2e/roles/*.spec.ts; do
+            rel="${f#apps/web/}"
+            echo "::group::$rel"
+            pnpm --filter web e2e -- "$rel"
+            echo "::endgroup::"
+          done

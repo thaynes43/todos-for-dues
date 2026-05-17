@@ -85,6 +85,13 @@ export async function reAuth(
 ): Promise<void> {
   await context.clearCookies();
   await signInAs(page, persona.email, persona.password);
+  // After the post-signin redirect to '/', wait for the network to go idle
+  // so Better Auth's Set-Cookie has been fully processed by Playwright's
+  // cookie jar AND any layout-level role lookup has completed. Without this,
+  // a fast goto('/admin/X') immediately after reAuth can race the session
+  // hydration — the admin layout reads a stale or missing session role and
+  // redirects to '/' instead of rendering the admin page.
+  await page.waitForLoadState('networkidle');
 }
 
 export async function pollJobState(

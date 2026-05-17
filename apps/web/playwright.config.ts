@@ -13,6 +13,11 @@ export default defineConfig({
   fullyParallel: true,
   retries: 0,
   reporter: 'list',
+  // Default expect assertion timeout. Playwright's built-in default is 5s;
+  // bumped to 15s so a single first-hit compile-lag spike (esp. on GHA cold
+  // runners) doesn't trip a `toBeVisible` / `toBeEnabled`. Specs may still
+  // pass `{ timeout: N }` overrides for longer waits where needed.
+  expect: { timeout: 15_000 },
   // Playwright's `webServer` plugin starts BEFORE globalSetup (see runner's
   // createGlobalSetupTasks ordering), so a webServer block would launch
   // `next dev` with a stale env — DATABASE_URL would not point at the

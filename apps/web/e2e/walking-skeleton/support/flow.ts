@@ -126,10 +126,16 @@ export async function driveToLocked(opts: DriveOpts): Promise<string> {
   const jobId = await driveToEnrolled(opts);
   await reAuth(opts.page, opts.context, opts.personas.alumni);
   await opts.page.goto(`/jobs/${jobId}`);
+  // Wait for /jobs/[jobId] to hydrate before driving the lock form. On cold
+  // GHA runners the submit button stayed `disabled` past 30s because React
+  // state hadn't caught up to the .fill() yet.
+  await opts.page.waitForLoadState('networkidle');
   await opts.page
     .getByTestId('lock-job-work-date')
     .fill(futureLocalDatetimeMinutes(60 * 24 * 3));
-  await opts.page.getByTestId('lock-job-submit').click();
+  const submit = opts.page.getByTestId('lock-job-submit');
+  await expect(submit).toBeEnabled({ timeout: 30_000 });
+  await submit.click();
   await pollJobState(opts.pool, jobId, 'locked');
   return jobId;
 }

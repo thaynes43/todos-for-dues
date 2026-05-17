@@ -56,6 +56,53 @@ async function waitForReady(url: string, timeoutMs: number): Promise<void> {
   );
 }
 
+/**
+ * Pre-compile every route a spec might hit. Next.js's dev server compiles
+ * routes on first request — on a cold GHA runner that first-hit cost can
+ * exceed the per-spec timeout (button stays `disabled` past 30s, etc.).
+ * Issuing a single GET to each route during globalSetup amortises the
+ * compile cost once, so individual specs see warm responses.
+ *
+ * Dynamic routes like `/jobs/[jobId]` are warmed by hitting a zero-UUID
+ * placeholder — the route MODULE is compiled regardless of param value;
+ * the handler will return notFound but that's the same module.
+ */
+async function prewarmRoutes(baseUrl: string): Promise<void> {
+  const placeholderId = '00000000-0000-0000-0000-000000000000';
+  const routes = [
+    '/',
+    '/login',
+    '/signup',
+    '/forgot-password',
+    '/profile',
+    '/jobs',
+    '/jobs/new',
+    `/jobs/${placeholderId}`,
+    '/my-postings',
+    '/my-enrollments',
+    '/moderation-queue',
+    '/admin',
+    '/admin/users',
+    `/admin/users/${placeholderId}`,
+    `/admin/jobs/${placeholderId}`,
+    '/admin/disputes',
+    '/admin/settings',
+    '/admin/audit-log',
+    '/admin/invites',
+    '/api/health',
+  ];
+  const start = Date.now();
+  await Promise.all(
+    routes.map((path) =>
+      fetch(baseUrl + path, { redirect: 'manual' }).catch(() => undefined),
+    ),
+  );
+  // eslint-disable-next-line no-console
+  console.log(
+    `[e2e] prewarm: ${routes.length} routes compiled in ${Date.now() - start}ms`,
+  );
+}
+
 export default async function globalSetup(_config: FullConfig): Promise<void> {
   try {
     rmSync(TMP_DIR, { recursive: true, force: true });
@@ -147,6 +194,11 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   });
 
   await waitForReady(DEV_URL, DEV_READY_TIMEOUT_MS);
+
+  // Compile every spec-facing route once before specs start. On cold GHA
+  // runners route compile-lag was tripping per-spec timeouts (e.g. lock-job
+  // submit button stayed disabled past 30s while /jobs/[id] compiled).
+  await prewarmRoutes(DEV_URL);
 
   // eslint-disable-next-line no-console
   console.log(

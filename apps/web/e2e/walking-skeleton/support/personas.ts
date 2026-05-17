@@ -14,12 +14,17 @@ export async function signInAs(
   password: string,
 ): Promise<void> {
   await page.goto('/login');
+  // Wait for /login to hydrate. On a cold dev server (esp. GHA runners) the
+  // form may still be compiling/mounting when goto resolves; without this
+  // wait the submit click can race with hydration and silently drop.
+  await page.waitForLoadState('networkidle');
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.locator('button[type=submit]').click();
   // Successful sign-in redirects to /. If credentials are wrong the form
-  // renders an inline error and we'll fail below.
-  await page.waitForURL('**/', { timeout: 15_000 });
+  // renders an inline error and we'll fail below. 30s tolerates GHA
+  // cold-runner compile-lag on the post-redirect homepage.
+  await page.waitForURL('**/', { timeout: 30_000 });
 }
 
 export async function signOut(context: BrowserContext): Promise<void> {
