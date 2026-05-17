@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.3](https://github.com/thaynes43/todos-for-dues/compare/v0.2.2...v0.2.3) (2026-05-17)
+
+
+### Documentation
+
+* **agents:** add coordinator + developer role profiles ([#9](https://github.com/thaynes43/todos-for-dues/issues/9)) ([09c1d7f](https://github.com/thaynes43/todos-for-dues/commit/09c1d7f4b400053936caece8c11c8c36354a5a3f))
+* reconcile DESIGN-001 + PLAN-002/009/013 with PLAN-009 deploy reality ([#11](https://github.com/thaynes43/todos-for-dues/issues/11)) ([e54e076](https://github.com/thaynes43/todos-for-dues/commit/e54e076387ec07b8136d274816fbf60116083982))
+
 ## [0.2.2](https://github.com/thaynes43/todos-for-dues/compare/v0.2.1...v0.2.2) (2026-05-17)
 
 
