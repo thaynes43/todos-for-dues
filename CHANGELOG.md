@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.0](https://github.com/thaynes43/todos-for-dues/compare/v0.6.0...v0.7.0) (2026-05-17)
+
+
+### Features
+
+* **ci:** SDLC hardening — Playwright in CI · release-tag automation · test hygiene · live smoke + health · ops runbook (PLAN-013) ([#27](https://github.com/thaynes43/todos-for-dues/issues/27)) ([bb4e94e](https://github.com/thaynes43/todos-for-dues/commit/bb4e94e947a356078cee6695ed59c8944dee85b4))
+
+
+### Documentation
+
+* **plan-013 + plan-014:** reshape PLAN-013 + commit deploy prompt 029 ([#25](https://github.com/thaynes43/todos-for-dues/issues/25)) ([741d04b](https://github.com/thaynes43/todos-for-dues/commit/741d04b425a26510157d1d966ec7c4c01e75bb77))
+
 ## [0.6.0](https://github.com/thaynes43/todos-for-dues/compare/v0.5.0...v0.6.0) (2026-05-17)
 
 
