@@ -50,6 +50,13 @@
       "when": 1778809054000,
       "tag": "0007_users_add_image",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1778809055000,
+      "tag": "0008_fix_min_admin_trigger_bootstrap",
+      "breakpoints": true
     }
   ]
 }
