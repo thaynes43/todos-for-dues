@@ -85,9 +85,22 @@ Acceptance: spec passes 1x against the deployed URL (full 5x-no-flake gate isn't
 
 If the deploy fails partway, PLAN-009's resume points map to the failing step (Dockerfile → CI → DB → Secrets → Deployment → smoke). Do NOT delete the External Secrets configuration to "start clean" — investigate the underlying issue first. Resume by re-pushing the deploy commit or re-triggering Flux reconciliation.
 
+### 7.1 Deferred user-driven gates (decided 2026-05-17, post-validation)
+
+The validator passed 16/19 §6 gates. Three remaining gates are **deferred** to a single dedicated pre-beta validation that runs AFTER PLAN-012 (role-management UI) completes the MVP feature set:
+
+- Walking-skeleton happy-path click-through against the live URL (post-job → moderator-approve → active-enroll → confirm-received → close).
+- Treasurer email lands (Resend dashboard or test-inbox confirmation against the deployed instance).
+- Bootstrap-admin path via SSO live click-through (DB-layer evidence is in place; the browser-driven path hasn't been exercised by a human).
+
+**Why deferred:** the Admin UI (invite-link generation, moderation queue, dispute resolution, settings UI) doesn't ship until PLAN-011 + PLAN-012. Running these gates on a UI-incomplete instance would require re-running them after every subsequent feature plan since each one can introduce new affordances that need re-exercise. Treating them as the **last gate before bringing in beta testers** amortises the cost to one run and validates the full MVP surface in one pass.
+
+The pre-beta validation plan is a flagged follow-up in PLAN-013's §3.1 backlog; promotion from backlog to a dedicated plan (likely `PLAN-014` or appended to `docs/releases/001-mvp.md` §5 rollout) happens during the post-PLAN-009 review.
+
 ## 8. Changelog
 
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial draft. Pairs with PLAN-009. Operational/smoke-only validation; PRD ACs are re-verified via VALIDATION-008's spec rerun against the deployed URL. |
 | 2026-05-15 | Tom Haynes | §3 + §6: added gates for the three new PLAN-009 sub-steps — branch protection on `main` (verified via `gh api` returning the expected ruleset; `git push origin main` rejected; linear history enforced), root `CLAUDE.md` PR-flow + release-please sections (grep verification), and the release-please pipeline end-to-end (feat-PR merge → release PR opens → release PR merge → tag created → build-image triggered → versioned image in GHCR). Deployment image-tag gate now requires `:vX.Y.Z` pinning, not `:latest`. Init-container migrate command updated from `drizzle-kit migrate` to the PLAN-002 `pnpm --filter @app/db migrate` wrapper. Commit-count gate broadened to "all PLAN-009 commits landed via PRs" since branch protection lands mid-plan. |
+| 2026-05-17 | Tom Haynes | Post-validation: 16/19 gates passed (technical infrastructure all green). Added §7.1 documenting that the 3 remaining user-driven gates (walking-skeleton live click-through, treasurer email lands, SSO bootstrap-admin live click-through) are deferred to a single pre-beta validation plan that runs AFTER PLAN-012 (when the Admin UI surface is complete). Validator's reasoning was that running these gates on a UI-incomplete instance would require re-running after every subsequent feature plan; treating them as the last gate before beta testers amortises the cost. Flagged follow-up captured in PLAN-013 §3.1 backlog. Two validator-noted deviations: (1) `enforce_admins: false` keeps a coordinator break-glass (intentional per §2.5; the validator's `git push origin main` "live test" succeeded for an admin token, leaving an empty probe commit `4e2ea9e` permanently in main history — harmless, force-push remains rejected for everyone); (2) Playwright is not invoked by the CI `test` job (vitest only), documented gap, in PLAN-013 backlog. |
