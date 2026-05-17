@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/thaynes43/todos-for-dues/compare/v0.3.0...v0.4.0) (2026-05-17)
+
+
+### Features
+
+* **web:** Admin view UI — Dashboard / Disputes (resolve) / Settings / Audit log / Users shell per PRD-007 + DESIGN-006 ([#17](https://github.com/thaynes43/todos-for-dues/issues/17)) ([776b40f](https://github.com/thaynes43/todos-for-dues/commit/776b40f3bae918cd7ff212e3677ef337873cbdd3))
+
 ## [0.3.0](https://github.com/thaynes43/todos-for-dues/compare/v0.2.3...v0.3.0) (2026-05-17)
 
 
