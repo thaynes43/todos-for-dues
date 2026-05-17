@@ -38,6 +38,9 @@ vi.mock('@/lib/trpc-client', () => ({
       approve: {
         useMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }),
       },
+      reject: {
+        useMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+      },
     },
   },
 }));

@@ -903,6 +903,85 @@ describe('jobs router', () => {
         .jobs.getById({ jobId });
       expect(result.roster).toHaveLength(1);
     });
+
+    // PLAN-010 projection extensions ────────────────────────────────────
+    it('projects closedBy.displayName when state=closed (PLAN-010)', async () => {
+      const c = caller(makeCtx({ userId: users.alumni, role: 'Alumni' }));
+      const { jobId } = await c.jobs.post({
+        description: 'closeable',
+        duesAmount: 20,
+        recommendedPeopleCount: 1,
+      });
+      await caller(makeCtx({ userId: users.moderator, role: 'Moderator' })).jobs.approve({
+        jobId,
+      });
+      await caller(makeCtx({ userId: users.active1, role: 'Active' })).jobs.enroll({ jobId });
+      // Drive the lock → complete → markPaymentSent → confirmReceipt path.
+      await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).jobs.lock({
+        jobId,
+        workDate: FUTURE_DATE(),
+      });
+      await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).jobs.complete({
+        jobId,
+        confirmedAttendees: [users.active1],
+      });
+      await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).jobs.markPaymentSent({
+        jobId,
+      });
+      await caller(makeCtx({ userId: users.active1, role: 'Active' })).jobs.confirmReceipt({
+        jobId,
+      });
+
+      const result = await caller(makeCtx({ userId: users.active1, role: 'Active' }))
+        .jobs.getById({ jobId });
+      expect(result.state).toBe('closed');
+      expect(result.closedBy?.displayName).toBeTruthy();
+    });
+
+    it('projects viewerCredit for an enrolled Active when completed', async () => {
+      const jobId = await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'completed',
+        perActiveDuesCredit: { [users.active1]: '12.34' },
+      });
+      await insertEnrollment(testDb.pool, jobId, users.active1);
+      await testDb.pool.query(
+        `UPDATE job_enrollments SET confirmed_attendee_at = now() WHERE job_id = $1 AND active_id = $2`,
+        [jobId, users.active1],
+      );
+
+      const result = await caller(makeCtx({ userId: users.active1, role: 'Active' }))
+        .jobs.getById({ jobId });
+      expect(result.viewerCredit).toEqual({ confirmed: true, amount: '12.34' });
+    });
+
+    it('viewerCredit.confirmed=false for an enrolled-but-not-confirmed Active (Q-PLN-01)', async () => {
+      const jobId = await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'completed',
+        perActiveDuesCredit: { [users.active2]: '25.00' },
+      });
+      await insertEnrollment(testDb.pool, jobId, users.active1);
+      await insertEnrollment(testDb.pool, jobId, users.active2);
+      await testDb.pool.query(
+        `UPDATE job_enrollments SET confirmed_attendee_at = now() WHERE job_id = $1 AND active_id = $2`,
+        [jobId, users.active2],
+      );
+
+      const result = await caller(makeCtx({ userId: users.active1, role: 'Active' }))
+        .jobs.getById({ jobId });
+      expect(result.viewerCredit).toEqual({ confirmed: false, amount: null });
+    });
+
+    it('viewerCredit is null for non-Active viewers', async () => {
+      const jobId = await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'completed',
+      });
+      const result = await caller(makeCtx({ userId: users.alumni, role: 'Alumni' }))
+        .jobs.getById({ jobId });
+      expect(result.viewerCredit).toBeNull();
+    });
   });
 
   describe('getHistory — PRD-007 R-06', () => {
