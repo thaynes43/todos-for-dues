@@ -47,7 +47,12 @@ Maps every PRD-002..008 R-NN + AC-NN, every DESIGN-001..006 §4 subsection, and 
 | PRD ref | Plan | Validation |
 |---|---|---|
 | R-01..R-10 (all) | PLAN-004 + PLAN-002 (DB) | VALIDATION-004 + VALIDATION-002 |
+| R-11 (mint invite token) | PLAN-014 `invites.mint` | VALIDATION-014 |
+| R-12 (list outstanding invites) | PLAN-014 `invites.list` + `/admin/invites` | VALIDATION-014 |
+| R-13 (revoke invite token) | PLAN-014 `invites.revoke` | VALIDATION-014 |
+| R-14 (single-use redemption) | PLAN-014 (signup-action fix) | VALIDATION-014 |
 | AC-01..AC-09 (all) | PLAN-004 | VALIDATION-004 |
+| AC-10..AC-13 (invite management) | PLAN-014 | VALIDATION-014 |
 
 ### PRD-004 — Enrollment, lock & reschedule
 

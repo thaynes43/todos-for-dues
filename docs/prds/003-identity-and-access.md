@@ -74,6 +74,10 @@ Personas are defined in PRD-001 §4.1. Reproduced in brief for this PRD's scope:
 | R-08 | Admins shall be able to deactivate or reassign the role of any account regardless of whether it was created via SSO or app-managed signup. | P0 | US-04 | Deactivation blocks login; it does not delete the account or its history. |
 | R-09 | When a user signs in via Google SSO and an app-managed account already exists with the same email address, the system shall automatically link the SSO credential to the existing account rather than creating a duplicate. | P0 | US-01 | Merge is by email, automatic, no Admin action required. Exact linking semantics (session history, which credential takes precedence) belong in the auth design doc. Better Auth's account-linking feature is the implementation path. |
 | R-10 | At account creation (app-managed signup form) or first SSO sign-in, the system shall require a display name (text, ≥ 1 non-whitespace char) and persist it on the User row. The display name is used by PRD-004 R-05 (job roster visibility), PRD-005 R-07 (treasurer email line items), PRD-007 R-06 (audit-log actor rendering), and PRD-008 R-08 / R-10 (role-change history). | P0 | US-01, US-02 | App-managed signup: required field on the signup form. SSO first-login: prefilled from the OIDC `name` / `given_name` claim where available, with a one-step confirm screen if absent or empty. Display name is editable post-signup (TBD which surface owns the editor; not blocking MVP). Stored as `users.display_name NOT NULL` per DESIGN-001 §4.2. |
+| R-11 | When an Admin submits a request to mint an invite token specifying a preselected non-privileged role (Active or Alumni), the system shall persist a row in `invite_tokens` with a securely-generated random `token` value (URL-safe, ≥ 128 bits of entropy), `preselected_role` set to the requested role, `created_by` set to the Admin's user id, and return the token string to the caller for distribution. | P0 | US-02 | Backs R-02 by giving Admins a first-class way to mint tokens without raw SQL. Token format: URL-safe (base64url of 16+ random bytes is the lean). The CHECK constraint `invite_tokens_role_non_privileged` on `invite_tokens.preselected_role` blocks any attempt to mint a Moderator/Admin invite. |
+| R-12 | The system shall expose to Admins a list of outstanding invite tokens (`revoked_at IS NULL`) ordered most-recent-first, showing each token's preselected role, creation timestamp, the display name of the Admin who minted it, and an action affordance to revoke or copy the signup URL. The list shall NOT include revoked tokens by default. | P0 | US-02 | Admin-only visibility — non-Admins must not be able to enumerate tokens (privileged data). Includes a "copy URL" affordance using the URL form `<base>/signup?token=<token>` (matches `apps/web/app/signup/page.tsx`'s existing param parsing). |
+| R-13 | When an Admin submits a request to revoke an outstanding invite token, the system shall set the token's `revoked_at` to the current timestamp; subsequent attempts to redeem the token shall be rejected per R-02 with the existing "Invite link is invalid or has been revoked" error. | P0 | US-02 | One-way operation; no un-revoke. To restart, Admin mints a fresh token. |
+| R-14 | Upon successful signup that consumed an invite token, the system shall set that token's `revoked_at` to the current timestamp atomically with the user-account creation, so the token cannot be reused by a subsequent signup. Tokens are single-use. | P0 | US-02 | Closes a security hole: prior to R-14 the signup action verified the token but never marked it consumed, so a single URL could be redeemed by an unlimited number of users. The atomicity requirement (single transaction) avoids a race where two concurrent signups both observe `revoked_at IS NULL` and both succeed; an `UPDATE … WHERE revoked_at IS NULL` + row-count check is sufficient. If the UPDATE affects zero rows the second signup is rejected with the revoked error. |
 
 ### 5.1 Acceptance criteria
 
@@ -121,6 +125,26 @@ Personas are defined in PRD-001 §4.1. Reproduced in brief for this PRD's scope:
   - **Given** a hosted-domain user completes Google OAuth and Google returns no `name` / `given_name` claim
   - **When** the OIDC callback runs
   - **Then** the user is shown a one-step "What should we call you?" form before the session is established; submitting a non-empty value persists `users.display_name` and creates the session.
+
+- **AC-10** — covers R-11 (mint invite)
+  - **Given** Admin A is logged in
+  - **When** A submits a mint request specifying preselected role `Active`
+  - **Then** a new `invite_tokens` row exists with `preselected_role: Active`, `created_by: A.id`, `revoked_at: NULL`, a populated `token`, and the caller receives the token string back. Mint with role `Moderator` or `Admin` is rejected at the DB layer by the `invite_tokens_role_non_privileged` CHECK constraint (the procedure should refuse before the DB call as an early guard).
+
+- **AC-11** — covers R-12 (list outstanding)
+  - **Given** the DB has 3 outstanding invites + 1 revoked invite + 1 redeemed invite (revoked-after-signup per R-14)
+  - **When** Admin A views the invites list
+  - **Then** exactly the 3 outstanding rows appear, ordered `created_at DESC`, with each row showing role + creation time + minter display name + signup-URL + revoke action. The 2 non-outstanding rows are absent.
+
+- **AC-12** — covers R-13 (revoke)
+  - **Given** an outstanding invite token T
+  - **When** Admin A revokes T via the UI
+  - **Then** T's `revoked_at` is set to now; a subsequent `GET /signup?token=<T>` shows the existing "Invite link is invalid or has been revoked" error from `verifyInviteToken`; the row no longer appears in the outstanding list.
+
+- **AC-13** — covers R-14 (single-use redemption)
+  - **Given** an outstanding invite token T
+  - **When** user U1 successfully signs up with T
+  - **Then** T's `revoked_at` is set to now atomically with U1's account creation; a second user U2 attempting signup with T receives the revoked error and no account is created for U2.
 
 ## 6. User experience
 
@@ -182,3 +206,4 @@ New terms introduced by this PRD for `docs/domain/glossary.md`:
 | 2026-05-14 | Tom Haynes | Initial draft. Reflects confirmed product decision: Workspace membership is sufficient authorization for SSO users; invite token required for app-managed only. OIDC SSO promoted to P0 / MVP scope. |
 | 2026-05-14 | Tom Haynes | Resolved Q-01 (account linking): same email = automatic link, no duplicate account, no Admin action. Added R-09. |
 | 2026-05-14 | Tom Haynes | Added R-10 (display-name capture) + AC-08 (app-managed signup validation) + AC-09 (SSO fallback prompt). Closes the gap where every downstream PRD (004 / 005 / 007 / 008) and DESIGN-001 §4.2 assumed `users.display_name NOT NULL` without any PRD-003 R-NN owning the capture flow. |
+| 2026-05-17 | Tom Haynes | Added R-11..R-14 + AC-10..AC-13 for Admin-side invite-token management. Closes the gap surfaced post-PLAN-012 deploy: invite-token DB / verify / signup-consumption infrastructure existed since PLAN-002/004, but no Admin UI to mint, list, or revoke tokens — chapter Admins had to issue raw SQL to onboard non-SSO members. R-14 also fixes a latent security bug in the signup action: tokens were verified but never marked consumed, so a single URL could be redeemed an unlimited number of times. Paired implementation: PLAN-014. |
