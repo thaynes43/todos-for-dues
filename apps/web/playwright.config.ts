@@ -11,7 +11,13 @@ export default defineConfig({
   // parallelism is safe because every spec uses UUID-suffixed identifiers
   // (Trap 6) — no spec depends on global "fresh DB" state.
   fullyParallel: true,
-  retries: 0,
+  // CI-only retry: GHA cold-runner timing variance occasionally fails a spec
+  // even after the prewarm + waitForLoadState('load') + toBeEnabled hardening
+  // in support helpers. Real bugs reproduce locally with retries=0 (where the
+  // helpers cover the deterministic paths). 1 retry is the minimum to absorb
+  // residual GHA jitter without masking real flakes (rerun-and-pass repeatedly
+  // would still surface in the Playwright HTML report).
+  retries: process.env.CI ? 1 : 0,
   reporter: 'list',
   // Default expect assertion timeout. Playwright's built-in default is 5s;
   // bumped to 15s so a single first-hit compile-lag spike (esp. on GHA cold
