@@ -25,6 +25,11 @@ const NAV_LINKS: ReadonlyArray<NavLink> = [
     label: 'Moderation queue',
     roles: ['Moderator', 'Admin'],
   },
+  {
+    href: '/profile',
+    label: 'Profile',
+    roles: ['Active', 'Alumni', 'Moderator', 'Admin'],
+  },
 ];
 
 export function RoleAwareNav({ role }: { role: Role | null }) {

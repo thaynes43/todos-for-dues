@@ -211,7 +211,20 @@ describe('users router', () => {
       const u = await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).users.getById({
         userId: users.active1,
       });
-      expect(u).toMatchObject({ id: users.active1, role: 'Active' });
+      expect(u).toMatchObject({
+        id: users.active1,
+        role: 'Active',
+      });
+    });
+
+    // PLAN-012 Step 6 needs email on the per-user Admin detail page.
+    it('projects email + displayName for the Admin detail view', async () => {
+      const u = await caller(makeCtx({ userId: users.admin, role: 'Admin' })).users.getById({
+        userId: users.active1,
+      });
+      expect(u.email).toBe('active1@test.invalid');
+      expect(typeof u.displayName).toBe('string');
+      expect(u.displayName.length).toBeGreaterThan(0);
     });
 
     it('rejects without session', async () => {
