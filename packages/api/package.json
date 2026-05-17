@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./trpc": "./src/trpc.ts",
-    "./routers": "./src/routers/index.ts"
+    "./routers": "./src/routers/index.ts",
+    "./settings-shared": "./src/settings-shared.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

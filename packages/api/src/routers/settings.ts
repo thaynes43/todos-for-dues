@@ -4,16 +4,14 @@ import { sql } from 'drizzle-orm';
 import { chapterSettings } from '@app/db/schema';
 import { router } from '../trpc';
 import { adminProcedure } from '../middleware/role';
+import {
+  SETTING_VALIDATORS,
+  SETTING_KEYS,
+  type SettingKey,
+} from '../settings-shared';
 
-const SETTING_VALIDATORS = {
-  admin_recipient_email: z.string().email(),
-  treasurer_recipient_email: z.string().email(),
-  moderators_recipient_email: z.string().email(),
-  chapter_timezone: z.string().regex(/^[A-Za-z_]+\/[A-Za-z0-9_+-]+$/),
-  chapter_display_name: z.string().trim().min(1).max(120),
-} as const;
-
-export const SETTING_KEYS = Object.keys(SETTING_VALIDATORS) as readonly (keyof typeof SETTING_VALIDATORS)[];
+export { SETTING_VALIDATORS, SETTING_KEYS };
+export type { SettingKey };
 
 export const settingsRouter = router({
   // PRD-007 R-07 — Admin lists all chapter settings.
