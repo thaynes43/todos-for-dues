@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/thaynes43/todos-for-dues/compare/v0.2.3...v0.3.0) (2026-05-17)
+
+
+### Features
+
+* **web:** MVP job-loop UI completion — rejection / reschedule / cancel / unenroll / revert / dispute / list views per DESIGN-006 ([#14](https://github.com/thaynes43/todos-for-dues/issues/14)) ([a69af93](https://github.com/thaynes43/todos-for-dues/commit/a69af9355a55e354f2d2c55252a9dd12088ec0ce))
+
 ## [0.2.3](https://github.com/thaynes43/todos-for-dues/compare/v0.2.2...v0.2.3) (2026-05-17)
 
 
