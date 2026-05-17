@@ -1,24 +1,26 @@
+import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { desc, eq, sql } from 'drizzle-orm';
-import { inviteTokens, INVITE_TOKEN_ROLES } from '@app/db/schema';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { inviteTokens, users, INVITE_TOKEN_ROLES } from '@app/db/schema';
 import { router } from '../trpc';
 import { adminProcedure } from '../middleware/role';
 
-function publicBaseUrl(): string {
-  return (
-    process.env.PUBLIC_BASE_URL ??
-    process.env.BETTER_AUTH_URL ??
-    'http://localhost:3000'
-  );
-}
+const MintInput = z.object({
+  preselectedRole: z.enum(INVITE_TOKEN_ROLES),
+});
+
+const RevokeInput = z.object({
+  id: z.string().uuid(),
+});
 
 export const invitesRouter = router({
-  // PRD-001 R-01 — Admin generates an invite URL for an Active or Alumni role.
-  generate: adminProcedure
-    .input(z.object({ preselectedRole: z.enum(INVITE_TOKEN_ROLES) }))
+  // PRD-003 R-11..R-13 / PLAN-014 §3 — Admin mints an invite for Active or Alumni.
+  // The Zod enum is defense-in-depth alongside the DB CHECK constraint.
+  mint: adminProcedure
+    .input(MintInput)
     .mutation(async ({ ctx, input }) => {
-      const token = crypto.randomUUID().replace(/-/g, '');
+      const token = randomBytes(16).toString('base64url');
       const [row] = await ctx.db
         .insert(inviteTokens)
         .values({
@@ -31,32 +33,41 @@ export const invitesRouter = router({
           token: inviteTokens.token,
           preselectedRole: inviteTokens.preselectedRole,
           createdAt: inviteTokens.createdAt,
+          createdBy: inviteTokens.createdBy,
         });
       if (!row) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
-      return {
-        id: row.id,
-        token: row.token,
-        preselectedRole: row.preselectedRole,
-        url: `${publicBaseUrl()}/signup?token=${row.token}`,
-        createdAt: row.createdAt,
-      };
+      return row;
     }),
 
+  // PRD-003 AC-11 — outstanding (un-revoked) invites only, newest first.
   list: adminProcedure.query(async ({ ctx }) => {
-    return ctx.db
-      .select()
+    const rows = await ctx.db
+      .select({
+        id: inviteTokens.id,
+        token: inviteTokens.token,
+        preselectedRole: inviteTokens.preselectedRole,
+        createdAt: inviteTokens.createdAt,
+        createdByDisplayName: users.displayName,
+      })
       .from(inviteTokens)
+      .leftJoin(users, eq(users.id, inviteTokens.createdBy))
+      .where(isNull(inviteTokens.revokedAt))
       .orderBy(desc(inviteTokens.createdAt));
+    return rows;
   }),
 
+  // PRD-003 AC-12 — Admin revokes; already-revoked or unknown id returns NOT_FOUND.
   revoke: adminProcedure
-    .input(z.object({ tokenId: z.string().uuid() }))
+    .input(RevokeInput)
     .mutation(async ({ ctx, input }) => {
-      const result = await ctx.db
+      const [row] = await ctx.db
         .update(inviteTokens)
         .set({ revokedAt: sql`now()` })
-        .where(eq(inviteTokens.id, input.tokenId))
-        .returning({ id: inviteTokens.id });
-      if (result.length === 0) throw new TRPCError({ code: 'NOT_FOUND' });
+        .where(and(eq(inviteTokens.id, input.id), isNull(inviteTokens.revokedAt)))
+        .returning({ revokedAt: inviteTokens.revokedAt });
+      if (!row || row.revokedAt === null) {
+        throw new TRPCError({ code: 'NOT_FOUND' });
+      }
+      return { revokedAt: row.revokedAt };
     }),
 });
