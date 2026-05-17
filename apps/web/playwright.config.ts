@@ -3,6 +3,10 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: '.',
   testMatch: ['__e2e__/**/*.spec.ts', 'e2e/**/*.spec.ts'],
+  // `e2e/live/` runs against a deployed instance and requires LIVE_URL — it
+  // has its own `playwright.config.live.ts`. Exclude it from the local config
+  // so `pnpm --filter web e2e` does not pick it up.
+  testIgnore: ['e2e/live/**/*.spec.ts'],
   // PLAN-008: workers > 1 must pass per VALIDATION-008 §6. Spec-level
   // parallelism is safe because every spec uses UUID-suffixed identifiers
   // (Trap 6) — no spec depends on global "fresh DB" state.
