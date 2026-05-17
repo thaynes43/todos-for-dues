@@ -11,6 +11,9 @@ export const ADMIN_NAV_ENTRIES: ReadonlyArray<AdminNavEntry> = [
   { href: '/admin/disputes', label: 'Disputes', testId: 'admin-nav-disputes' },
   { href: '/admin/settings', label: 'Settings', testId: 'admin-nav-settings' },
   { href: '/admin/audit-log', label: 'Audit log', testId: 'admin-nav-audit-log' },
+  // PLAN-014 Q-PLN-01 lean: Invites sits between Audit-log and Users so
+  // member-onboarding actions cluster near role management.
+  { href: '/admin/invites', label: 'Invites', testId: 'admin-nav-invites' },
   { href: '/admin/users', label: 'Users', testId: 'admin-nav-users' },
 ];
 
