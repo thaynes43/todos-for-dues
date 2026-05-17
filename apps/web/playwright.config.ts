@@ -7,6 +7,10 @@ export default defineConfig({
   // has its own `playwright.config.live.ts`. Exclude it from the local config
   // so `pnpm --filter web e2e` does not pick it up.
   testIgnore: ['e2e/live/**/*.spec.ts'],
+  // Per-test timeout. Default Playwright is 30s; some specs seed many jobs
+  // across states (e.g. admin/dashboard) and need more headroom on cold GHA
+  // runners. 60s in CI; 30s locally to keep dev-loop tight.
+  timeout: process.env.CI ? 60_000 : 30_000,
   // PLAN-008: workers > 1 must pass per VALIDATION-008 §6. Spec-level
   // parallelism is safe because every spec uses UUID-suffixed identifiers
   // (Trap 6) — no spec depends on global "fresh DB" state.
