@@ -71,6 +71,31 @@ A local Postgres 16 must be reachable at `DATABASE_URL` for migrate, dev, and an
 
 Tests use the **same Postgres engine as prod** — Testcontainers spins up `postgres:16` in CI and locally (`packages/test-utils/src/postgres.ts`). **No SQLite or MySQL substitution, ever.** ADR-004 relies on `citext`, `pgcrypto`, `gen_random_uuid()`, partial indexes, and triggers — engine substitution would mask real bugs (this is why `pnpm test` requires Docker).
 
+## Pull-request flow (NORMATIVE)
+
+From PLAN-009 Step 2.5 onward, `main` is **branch-protected**. Direct push to `main` is rejected by GitHub. Every code change — from the coordinator and from execution / validation agents alike — follows this flow:
+
+1. Create a branch (`plan-NNN-execution`, `plan-NNN-validation`, `fix-…`, `chore-…`, etc.).
+2. Push the branch and open a PR against `main`.
+3. Wait for required status checks (`lint-and-typecheck`, `test`) to go green.
+4. Squash-merge (linear history is required; no merge commits).
+
+Hot-fixes that bypass CI are a coordinator-only break-glass — agents must never `gh pr merge --admin` or push to `main` directly.
+
+## Release versioning (release-please)
+
+Docker images are released by tag, not by commit:
+
+- Day-to-day commits use **conventional-commit prefixes** (`feat:`, `fix:`, `chore:`, `docs:`, `test:`, `refactor:`). The CI workflows ignore the prefix, but release-please reads it to compute version bumps.
+- When changes land on `main`, the **release-please** GitHub Action opens (or updates) a release PR titled `chore(main): release vX.Y.Z` with a generated CHANGELOG and a bumped `version` field in the root `package.json`.
+- Merging the release PR creates a `vX.Y.Z` git tag. The CI `build-image` job triggers on that tag and pushes `ghcr.io/thaynes43/todos-for-dues:vX.Y.Z` and `:latest`.
+- **Bump rules** (SemVer, derived from conventional commits):
+  - `feat:` → minor bump (`v1.2.0` → `v1.3.0`)
+  - `fix:` → patch bump (`v1.2.0` → `v1.2.1`)
+  - `feat!:` or a `BREAKING CHANGE:` footer → major bump (`v1.2.0` → `v2.0.0`)
+  - `chore:`, `docs:`, `refactor:`, `test:` → no bump (changelog-only)
+- The `:latest` Docker tag always points at the most recent SemVer release. The init container in PLAN-009 Step 5 pins a specific version, not `:latest`, so production deploys are reproducible.
+
 ## Domain invariant — FSM-only state writes
 
 Job state and user role state are **never** written by direct UPDATE. All transitions go through `transitionJob` / `transitionRole` in `packages/domain`, which atomically write the state row + the matching audit-log row (`job_state_transitions`, `user_role_transitions`) inside a single transaction. There is a dedicated test (`packages/domain/__tests__/no-direct-state-writes.test.ts`) that scans for direct writes and fails CI if any are added.
