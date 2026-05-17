@@ -208,10 +208,16 @@ export async function lockAsAlumni(
 ): Promise<void> {
   await reAuth(page, context, alumni);
   await page.goto(`/jobs/${jobId}`);
+  // Wait for hydration: the lock-job submit stays disabled until validation
+  // accepts the work-date. On cold GHA runners the form hydration can lag
+  // past the default click timeout.
+  await page.waitForLoadState('networkidle');
   await page
     .getByTestId('lock-job-work-date')
     .fill(futureLocalDatetimeMinutes(60 * 24 * 3));
-  await page.getByTestId('lock-job-submit').click();
+  const submit = page.getByTestId('lock-job-submit');
+  await expect(submit).toBeEnabled({ timeout: 30_000 });
+  await submit.click();
   await pollJobState(pool, jobId, 'locked');
 }
 
@@ -224,7 +230,10 @@ export async function completeAsAlumni(
 ): Promise<void> {
   await reAuth(page, context, alumni);
   await page.goto(`/jobs/${jobId}`);
-  await page.getByTestId('complete-job-submit').click();
+  await page.waitForLoadState('networkidle');
+  const submit = page.getByTestId('complete-job-submit');
+  await expect(submit).toBeEnabled({ timeout: 30_000 });
+  await submit.click();
   await pollJobState(pool, jobId, 'completed');
 }
 
@@ -237,6 +246,9 @@ export async function markPaymentSentAsAlumni(
 ): Promise<void> {
   await reAuth(page, context, alumni);
   await page.goto(`/jobs/${jobId}`);
-  await page.getByTestId('mark-payment-sent-button').click();
+  await page.waitForLoadState('networkidle');
+  const submit = page.getByTestId('mark-payment-sent-button');
+  await expect(submit).toBeEnabled({ timeout: 30_000 });
+  await submit.click();
   await pollJobState(pool, jobId, 'payment_sent');
 }
