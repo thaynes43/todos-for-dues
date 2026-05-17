@@ -2,6 +2,34 @@ import type { ReactElement } from 'react';
 import { render } from '@react-email/render';
 import { Resend } from 'resend';
 
+/**
+ * Boot-time guard: in production, refuse to load if `RESEND_FROM_ADDRESS` is
+ * missing or still points at the placeholder `@todos-for-dues.app` domain
+ * (which is not Resend-verified — sends would fail silently). Gated strictly
+ * on `NODE_ENV === 'production'` so Vitest (`NODE_ENV=test`) and local dev are
+ * unaffected.
+ *
+ * Skipped during `next build` (`NEXT_PHASE === 'phase-production-build'`):
+ * Next.js's page-data collection runs in NODE_ENV=production but without the
+ * runtime env, so a module-load throw would break the build. The guard still
+ * fires on real production server boot (NEXT_PHASE=phase-production-server,
+ * or unset for non-Next.js runtimes) — where the env var is required.
+ *
+ * Exported for direct test coverage.
+ */
+export function assertValidResendFromAddressOrThrow(): void {
+  if (process.env.NODE_ENV !== 'production') return;
+  if (process.env.NEXT_PHASE === 'phase-production-build') return;
+  const from = process.env.RESEND_FROM_ADDRESS;
+  if (!from || from.includes('@todos-for-dues.app')) {
+    throw new Error(
+      'RESEND_FROM_ADDRESS must be a verified Resend domain in production; ' +
+        'placeholder "@todos-for-dues.app" detected.',
+    );
+  }
+}
+assertValidResendFromAddressOrThrow();
+
 const FROM_ADDRESS_DEFAULT = 'TODOs for Dues <noreply@todos-for-dues.app>';
 
 export interface SendEmailInput {
