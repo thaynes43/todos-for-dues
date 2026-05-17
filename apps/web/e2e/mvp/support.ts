@@ -1,6 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import { expect, type BrowserContext, type Page } from '@playwright/test';
 import { Pool } from 'pg';
+
+/**
+ * VALIDATION-010 noted that PLAN-010's MVP specs never installed a
+ * `pageerror` listener (PLAN-006 walking-skeleton specs had it). Every
+ * spec under `e2e/mvp/` MUST install this listener so an uncaught
+ * browser error fails the spec rather than silently passing.
+ *
+ * Mirrors `apps/web/e2e/admin/support.ts:installPageerrorListener`
+ * line-for-line.
+ */
+export function installPageerrorListener(page: Page): Error[] {
+  const errors: Error[] = [];
+  page.on('pageerror', (err) => errors.push(err));
+  return errors;
+}
 import {
   createPool,
   seedPersona,
