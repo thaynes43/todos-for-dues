@@ -2,25 +2,37 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { Role } from '@app/db/schema';
 
-vi.mock('@/lib/trpc-client', () => ({
-  trpc: {
-    useUtils: () => ({ jobs: { getById: { invalidate: vi.fn() } } }),
-    jobs: {
-      enroll: { useMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }) },
-      lock: { useMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }) },
-      complete: { useMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }) },
-      markPaymentSent: {
-        useMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }),
-      },
-      confirmReceipt: {
-        useMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }),
-      },
-      approve: {
-        useMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+vi.mock('@/lib/trpc-client', () => {
+  const stubMutation = () => ({
+    useMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  });
+  return {
+    trpc: {
+      useUtils: () => ({
+        jobs: {
+          getById: { invalidate: vi.fn() },
+          listModerationQueue: { invalidate: vi.fn() },
+          listByState: { invalidate: vi.fn() },
+          listMyEnrolled: { invalidate: vi.fn() },
+        },
+      }),
+      jobs: {
+        enroll: stubMutation(),
+        unenroll: stubMutation(),
+        lock: stubMutation(),
+        complete: stubMutation(),
+        markPaymentSent: stubMutation(),
+        confirmReceipt: stubMutation(),
+        approve: stubMutation(),
+        reject: stubMutation(),
+        reschedule: stubMutation(),
+        cancel: stubMutation(),
+        revertCompletion: stubMutation(),
+        dispute: stubMutation(),
       },
     },
-  },
-}));
+  };
+});
 
 import {
   JobDetailView,
@@ -148,5 +160,117 @@ describe('<JobDetailView> walking-skeleton affordances', () => {
     render(<JobDetailView job={job} viewer={viewer('Active', 'outside')} />);
     expect(screen.getByText(/3 people/)).toBeInTheDocument();
   });
+});
 
+describe('<JobDetailView> PLAN-010 MVP additions', () => {
+  it('Active enrolled on enrollment_open sees UnenrollButton (PRD-004 R-03)', () => {
+    const job = baseJob({ state: 'enrollment_open' });
+    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    expect(screen.getByTestId('unenroll-button')).toBeInTheDocument();
+  });
+
+  it('Active enrolled on locked does NOT see UnenrollButton (PRD-004 AC-05)', () => {
+    const job = baseJob({ state: 'locked' });
+    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    expect(screen.queryByTestId('unenroll-button')).not.toBeInTheDocument();
+  });
+
+  it('Alumni-poster on enrollment_open sees LockJobForm + CancelJobModal', () => {
+    const job = baseJob({ state: 'enrollment_open' });
+    render(<JobDetailView job={job} viewer={viewer('Alumni', 'alumni-1')} />);
+    expect(screen.getByTestId('lock-job-form')).toBeInTheDocument();
+    expect(screen.getByTestId('cancel-job-button')).toBeInTheDocument();
+  });
+
+  it('Alumni-poster on locked sees CompleteJobForm + Reschedule + Cancel', () => {
+    const job = baseJob({ state: 'locked' });
+    render(<JobDetailView job={job} viewer={viewer('Alumni', 'alumni-1')} />);
+    expect(screen.getByTestId('complete-job-form')).toBeInTheDocument();
+    expect(screen.getByTestId('reschedule-button')).toBeInTheDocument();
+    expect(screen.getByTestId('cancel-job-button')).toBeInTheDocument();
+  });
+
+  it('Alumni-poster on completed sees MarkPaymentSent + RevertCompletion', () => {
+    const job = baseJob({ state: 'completed' });
+    render(<JobDetailView job={job} viewer={viewer('Alumni', 'alumni-1')} />);
+    expect(screen.getByTestId('mark-payment-sent-button')).toBeInTheDocument();
+    expect(screen.getByTestId('revert-completion-button')).toBeInTheDocument();
+  });
+
+  it('Active enrolled on payment_sent sees Confirm + Dispute', () => {
+    const job = baseJob({ state: 'payment_sent' });
+    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    expect(screen.getByTestId('confirm-received-button')).toBeInTheDocument();
+    expect(screen.getByTestId('dispute-button')).toBeInTheDocument();
+  });
+
+  it('rejected state renders only RejectedJobBanner, no other actions', () => {
+    const job = baseJob({
+      state: 'rejected',
+      rejectionReason: 'dues too low',
+      roster: null,
+    });
+    render(<JobDetailView job={job} viewer={viewer('Alumni', 'alumni-1')} />);
+    expect(screen.getByTestId('rejected-job-banner')).toBeInTheDocument();
+    expect(screen.queryByTestId('job-actions')).not.toBeInTheDocument();
+  });
+
+  it('rejected state for the poster shows the Post-new-job CTA', () => {
+    const job = baseJob({
+      state: 'rejected',
+      rejectionReason: 'dues too low',
+      roster: null,
+    });
+    render(<JobDetailView job={job} viewer={viewer('Alumni', 'alumni-1')} />);
+    expect(screen.getByTestId('rejected-post-new-cta')).toBeInTheDocument();
+  });
+
+  it('cancelled state renders only CancelledJobBanner', () => {
+    const job = baseJob({
+      state: 'cancelled',
+      cancellationReason: 'Mom moved the couch',
+    });
+    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    expect(screen.getByTestId('cancelled-job-banner')).toBeInTheDocument();
+    expect(screen.queryByTestId('job-actions')).not.toBeInTheDocument();
+  });
+
+  it('disputed state for an Active renders DisputedJobBanner', () => {
+    const job = baseJob({ state: 'disputed' });
+    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    expect(screen.getByTestId('disputed-job-banner')).toBeInTheDocument();
+    expect(screen.queryByTestId('job-actions')).not.toBeInTheDocument();
+  });
+
+  it('closed state renders ClosedJobBanner with the closer name', () => {
+    const job = baseJob({
+      state: 'closed',
+      closedBy: { displayName: 'Alice Active' },
+    });
+    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    expect(screen.getByTestId('closed-job-banner')).toBeInTheDocument();
+    expect(screen.getByTestId('closed-by-name')).toHaveTextContent(
+      /Alice Active/,
+    );
+  });
+
+  it('Active enrolled + completed shows credit (Q-PLN-01 confirmed)', () => {
+    const job = baseJob({
+      state: 'completed',
+      viewerCredit: { confirmed: true, amount: '25.00' },
+    });
+    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    expect(screen.getByTestId('completed-credit-amount')).toHaveTextContent(
+      /\$25\.00/,
+    );
+  });
+
+  it('Active enrolled + payment_sent who was not confirmed sees "weren\'t confirmed" copy', () => {
+    const job = baseJob({
+      state: 'payment_sent',
+      viewerCredit: { confirmed: false, amount: null },
+    });
+    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    expect(screen.getByTestId('completed-not-confirmed')).toBeInTheDocument();
+  });
 });

@@ -5,6 +5,7 @@ import {
   jobs,
   jobEnrollments,
   jobStateTransitions,
+  users,
   JOB_STATES,
   type JobState,
 } from '@app/db/schema';
@@ -677,7 +678,46 @@ export const jobsRouter = router({
       const enrolleeCount = enrollmentRows.length;
       const roster = seesRoster ? enrollmentRows : null;
 
-      return { ...job, enrolleeCount, roster };
+      let closedBy: { displayName: string | null } | null = null;
+      if (job.state === 'closed') {
+        const [closeRow] = await ctx.db
+          .select({ displayName: users.displayName })
+          .from(jobStateTransitions)
+          .leftJoin(users, eq(users.id, jobStateTransitions.actorId))
+          .where(
+            and(
+              eq(jobStateTransitions.jobId, input.jobId),
+              eq(jobStateTransitions.toState, 'closed'),
+            ),
+          )
+          .orderBy(desc(jobStateTransitions.createdAt))
+          .limit(1);
+        closedBy = { displayName: closeRow?.displayName ?? null };
+      }
+
+      let viewerCredit:
+        | { confirmed: boolean; amount: string | null }
+        | null = null;
+      if (
+        role === 'Active' &&
+        (job.state === 'completed' ||
+          job.state === 'payment_sent' ||
+          job.state === 'closed')
+      ) {
+        const ownRow = enrollmentRows.find((r) => r.activeId === ctx.userId);
+        if (ownRow) {
+          const confirmed = ownRow.confirmedAttendeeAt != null;
+          const credit = job.perActiveDuesCredit as
+            | Record<string, string>
+            | null;
+          const amount = confirmed
+            ? (credit?.[ctx.userId] ?? null)
+            : null;
+          viewerCredit = { confirmed, amount };
+        }
+      }
+
+      return { ...job, enrolleeCount, roster, closedBy, viewerCredit };
     }),
 
   // Q-03 GetJobHistory — PRD-007 R-06 (Admin)

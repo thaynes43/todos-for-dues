@@ -41,9 +41,9 @@ test.describe('PRD-006 R-01 — confirmReceipt closes the loop', () => {
         .toBe('closed');
       await page.goto(`/jobs/${jobId}`);
       await expect(page.getByTestId('job-state-badge')).toHaveText(/closed/);
-      // VALIDATION-006 §5 — walking-skeleton shows only the state badge;
-      // <ClosedJobBanner> is PLAN-010 scope and must not render.
-      await expect(page.getByTestId('closed-job-banner')).toHaveCount(0);
+      // VALIDATION-006 §5 originally gated this banner OUT; PLAN-010 landed it
+      // (VALIDATION-010 §5 confirm-race spec) so it must now render.
+      await expect(page.getByTestId('closed-job-banner')).toBeVisible();
 
       expect(pageErrors, pageErrors.map((e) => e.message).join('\n')).toEqual([]);
     } finally {

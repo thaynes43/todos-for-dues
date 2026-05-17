@@ -11,6 +11,16 @@ const NAV_LINKS: ReadonlyArray<NavLink> = [
   { href: '/jobs', label: 'Jobs', roles: ['Active', 'Alumni', 'Moderator', 'Admin'] },
   { href: '/jobs/new', label: 'Post a job', roles: ['Alumni', 'Moderator', 'Admin'] },
   {
+    href: '/my-postings',
+    label: 'My postings',
+    roles: ['Alumni', 'Moderator', 'Admin'],
+  },
+  {
+    href: '/my-enrollments',
+    label: 'My enrollments',
+    roles: ['Active'],
+  },
+  {
     href: '/moderation-queue',
     label: 'Moderation queue',
     roles: ['Moderator', 'Admin'],

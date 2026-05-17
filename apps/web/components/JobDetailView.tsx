@@ -10,6 +10,19 @@ import { MarkPaymentSentButton } from './MarkPaymentSentButton';
 import { ConfirmReceivedButton } from './ConfirmReceivedButton';
 import { TippingNudge } from './TippingNudge';
 import { ApproveRejectButtons } from './ApproveRejectButtons';
+import { UnenrollButton } from './UnenrollButton';
+import { RescheduleButton } from './RescheduleButton';
+import { CancelJobModal } from './CancelJobModal';
+import { RevertCompletionButton } from './RevertCompletionButton';
+import { DisputeJobModal } from './DisputeJobModal';
+import { RejectedJobBanner } from './RejectedJobBanner';
+import { CancelledJobBanner } from './CancelledJobBanner';
+import { DisputedJobBanner } from './DisputedJobBanner';
+import { ClosedJobBanner } from './ClosedJobBanner';
+import {
+  CompletedJobActiveView,
+  type ViewerCredit,
+} from './CompletedJobActiveView';
 import { formatChapterLocal } from '@/lib/formatters';
 
 export interface JobForDetailView {
@@ -20,12 +33,17 @@ export interface JobForDetailView {
   state: JobState;
   postedBy: string;
   workDate?: string | Date | null;
+  rejectionReason?: string | null;
+  cancellationReason?: string | null;
+  disputeReason?: string | null;
   enrolleeCount: number;
   roster: ReadonlyArray<{
     activeId: string;
     enrolledAt: Date | string;
     confirmedAttendeeAt: Date | string | null;
   }> | null;
+  closedBy?: { displayName: string | null } | null;
+  viewerCredit?: ViewerCredit | null;
 }
 
 export interface Viewer {
@@ -60,6 +78,12 @@ export function JobDetailView({
     activeId: r.activeId,
     displayName: rosterNames?.find((n) => n.activeId === r.activeId)?.displayName,
   }));
+
+  const isTerminal =
+    job.state === 'rejected' ||
+    job.state === 'cancelled' ||
+    job.state === 'closed' ||
+    job.state === 'disputed';
 
   return (
     <article className="space-y-6" data-testid="job-detail-view">
@@ -109,34 +133,87 @@ export function JobDetailView({
         )}
       </section>
 
-      <section className="space-y-3">
-        {viewer.role === 'Active' &&
-          job.state === 'enrollment_open' &&
-          !viewerEnrolled && <EnrollButton jobId={job.id} state={job.state} />}
+      {/* Terminal-state banners — suppress all action affordances when present. */}
+      {job.state === 'rejected' && (
+        <RejectedJobBanner
+          reason={job.rejectionReason}
+          canPostNew={isPoster || isMod}
+        />
+      )}
+      {job.state === 'cancelled' && (
+        <CancelledJobBanner reason={job.cancellationReason} />
+      )}
+      {job.state === 'disputed' && (
+        <DisputedJobBanner reason={isAdmin ? job.disputeReason : undefined} />
+      )}
+      {job.state === 'closed' && (
+        <ClosedJobBanner
+          closedByDisplayName={job.closedBy?.displayName ?? null}
+        />
+      )}
 
-        {isPoster && job.state === 'enrollment_open' && (
-          <LockJobForm jobId={job.id} enrolleeCount={job.enrolleeCount} />
+      {/* Active-side completed-view (credit display). Renders for completed /
+         payment_sent / closed when the viewer is an enrolled Active. */}
+      {viewer.role === 'Active' &&
+        viewerEnrolled &&
+        (job.state === 'completed' ||
+          job.state === 'payment_sent' ||
+          job.state === 'closed') && (
+          <CompletedJobActiveView viewerCredit={job.viewerCredit ?? null} />
         )}
 
-        {isPoster && job.state === 'locked' && (
-          <CompleteJobForm jobId={job.id} roster={rosterEntries} />
-        )}
+      {/* Action affordances. Suppressed entirely for terminal states. */}
+      {!isTerminal && (
+        <section className="space-y-3" data-testid="job-actions">
+          {viewer.role === 'Active' &&
+            job.state === 'enrollment_open' &&
+            !viewerEnrolled && (
+              <EnrollButton jobId={job.id} state={job.state} />
+            )}
 
-        {isPoster && job.state === 'completed' && (
-          <MarkPaymentSentButton
-            jobId={job.id}
-            treasurerRecipient={treasurerRecipient}
-          />
-        )}
+          {viewer.role === 'Active' &&
+            job.state === 'enrollment_open' &&
+            viewerEnrolled && (
+              <UnenrollButton jobId={job.id} state={job.state} />
+            )}
 
-        {(viewerEnrolled || isAdmin) && job.state === 'payment_sent' && (
-          <ConfirmReceivedButton jobId={job.id} />
-        )}
+          {isPoster && job.state === 'enrollment_open' && (
+            <>
+              <LockJobForm jobId={job.id} enrolleeCount={job.enrolleeCount} />
+              <CancelJobModal jobId={job.id} />
+            </>
+          )}
 
-        {isMod && job.state === 'awaiting_moderation' && (
-          <ApproveRejectButtons jobId={job.id} />
-        )}
-      </section>
+          {isPoster && job.state === 'locked' && (
+            <>
+              <CompleteJobForm jobId={job.id} roster={rosterEntries} />
+              <RescheduleButton jobId={job.id} />
+              <CancelJobModal jobId={job.id} />
+            </>
+          )}
+
+          {isPoster && job.state === 'completed' && (
+            <>
+              <MarkPaymentSentButton
+                jobId={job.id}
+                treasurerRecipient={treasurerRecipient}
+              />
+              <RevertCompletionButton jobId={job.id} />
+            </>
+          )}
+
+          {(viewerEnrolled || isAdmin) && job.state === 'payment_sent' && (
+            <>
+              <ConfirmReceivedButton jobId={job.id} />
+              <DisputeJobModal jobId={job.id} />
+            </>
+          )}
+
+          {isMod && job.state === 'awaiting_moderation' && (
+            <ApproveRejectButtons jobId={job.id} />
+          )}
+        </section>
+      )}
 
       {(job.state === 'payment_sent' || job.state === 'closed') && (
         <TippingNudge />
