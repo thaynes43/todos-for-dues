@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/thaynes43/todos-for-dues/compare/v0.2.1...v0.2.2) (2026-05-17)
+
+
+### Bug Fixes
+
+* **db:** min-Admin trigger no longer fires on INSERT ([#7](https://github.com/thaynes43/todos-for-dues/issues/7)) ([bd3a070](https://github.com/thaynes43/todos-for-dues/commit/bd3a070434de7d74215bb579bba47d7f7ef45bb3))
+
 ## [0.2.1](https://github.com/thaynes43/todos-for-dues/compare/v0.2.0...v0.2.1) (2026-05-17)
 
 
