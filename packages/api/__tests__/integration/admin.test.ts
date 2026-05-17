@@ -77,7 +77,63 @@ describe('admin router', () => {
       expect(list[0]!.id).toBe(jobId);
       expect(list[0]!.disputeReason).toBe('Did not receive payment');
       expect(list[0]!.disputer?.id).toBe(users.active1);
+      expect(list[0]!.disputer?.role).toBe('Active');
       expect(list[0]!.disputedAt).toBeInstanceOf(Date);
+    });
+
+    it('disputedAt reflects the latest dispute transition after dispute → resolve → re-dispute (PLAN-011 Trap 4)', async () => {
+      // Drive a job through dispute → resolve-as-payment-sent (false alarm)
+      // → re-dispute. The disputedAt projection should track the re-dispute
+      // timestamp, not the original one, because the FSM filters on the
+      // latest to_state = 'disputed' row.
+      const c = caller(makeCtx({ userId: users.alumni, role: 'Alumni' }));
+      const moderator = caller(makeCtx({ userId: users.moderator, role: 'Moderator' }));
+      const active = caller(makeCtx({ userId: users.active1, role: 'Active' }));
+      const admin = caller(makeCtx({ userId: users.admin, role: 'Admin' }));
+
+      const { jobId } = await c.jobs.post({
+        description: 'Pull weeds II',
+        duesAmount: 30,
+        recommendedPeopleCount: 1,
+      });
+      await moderator.jobs.approve({ jobId });
+      await active.jobs.enroll({ jobId });
+      await c.jobs.lock({
+        jobId,
+        workDate: new Date(Date.now() + 86_400_000).toISOString(),
+      });
+      await c.jobs.complete({ jobId, confirmedAttendees: [users.active1] });
+      await c.jobs.markPaymentSent({ jobId });
+      await active.jobs.dispute({ jobId, reason: 'first dispute' });
+
+      const firstDisputeAt = (
+        await testDb.pool.query<{ created_at: Date }>(
+          `SELECT created_at FROM job_state_transitions WHERE job_id = $1 AND to_state = 'disputed' ORDER BY created_at DESC LIMIT 1`,
+          [jobId],
+        )
+      ).rows[0]!.created_at;
+
+      await admin.jobs.resolveDisputeAsPaymentSent({
+        jobId,
+        note: 'false-alarm — treasurer just credited',
+      });
+      // Re-dispute. Sleep a sliver so the created_at timestamps differ.
+      await new Promise((r) => setTimeout(r, 10));
+      await active.jobs.dispute({ jobId, reason: 'second dispute' });
+
+      const latestDisputeAt = (
+        await testDb.pool.query<{ created_at: Date }>(
+          `SELECT created_at FROM job_state_transitions WHERE job_id = $1 AND to_state = 'disputed' ORDER BY created_at DESC LIMIT 1`,
+          [jobId],
+        )
+      ).rows[0]!.created_at;
+      expect(latestDisputeAt.getTime()).toBeGreaterThan(firstDisputeAt.getTime());
+
+      const list = await admin.admin.listDisputed();
+      const row = list.find((r) => r.id === jobId);
+      // Latest dispute wins (not the first).
+      expect(row?.disputedAt?.getTime()).toBe(latestDisputeAt.getTime());
+      expect(row?.disputer?.id).toBe(users.active1);
     });
 
     it('AC-02: non-Admin returns FORBIDDEN', async () => {

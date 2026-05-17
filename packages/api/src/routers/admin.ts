@@ -1,5 +1,12 @@
 import { desc, eq, sql } from 'drizzle-orm';
-import { jobs, jobStateTransitions, users, JOB_STATES, type JobState } from '@app/db/schema';
+import {
+  jobs,
+  jobStateTransitions,
+  users,
+  JOB_STATES,
+  type JobState,
+  type Role,
+} from '@app/db/schema';
 import { router } from '../trpc';
 import { adminProcedure } from '../middleware/role';
 
@@ -44,28 +51,48 @@ export const adminRouter = router({
       disputeReason: string | null;
       createdAt: Date;
       updatedAt: Date;
-      disputer: { id: string | null; displayName: string | null } | null;
+      disputer: {
+        id: string | null;
+        displayName: string | null;
+        role: Role | null;
+      } | null;
       disputedAt: Date | null;
     }> = [];
 
     for (const job of disputedJobs) {
+      // PLAN-011 Trap 4 option (a): the disputer + age-of-dispute come from
+      // the latest `to_state: 'disputed'` row in job_state_transitions, not
+      // the latest transition overall — guard against post-dispute writes
+      // by filtering on toState.
       const [transition] = await ctx.db
         .select({
           actorId: jobStateTransitions.actorId,
           createdAt: jobStateTransitions.createdAt,
         })
         .from(jobStateTransitions)
-        .where(eq(jobStateTransitions.jobId, job.id))
+        .where(
+          sql`${jobStateTransitions.jobId} = ${job.id} AND ${jobStateTransitions.toState} = 'disputed'`,
+        )
         .orderBy(desc(jobStateTransitions.createdAt))
         .limit(1);
 
-      let disputer: { id: string | null; displayName: string | null } | null = null;
+      let disputer: {
+        id: string | null;
+        displayName: string | null;
+        role: Role | null;
+      } | null = null;
       if (transition?.actorId) {
         const [user] = await ctx.db
-          .select({ id: users.id, displayName: users.displayName })
+          .select({
+            id: users.id,
+            displayName: users.displayName,
+            role: users.role,
+          })
           .from(users)
           .where(eq(users.id, transition.actorId));
-        disputer = user ?? { id: transition.actorId, displayName: null };
+        disputer = user
+          ? { id: user.id, displayName: user.displayName, role: user.role }
+          : { id: transition.actorId, displayName: null, role: null };
       }
 
       results.push({
