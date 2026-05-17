@@ -4,6 +4,7 @@ import {
   completeAsAlumni,
   createPool,
   enrollAsActive,
+  installPageerrorListener,
   lockAsAlumni,
   markPaymentSentAsAlumni,
   newSuffix,
@@ -14,6 +15,8 @@ import {
 } from './support';
 
 test.describe('PRD-006 R-05 + AC-05/AC-06 — Active disputes', () => {
+  test.beforeEach(({ page }) => installPageerrorListener(page));
+
   test('Active disputes with reason → state=disputed; banner shown; empty reason disabled', async ({
     page,
     context,

@@ -3,6 +3,7 @@ import {
   approveAsMod,
   createPool,
   enrollAsActive,
+  installPageerrorListener,
   lockAsAlumni,
   newSuffix,
   postJob,
@@ -12,6 +13,8 @@ import {
 } from './support';
 
 test.describe('PRD-004 R-10 / AC-12 — reschedule preserves enrollments', () => {
+  test.beforeEach(({ page }) => installPageerrorListener(page));
+
   test('Alumni reschedules locked job → state back to enrollment_open; Active stays enrolled', async ({
     page,
     context,

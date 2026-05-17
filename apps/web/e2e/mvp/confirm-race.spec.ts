@@ -4,6 +4,7 @@ import {
   completeAsAlumni,
   createPool,
   enrollAsActive,
+  installPageerrorListener,
   lockAsAlumni,
   markPaymentSentAsAlumni,
   newSuffix,
@@ -15,6 +16,8 @@ import {
 } from './support';
 
 test.describe('PRD-006 R-04 / AC-04 — confirm-received race', () => {
+  test.beforeEach(({ page }) => installPageerrorListener(page));
+
   test('Active + Admin both click confirm; exactly one transition; late clicker sees the alreadyClosed response', async ({
     browser,
   }) => {

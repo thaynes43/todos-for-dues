@@ -5,6 +5,7 @@ import {
   completeAsAlumni,
   createPool,
   enrollAsActive,
+  installPageerrorListener,
   lockAsAlumni,
   newSuffix,
   pollJobState,
@@ -16,6 +17,8 @@ import {
 } from './support';
 
 test.describe('PRD-005 R-05 + AC-06 — revert completion', () => {
+  test.beforeEach(({ page }) => installPageerrorListener(page));
+
   test('Alumni reverts → attendees cleared → completing again uses the new roster', async ({
     page,
     context,

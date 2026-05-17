@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import {
   createPool,
+  installPageerrorListener,
   newSuffix,
   pollJobState,
   postJob,
@@ -9,6 +10,8 @@ import {
 } from './support';
 
 test.describe('PRD-002 R-11 + AC-14 — /my-postings list', () => {
+  test.beforeEach(({ page }) => installPageerrorListener(page));
+
   test('Alumni posts 3 jobs (approved, awaiting, rejected); list shows all 3 most-recent first', async ({
     page,
     context,
@@ -62,21 +65,43 @@ test.describe('PRD-002 R-11 + AC-14 — /my-postings list', () => {
       await pollJobState(pool, job3, 'rejected');
 
       // Alumni opens /my-postings.
+      //
+      // VALIDATION-011 flake fix (PLAN-013 Track B):
+      // Under parallel-spec load, the dev server may still be compiling
+      // /my-postings on the first hit (Path A — dev-server compile-lag),
+      // and the server-rendered roster may also still be hydrating with
+      // the three rows we just wrote (Path C — stale-row hydration). We
+      // wait for `networkidle` AND poll for all three rows before reading
+      // the ordered list. No retries; no `--workers=1` pin.
       await reAuth(page, context, cast.alumni);
       await page.goto('/my-postings');
+      await page.waitForLoadState('load');
 
-      // All 3 rows visible.
-      const rows = page.locator('[data-testid="my-postings-row"]').filter({
-        has: page.locator(
-          `[data-job-id="${job1}"], [data-job-id="${job2}"], [data-job-id="${job3}"]`,
-        ),
-      });
+      // Poll until all three of OUR rows are rendered. The page may show
+      // unrelated rows from parallel workers' fixtures, but the three
+      // job ids we care about must all appear.
+      await expect
+        .poll(
+          async () =>
+            page
+              .locator('[data-testid="my-postings-row"]')
+              .evaluateAll((els, ids) => {
+                const seen = els
+                  .map((el) => el.getAttribute('data-job-id'))
+                  .filter((id): id is string => !!id);
+                return ids.every((id) => seen.includes(id));
+              }, [job1, job2, job3]),
+          { timeout: 15_000, intervals: [200, 500, 1000] },
+        )
+        .toBe(true);
+
+      // All 3 rows individually visible (sanity check; should be instant
+      // now that the poll above succeeded).
       for (const id of [job1, job2, job3]) {
         await expect(
           page.locator(`[data-testid="my-postings-row"][data-job-id="${id}"]`),
-        ).toBeVisible();
+        ).toBeVisible({ timeout: 10_000 });
       }
-      void rows;
 
       // Most-recent-first: the order in the rendered list of OUR three job
       // ids matches job3 → job2 → job1 (created in that order).

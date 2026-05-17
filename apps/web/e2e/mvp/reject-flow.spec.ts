@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import {
   createPool,
+  installPageerrorListener,
   newSuffix,
   pollJobState,
   postJob,
@@ -9,6 +10,8 @@ import {
 } from './support';
 
 test.describe('PRD-002 R-08..R-09 + AC-10..AC-13 — rejection flow', () => {
+  test.beforeEach(({ page }) => installPageerrorListener(page));
+
   test('Mod rejects with reason → Alumni sees banner + Post-new-job CTA', async ({
     page,
     context,

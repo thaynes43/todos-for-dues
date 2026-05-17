@@ -3,6 +3,7 @@ import {
   approveAsMod,
   createPool,
   enrollAsActive,
+  installPageerrorListener,
   newSuffix,
   postJob,
   reAuth,
@@ -10,6 +11,8 @@ import {
 } from './support';
 
 test.describe('PRD-004 R-03 + AC-04 — Active unenrolls', () => {
+  test.beforeEach(({ page }) => installPageerrorListener(page));
+
   test('Active enrolls → unenrolls → /my-enrollments no longer lists the job; re-enroll works', async ({
     page,
     context,
