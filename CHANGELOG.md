@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/thaynes43/todos-for-dues/compare/v0.4.0...v0.5.0) (2026-05-17)
+
+
+### Features
+
+* **web:** role management UI — profile self-service / Admin Users list / role history / min-Admin error per PRD-008 + DESIGN-006 ([#20](https://github.com/thaynes43/todos-for-dues/issues/20)) ([23a5371](https://github.com/thaynes43/todos-for-dues/commit/23a5371e10fe112f9aa9febc60d6c1cb431f3bb0))
+
 ## [0.4.0](https://github.com/thaynes43/todos-for-dues/compare/v0.3.0...v0.4.0) (2026-05-17)
 
 
