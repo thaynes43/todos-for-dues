@@ -83,6 +83,9 @@ export const usersRouter = router({
   getSession: publicProcedure.query(({ ctx }) => ctx.session),
 
   // BCC-01 Q-02 GetUserById — roster + audit-log display.
+  // PLAN-012 Step 6 needs `email` for the per-user detail page header; narrow
+  // SELECT-only projection extension per the prompt's projection-extension
+  // policy.
   getById: authedProcedure
     .input(z.object({ userId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
@@ -90,6 +93,7 @@ export const usersRouter = router({
         .select({
           id: users.id,
           displayName: users.displayName,
+          email: users.email,
           role: users.role,
         })
         .from(users)
