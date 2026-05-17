@@ -126,6 +126,8 @@ Migrations live in `packages/db/migrations/` (Drizzle convention) with both the 
 
   > **Reconciliation note (2026-05-14, after PLAN-004 execution):** an earlier draft of this section had `password_hash` + `oidc_subject` + `oidc_provider` columns on `users` plus a `users_account_kind` CHECK constraint. That was a scope-boundary leak — Better Auth 1.6.x stores credentials in its own `account` table per provider, and never writes to those `users` columns. The columns + CHECK have been dropped during PLAN-004; the `users.email_verified` column was added in the same reshape. §2.2's "Better Auth's internal session table layout is owned by DESIGN-004" already ceded this region; this update makes §4.2 consistent with that boundary.
 
+  > **Reconciliation note (2026-05-17, after PLAN-009 deploy):** Better Auth 1.6.x's `genericOAuth` profile-mapping flow writes the OIDC `picture` claim into a `users.image` column unconditionally — without this column the user-row insert raises `"The field 'image' does not exist in the 'users' Drizzle schema"`, the OAuth callback completes without setting a session cookie, and the browser bounces back to `/login`. Migration `0007_users_add_image.sql` adds the column as nullable text (credential signups have no `image`); the Drizzle declaration below now includes it. Same boundary as the previous note — Better Auth owns its profile-field set; we extend `users` to match it rather than fighting the library.
+
 - **Drizzle declaration:**
 
   ```ts
@@ -141,6 +143,7 @@ Migrations live in `packages/db/migrations/` (Drizzle convention) with both the 
       displayName: text('display_name').notNull(),                            // ADC-02 INV-05
       role: text('role').$type<Role>().notNull().default('Active'),           // ADR-011 + ADC-02 INV-02
       emailVerified: boolean('email_verified').notNull().default(false),      // Better Auth account-linking gate (PRD-003 R-09)
+      image: text('image'),                                                   // nullable; Better Auth's OIDC profile mapping writes the `picture` claim here (PLAN-009 reconciliation)
       createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
       updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     },
@@ -408,16 +411,25 @@ CREATE EXTENSION IF NOT EXISTS citext;     -- ADR-004 mentions; not yet used in 
 
 ### 5.3 Min-Admin invariant trigger (hand-written)
 
-`0003_min_admin_trigger.sql` — implements ADR-011's deferred-CHECK trigger:
+`0003_min_admin_trigger.sql` (initial) + `0008_fix_min_admin_trigger_bootstrap.sql` (correction) — implements ADR-011's deferred-CHECK trigger. The end-state function below incorporates the 0008 correction described in the reconciliation note that follows the SQL block:
 
 ```sql
 CREATE OR REPLACE FUNCTION assert_min_one_admin() RETURNS trigger AS $$
-DECLARE admin_count int;
+DECLARE
+  admin_count int;
 BEGIN
-  SELECT COUNT(*) INTO admin_count FROM users WHERE role = 'Admin';
-  IF admin_count < 1 THEN
-    RAISE EXCEPTION 'min-Admin invariant violated: chapter must have at least one Admin'
-      USING ERRCODE = '23514';
+  -- Only check on operations that can REDUCE the admin count.
+  -- INSERT can never reduce it (a row being added cannot decrement an existing
+  -- count); enforcement on INSERT blocks bootstrap, since the very first user
+  -- of a fresh chapter is necessarily a non-Admin and the bootstrap-admin hook
+  -- only fires AFTER the user + session rows exist.
+  IF (TG_OP = 'UPDATE' AND OLD.role = 'Admin' AND NEW.role <> 'Admin')
+     OR (TG_OP = 'DELETE' AND OLD.role = 'Admin') THEN
+    SELECT COUNT(*) INTO admin_count FROM users WHERE role = 'Admin';
+    IF admin_count < 1 THEN
+      RAISE EXCEPTION 'min-Admin invariant violated: chapter must have at least one Admin'
+        USING ERRCODE = '23514';
+    END IF;
   END IF;
   RETURN NULL;
 END;
@@ -430,6 +442,8 @@ CREATE CONSTRAINT TRIGGER trg_min_one_admin
 ```
 
 > **Important:** the trigger is `INITIALLY DEFERRED` so atomic-swap transactions (promote-then-demote in one BEGIN/COMMIT) succeed — see ADC-02 §4 + AC-05 in PRD-008.
+
+> **Reconciliation note (2026-05-17, after PLAN-009 deploy):** the original 0003 function unconditionally asserted `count(admins) >= 1` on every fire, including INSERT. On a fresh chapter the first user is inserted with a non-Admin role (`mapProfileToUser` returns `'Alumni'` for SSO sign-ups; the bootstrap-admin hook only promotes them AFTER the user + session rows exist) — so the INSERT itself fired the trigger, found zero Admins, and aborted. Symptom: first Workspace SSO bounces back to `/login`; pod log shows `min-Admin invariant violated`. PRD-001 Q-08's intent is to guard DEMOTION and DELETION (the two operations that can drop Admin count); INSERT cannot. Migration `0008_fix_min_admin_trigger_bootstrap.sql` replaces the function body with the `TG_OP`-aware version shown above. The trigger declaration (`AFTER INSERT OR UPDATE OF role OR DELETE`) is unchanged — only the function body short-circuits on INSERT.
 
 ### 5.4 Bootstrap migration
 
@@ -497,3 +511,4 @@ Per the project test-DB rule (`feedback_doc_conventions.md` / handoff): **no SQL
 | 2026-05-14 | Tom Haynes | Initial draft. Schema for the walking-skeleton subset across BCC-01 + BCC-02 + BCC-03 + cross-cutting tables. 8 tables, all CHECK constraints, indexes for the major query patterns (R-02 aggregate counts, R-04 disputes, R-06 / R-11 user lists, R-06 audit timeline). Min-Admin deferred-CHECK trigger from ADR-011 included as a hand-written migration. 4 design follow-up questions. |
 | 2026-05-14 | Tom Haynes | §4.1: strengthened naming note to make the snake_case (wire/code) vs. hyphenated (PRD-001 R-07 display) convention explicit and to point at DESIGN-006 §4.6's `stateDisplayName()` formatter as the single conversion point. §5.5: added `0005_bootstrap_chapter_settings.sql` migration so the five PRD-007 R-07 settings are seeded from env vars on first deploy — closes the gap where `getSetting()` would crash on a fresh instance. |
 | 2026-05-14 | Tom Haynes | **§4.2 reconciliation with Better Auth's actual data model.** Earlier draft had `password_hash` + `oidc_subject` + `oidc_provider` columns on `users` plus a `users_account_kind` CHECK — a scope-boundary leak past §2.2 which already cedes Better Auth's internal table layout to DESIGN-004. PLAN-004's execution surfaced that Better Auth 1.6.x stores credentials in its own `account` table (per provider row) and never writes to those `users` columns, so the CHECK would fail on every signup. Reshape: drop the three legacy columns + the CHECK; add `users.email_verified` (consumed by Better Auth's transparent account-linking check per PRD-003 R-09); declare Better Auth's `session` / `account` / `verification` tables in `packages/db/schema/better-auth.ts` (new §4.10) since the drizzleAdapter does NOT auto-create tables. ADC-02 INV-04 (app-managed has password, SSO has linkage) is now satisfied by the presence of an `account` row per user, asserted by PLAN-004's `packages/auth/__tests__/integration/`. §3 architecture diagram + schema-folder listing updated. Q-DSG-02 resolved (public.* schema for Better Auth tables). |
+| 2026-05-17 | Tom Haynes | **Two PLAN-009 deploy-time reconciliations** with Better Auth's actual data flow + the min-Admin trigger's intent. (1) §4.2 `users` table gains a nullable `image: text` column (migration `0007_users_add_image.sql`); Better Auth 1.6.x's `genericOAuth` profile-mapping writes the OIDC `picture` claim there unconditionally and the missing column silently broke SSO sign-in (callback succeeded, session cookie never set, browser bounced to `/login`). Inline reconciliation note added under §4.2. (2) §5.3 min-Admin trigger function body updated to short-circuit on INSERT (migration `0008_fix_min_admin_trigger_bootstrap.sql`); the original 0003 function fired on every INSERT and blocked bootstrap of a fresh chapter (first user is necessarily non-Admin, bootstrap-promote hook fires AFTER the row + session exist). PRD-001 Q-08's intent is to guard demotion + deletion of Admins — INSERT can never reduce Admin count, so it shouldn't be gated by the trigger function. Trigger declaration is unchanged; only the function body short-circuits via `TG_OP` check. Inline reconciliation note added under §5.3. |
