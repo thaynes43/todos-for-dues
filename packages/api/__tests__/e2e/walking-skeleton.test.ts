@@ -32,14 +32,14 @@ beforeEach(async () => {
  * job state + the audit-log shape.
  */
 describe('walking skeleton — full happy path through tRPC procedures', () => {
-  it('invites.generate → jobs.post → approve → enroll → lock → complete → markPaymentSent → confirmReceipt = closed; 7 audit rows', async () => {
+  it('invites.mint → jobs.post → approve → enroll → lock → complete → markPaymentSent → confirmReceipt = closed; 7 audit rows', async () => {
     const admin = caller(makeCtx({ userId: users.admin, role: 'Admin' }));
     const alumni = caller(makeCtx({ userId: users.alumni, role: 'Alumni' }));
     const mod = caller(makeCtx({ userId: users.moderator, role: 'Moderator' }));
     const active = caller(makeCtx({ userId: users.active1, role: 'Active' }));
 
-    // 1. Admin generates an Active invite token; the verify helper accepts it.
-    const invite = await admin.invites.generate({ preselectedRole: 'Active' });
+    // 1. Admin mints an Active invite token; the verify helper accepts it.
+    const invite = await admin.invites.mint({ preselectedRole: 'Active' });
     await expect(verifyInviteToken(invite.token)).resolves.toEqual({
       preselectedRole: 'Active',
     });

@@ -2,7 +2,10 @@
 
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { auth, verifyInviteToken, InviteTokenError } from '@app/auth';
+import { and, eq, isNull, sql } from 'drizzle-orm';
+import { auth } from '@app/auth';
+import { db } from '@app/db';
+import { inviteTokens } from '@app/db/schema';
 
 const SignupInput = z.object({
   token: z.string().min(1, 'Invite link is invalid or has been revoked.'),
@@ -37,16 +40,29 @@ export async function signupWithInviteToken(
   }
   const input = parsed.data;
 
-  let preselectedRole: 'Active' | 'Alumni';
-  try {
-    const verified = await verifyInviteToken(input.token);
-    preselectedRole = verified.preselectedRole;
-  } catch (err) {
-    if (err instanceof InviteTokenError) {
-      return { ok: false, error: err.message, field: 'token' };
-    }
-    throw err;
+  // PRD-003 R-14 / PLAN-014 §7 Risk 1 strategy (a) — revoke-first.
+  // Atomically consume the invite token via UPDATE ... RETURNING. This single
+  // statement both verifies (revokedAt IS NULL) and marks the token spent, so
+  // concurrent redemptions cannot both succeed (only one UPDATE finds the row
+  // with revokedAt NULL). If signUpEmail subsequently fails (e.g., email
+  // collision), the token is orphaned (revoked, no associated user) — minor
+  // wart accepted per PLAN-014 §7 Risk 1.
+  const revoked = await db
+    .update(inviteTokens)
+    .set({ revokedAt: sql`now()` })
+    .where(
+      and(eq(inviteTokens.token, input.token.trim()), isNull(inviteTokens.revokedAt)),
+    )
+    .returning({ preselectedRole: inviteTokens.preselectedRole });
+
+  if (revoked.length === 0) {
+    return {
+      ok: false,
+      error: 'Invite link is invalid or has been revoked.',
+      field: 'token',
+    };
   }
+  const preselectedRole = revoked[0]!.preselectedRole;
 
   try {
     await auth.api.signUpEmail({

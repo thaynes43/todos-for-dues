@@ -25,6 +25,7 @@ const NAV_LINKS: ReadonlyArray<NavLink> = [
     label: 'Moderation queue',
     roles: ['Moderator', 'Admin'],
   },
+  { href: '/admin', label: 'Admin', roles: ['Admin'] },
   {
     href: '/profile',
     label: 'Profile',

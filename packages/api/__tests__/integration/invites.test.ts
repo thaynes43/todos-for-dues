@@ -26,47 +26,71 @@ beforeEach(async () => {
 });
 
 describe('invites router', () => {
-  describe('generate', () => {
-    it('Admin generates an Active invite URL', async () => {
+  describe('mint (PRD-003 AC-10)', () => {
+    it('Admin mints an Active invite with correct fields', async () => {
       const result = await caller(makeCtx({ userId: users.admin, role: 'Admin' }))
-        .invites.generate({ preselectedRole: 'Active' });
-      expect(result.url).toMatch(/\?token=[a-f0-9]+$/);
+        .invites.mint({ preselectedRole: 'Active' });
       expect(result.preselectedRole).toBe('Active');
-      // Token is valid
+      expect(result.id).toMatch(/^[0-9a-f-]{36}$/);
+      // base64url, 16 random bytes = 22 chars (no padding)
+      expect(result.token).toMatch(/^[A-Za-z0-9_-]{22}$/);
+      expect(result.createdBy).toBe(users.admin);
+      expect(result.createdAt).toBeInstanceOf(Date);
+      // Token is valid for redemption
       await expect(verifyInviteToken(result.token)).resolves.toEqual({
         preselectedRole: 'Active',
       });
     });
 
-    it('Admin generates an Alumni invite URL', async () => {
+    it('Admin mints an Alumni invite', async () => {
       const result = await caller(makeCtx({ userId: users.admin, role: 'Admin' }))
-        .invites.generate({ preselectedRole: 'Alumni' });
+        .invites.mint({ preselectedRole: 'Alumni' });
       expect(result.preselectedRole).toBe('Alumni');
+    });
+
+    it('rejects privileged roles at the Zod boundary (PRD-003 R-11)', async () => {
+      const admin = caller(makeCtx({ userId: users.admin, role: 'Admin' }));
+      for (const role of ['Moderator', 'Admin'] as const) {
+        await expect(
+          // @ts-expect-error — Zod enum rejects at runtime; type system also rejects.
+          admin.invites.mint({ preselectedRole: role }),
+        ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      }
     });
 
     it('rejects without session — UNAUTHORIZED', async () => {
       await expect(
-        caller(unauthedCtx()).invites.generate({ preselectedRole: 'Active' }),
+        caller(unauthedCtx()).invites.mint({ preselectedRole: 'Active' }),
       ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
     });
 
     it('rejects non-Admin — FORBIDDEN', async () => {
       await expect(
         caller(makeCtx({ userId: users.moderator, role: 'Moderator' }))
-          .invites.generate({ preselectedRole: 'Active' }),
+          .invites.mint({ preselectedRole: 'Active' }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     });
   });
 
-  describe('list', () => {
-    it('returns generated tokens in descending order', async () => {
+  describe('list (PRD-003 AC-11)', () => {
+    it('returns outstanding invites in DESC order with minter display name', async () => {
       const admin = caller(makeCtx({ userId: users.admin, role: 'Admin' }));
-      await admin.invites.generate({ preselectedRole: 'Active' });
-      await admin.invites.generate({ preselectedRole: 'Alumni' });
+      await admin.invites.mint({ preselectedRole: 'Active' });
+      await admin.invites.mint({ preselectedRole: 'Alumni' });
       const list = await admin.invites.list();
       expect(list).toHaveLength(2);
-      // Newest first
-      expect(list[0]!.createdAt >= list[1]!.createdAt).toBe(true);
+      expect(list[0]!.createdAt.getTime()).toBeGreaterThanOrEqual(
+        list[1]!.createdAt.getTime(),
+      );
+      expect(list[0]!.createdByDisplayName).toBe('Admin Anne');
+    });
+
+    it('omits revoked invites', async () => {
+      const admin = caller(makeCtx({ userId: users.admin, role: 'Admin' }));
+      const minted = await admin.invites.mint({ preselectedRole: 'Active' });
+      await admin.invites.revoke({ id: minted.id });
+      const list = await admin.invites.list();
+      expect(list).toHaveLength(0);
     });
 
     it('rejects non-Admin', async () => {
@@ -76,29 +100,39 @@ describe('invites router', () => {
     });
   });
 
-  describe('revoke', () => {
-    it('Admin revokes a token — verifyInviteToken rejects revoked tokens', async () => {
+  describe('revoke (PRD-003 AC-12)', () => {
+    it('Admin revokes — verifyInviteToken then rejects with reason="revoked"', async () => {
       const admin = caller(makeCtx({ userId: users.admin, role: 'Admin' }));
-      const generated = await admin.invites.generate({ preselectedRole: 'Active' });
-      await admin.invites.revoke({ tokenId: generated.id });
-      await expect(verifyInviteToken(generated.token)).rejects.toMatchObject({
+      const minted = await admin.invites.mint({ preselectedRole: 'Active' });
+      const { revokedAt } = await admin.invites.revoke({ id: minted.id });
+      expect(revokedAt).toBeInstanceOf(Date);
+      await expect(verifyInviteToken(minted.token)).rejects.toMatchObject({
         reason: 'revoked',
+      });
+    });
+
+    it('revoking an already-revoked id returns NOT_FOUND', async () => {
+      const admin = caller(makeCtx({ userId: users.admin, role: 'Admin' }));
+      const minted = await admin.invites.mint({ preselectedRole: 'Active' });
+      await admin.invites.revoke({ id: minted.id });
+      await expect(admin.invites.revoke({ id: minted.id })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
       });
     });
 
     it('rejects non-Admin', async () => {
       const admin = caller(makeCtx({ userId: users.admin, role: 'Admin' }));
-      const generated = await admin.invites.generate({ preselectedRole: 'Active' });
+      const minted = await admin.invites.mint({ preselectedRole: 'Active' });
       await expect(
         caller(makeCtx({ userId: users.alumni, role: 'Alumni' }))
-          .invites.revoke({ tokenId: generated.id }),
+          .invites.revoke({ id: minted.id }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     });
 
     it('returns NOT_FOUND for unknown id', async () => {
       const admin = caller(makeCtx({ userId: users.admin, role: 'Admin' }));
       await expect(
-        admin.invites.revoke({ tokenId: '00000000-0000-0000-0000-000000000000' }),
+        admin.invites.revoke({ id: '00000000-0000-0000-0000-000000000000' }),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
   });
