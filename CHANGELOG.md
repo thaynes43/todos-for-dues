@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/thaynes43/todos-for-dues/compare/v0.5.0...v0.6.0) (2026-05-17)
+
+
+### Features
+
+* **web:** Admin invite management UI + nav link + single-use token redemption per PRD-003 R-11..R-14 ([#24](https://github.com/thaynes43/todos-for-dues/issues/24)) ([e39cfc1](https://github.com/thaynes43/todos-for-dues/commit/e39cfc1dba2fda5394b459856b93bbe0a2419aea))
+
+
+### Documentation
+
+* **prd-003 + plan-014:** invite-management UI + admin nav fix scaffolding ([#22](https://github.com/thaynes43/todos-for-dues/issues/22)) ([b729c6e](https://github.com/thaynes43/todos-for-dues/commit/b729c6ed0ffaa85d77f6d9f036bdc7adf5c99c56))
+
 ## [0.5.0](https://github.com/thaynes43/todos-for-dues/compare/v0.4.0...v0.5.0) (2026-05-17)
 
 
