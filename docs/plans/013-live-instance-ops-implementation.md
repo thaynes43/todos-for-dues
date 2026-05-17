@@ -244,6 +244,26 @@ The plan calls for **three subagent tracks** spawned in parallel by the main age
 
   Each section ends with `<!-- Last verified: 2026-05-17 -->`.
 
+## 3.1 Architecture follow-ups (tracked, NOT in this PR)
+
+Surfaced during PLAN-013 execution (iteration 2). Each is a real defect or improvement that this PR works around or defers; track for a follow-up plan / chore before flipping `e2e` advisory → required-status-check.
+
+1. **`apps/web/e2e/roles/support.ts:demoteAllOtherAdmins` clobbers concurrent specs.** The helper does `SELECT id FROM users WHERE role = 'Admin' AND id <> $keepId` and demotes all results. When Playwright runs role specs in parallel projects, `last-admin-blocked` + `admin-swap` demote OTHER specs' freshly-seeded admins → those specs' layouts see the user as Alumni → assertion fails. **Workaround in this PR:** `e2e.yml` runs each roles spec file in its own `pnpm exec playwright test` invocation (fresh `globalSetup` → fresh testcontainer DB). ~70s extra wall time. **Real fix lean:** scope `demoteAllOtherAdmins` to a per-spec allowlist of IDs the caller created via `seedCast`, so the assertion becomes "count(Admin among my seeded users) = 1" rather than "count(Admin in chapter) = 1". Smallest blast radius; preserves test semantics. Once shipped, the per-spec invocation can collapse back to a single `pnpm --filter web e2e -- e2e/roles/` call.
+
+2. **`apps/web/e2e/admin/invites.spec.ts:24` cross-suite count race.** The assertion `expect(rows.count()).toBeGreaterThan(2)` passes when admin runs alone; fails when admin runs with walking-skeleton + mvp + auth in the same Playwright invocation (sees ≤2 invites because another suite consumed/invalidated rows mid-flight). **Workaround in this PR:** `e2e.yml` runs admin in its own invocation. **Real fix lean:** filter the listed invites by description prefix (the spec already knows what it minted); count only those. Matches the pattern other isolation-aware specs use.
+
+3. **`fullyParallel: false` for `e2e/admin/`?** The invites count race suggests admin specs may carry other latent cross-spec dependencies. Worth a 10-run parallel-vs-serial flake-rate comparison before committing to either. Defer until #1 and #2 are resolved (those are the known offenders; #3 is exploratory).
+
+4. **Flip `e2e` to required-status-check.** Already on coordinator backlog; assumes #1–#3 + GHA cold-runner improvements (#5 below) are all stable. Target: 2 weeks of green main runs.
+
+5. **GHA cold-runner Playwright wall time + flake.** Iteration 2 landed `globalSetup.ts:prewarmRoutes()` + `expect.timeout: 15_000` + `waitForLoadState('networkidle')` in support helpers. These materially helped but the workflow now ships per-suite invocations (Track A) which inflate wall time. Future-state options: (a) route pre-warming hits ALL spec-facing routes (already doing this), (b) split into `e2e-fast` + `e2e-slow` workflows, (c) bigger runner, (d) Playwright shard support.
+
+6. **`RESEND_FROM_ADDRESS` boot-fail-fast pattern.** Currently a module-load side effect gated on `NEXT_PHASE` + `NODE_ENV`. Heuristic; fragile. **Real fix:** Next.js [`instrumentation.ts`](https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation) hook is the documented "run once on server boot" mechanism. Refactor when convenient.
+
+7. **`/api/health` Vitest mock pattern.** `vi.resetModules()` doesn't reset `vi.fn()` call counts on `vi.mock` factory-returned objects. Worth a shared test helper across `apps/web/__tests__/`. Not urgent.
+
+8. **Smoke spec's `/api/health` against pre-v0.7.0 instances.** Returns 404 on v0.6.0 (route added by this PR). Live smoke fails 1/3 against the currently-deployed image. **Lean: leave it strict** — the validator runs smoke post-deploy, when the route exists. Document this in the runbook so a future operator doesn't panic at the 404 during a partial-deploy window.
+
 ## 4. Steps
 
 ### Step 0 — Branch off latest `origin/main`
@@ -386,6 +406,7 @@ After the SaaS PR merges:
 - **Required-status-check on `e2e`.** Advisory-only here; flip after 2 weeks of green runs.
 - **Full walking-skeleton click-through against live.** Live smoke is read-only.
 - **Multi-instance dashboards.** REL-002+.
+- **All 8 items in §3.1.** Tracked for follow-up; explicitly NOT fixed here. The two batch-bug items (#1 `demoteAllOtherAdmins`, #2 invites count race) are worked around via per-suite invocations in `e2e.yml` — that's a real workaround, not a fix.
 
 ## 7. Risks & gotchas
 
@@ -443,3 +464,4 @@ The same list as PLAN-014's prompt. The new `e2e.yml` workflow doesn't change an
 |------|--------|--------|
 | 2026-05-16 | Tom Haynes | Initial Draft. Three artefacts: deployed-Playwright smoke + ops runbook + Grafana dashboards/alerts. Circuit-breaker said reshape post-deploy. |
 | 2026-05-17 | Tom Haynes | **Reshaped Draft → Proposed** after today's v0.5.0 + v0.6.0 deploys. New three-track scope: CI/release automation (Playwright in CI + `GITHUB_TOKEN`-tag trap fix + `RESEND_FROM_ADDRESS` fail-fast); test hygiene (`installPageerrorListener` retrofit + `my-postings` flake fix); live smoke + health + runbook. **Grafana dashboards + alerts deferred to PLAN-015** (iterative via MCP, doesn't need a Markdown plan). Folds in the backlog items the coordinator has tracked since handoffs 008/009/010. Paired with VALIDATION-013 (also reshaped). |
+| 2026-05-17 | Tom Haynes | **Iteration 2 reality captured (post-execute-agent first CI run).** Original three-track scope landed clean (PR #27 — required CI green). Advisory CI surfaced (a) GHA cold-runner compile-lag, (b) pre-existing `demoteAllOtherAdmins` cross-spec clobber, (c) pre-existing `admin/invites.spec.ts` count race. Iteration 2 added `globalSetup.ts:prewarmRoutes()` + global `expect.timeout: 15_000` + `signInAs`/`reAuth`/`driveToLocked` hardening + per-suite invocation in `e2e.yml` (the latter is a workaround for the two pre-existing batch bugs, not a fix). All 8 architecture follow-ups now tracked in §3.1 — explicitly out of scope per §6 but required before flipping `e2e` to required-status-check. Bonus: `mvp/support.ts:postJob` compile-lag fix lifted the whole local mvp suite to 3× DEFAULT-workers green. `my-postings` parallel-flake closed parallel-safe (no `--workers=1` fallback). |
