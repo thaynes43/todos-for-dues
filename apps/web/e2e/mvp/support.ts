@@ -119,9 +119,14 @@ export async function postJob(
   recommended = '1',
 ): Promise<string> {
   await page.goto('/jobs/new');
+  // Dev-server compile-lag (PLAN-013 Track B Path A): under parallel-spec load,
+  // Next.js may still be compiling /jobs/new when goto resolves. Wait for the
+  // network to go idle so the page is fully hydrated before driving the form.
+  await page.waitForLoadState('networkidle');
   // Wait for the form to mount + hydrate. The submit button is initially
   // disabled until React state has caught up to the form's inputs, so a
-  // stable "submit is disabled and visible" tells us hydration finished.
+  // stable "submit is enabled" tells us hydration finished AND validation
+  // accepted the inputs.
   const submit = page.getByRole('button', { name: /Post job/i });
   await expect(submit).toBeVisible();
   const descBox = page.getByPlaceholder(/Describe the job/i);
@@ -133,7 +138,7 @@ export async function postJob(
   const countBox = page.locator('input[name="recommendedPeopleCount"]');
   await countBox.click();
   await countBox.fill(recommended);
-  await expect(submit).toBeEnabled({ timeout: 10_000 });
+  await expect(submit).toBeEnabled({ timeout: 30_000 });
   await submit.click();
   await page.waitForURL(/\/jobs\/[0-9a-f-]+$/, { timeout: 15_000 });
   return page.url().split('/').pop()!;

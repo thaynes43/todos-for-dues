@@ -4,6 +4,7 @@ import {
   createPool,
   enrollAsActive,
   futureLocalDatetimeMinutes,
+  installPageerrorListener,
   newSuffix,
   pollJobState,
   postJob,
@@ -12,6 +13,8 @@ import {
 } from './support';
 
 test.describe('PRD-004 R-06 — /my-enrollments list', () => {
+  test.beforeEach(({ page }) => installPageerrorListener(page));
+
   test('Active enrolled in (locked + future date) and (enrollment_open) → locked listed first', async ({
     page,
     context,
