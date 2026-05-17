@@ -75,7 +75,7 @@ test.describe('PRD-002 R-11 + AC-14 — /my-postings list', () => {
       // the ordered list. No retries; no `--workers=1` pin.
       await reAuth(page, context, cast.alumni);
       await page.goto('/my-postings');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('load');
 
       // Poll until all three of OUR rows are rendered. The page may show
       // unrelated rows from parallel workers' fixtures, but the three

@@ -91,7 +91,7 @@ export async function reAuth(
   // a fast goto('/admin/X') immediately after reAuth can race the session
   // hydration — the admin layout reads a stale or missing session role and
   // redirects to '/' instead of rendering the admin page.
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
 }
 
 export async function pollJobState(
@@ -129,7 +129,7 @@ export async function postJob(
   // Dev-server compile-lag (PLAN-013 Track B Path A): under parallel-spec load,
   // Next.js may still be compiling /jobs/new when goto resolves. Wait for the
   // network to go idle so the page is fully hydrated before driving the form.
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   // Wait for the form to mount + hydrate. The submit button is initially
   // disabled until React state has caught up to the form's inputs, so a
   // stable "submit is enabled" tells us hydration finished AND validation
@@ -211,7 +211,7 @@ export async function lockAsAlumni(
   // Wait for hydration: the lock-job submit stays disabled until validation
   // accepts the work-date. On cold GHA runners the form hydration can lag
   // past the default click timeout.
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   await page
     .getByTestId('lock-job-work-date')
     .fill(futureLocalDatetimeMinutes(60 * 24 * 3));
@@ -230,7 +230,7 @@ export async function completeAsAlumni(
 ): Promise<void> {
   await reAuth(page, context, alumni);
   await page.goto(`/jobs/${jobId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const submit = page.getByTestId('complete-job-submit');
   await expect(submit).toBeEnabled({ timeout: 30_000 });
   await submit.click();
@@ -246,7 +246,7 @@ export async function markPaymentSentAsAlumni(
 ): Promise<void> {
   await reAuth(page, context, alumni);
   await page.goto(`/jobs/${jobId}`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   const submit = page.getByTestId('mark-payment-sent-button');
   await expect(submit).toBeEnabled({ timeout: 30_000 });
   await submit.click();

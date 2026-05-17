@@ -17,7 +17,7 @@ export async function signInAs(
   // Wait for /login to hydrate. On a cold dev server (esp. GHA runners) the
   // form may still be compiling/mounting when goto resolves; without this
   // wait the submit click can race with hydration and silently drop.
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('load');
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.locator('button[type=submit]').click();

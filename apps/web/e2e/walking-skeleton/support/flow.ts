@@ -129,7 +129,7 @@ export async function driveToLocked(opts: DriveOpts): Promise<string> {
   // Wait for /jobs/[jobId] to hydrate before driving the lock form. On cold
   // GHA runners the submit button stayed `disabled` past 30s because React
   // state hadn't caught up to the .fill() yet.
-  await opts.page.waitForLoadState('networkidle');
+  await opts.page.waitForLoadState('load');
   await opts.page
     .getByTestId('lock-job-work-date')
     .fill(futureLocalDatetimeMinutes(60 * 24 * 3));
