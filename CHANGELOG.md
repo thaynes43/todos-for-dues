@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.1](https://github.com/thaynes43/todos-for-dues/compare/v0.7.0...v0.7.1) (2026-05-18)
+
+
+### Bug Fixes
+
+* **ci:** hybrid trigger for build-image — release.published from GITHUB_TOKEN is suppressed too ([#30](https://github.com/thaynes43/todos-for-dues/issues/30)) ([588c673](https://github.com/thaynes43/todos-for-dues/commit/588c6732e8e5ffc688ca9ce060dc6bb5302f0a64))
+
+
+### Documentation
+
+* **plan-013 + handoff-012:** track iteration-2 reality + 8 architecture follow-ups ([#28](https://github.com/thaynes43/todos-for-dues/issues/28)) ([9daad2a](https://github.com/thaynes43/todos-for-dues/commit/9daad2acfa4aa2aa0f5f9ecf60d8ba8cda72a79b))
+
 ## [0.7.0](https://github.com/thaynes43/todos-for-dues/compare/v0.6.0...v0.7.0) (2026-05-17)
 
 
