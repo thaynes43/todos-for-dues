@@ -14,5 +14,16 @@ jobs:
     steps:
       - uses: googleapis/release-please-action@v4
         with:
+          # Use a fine-grained PAT instead of the default GITHUB_TOKEN so the
+          # tags + GitHub Releases release-please creates fire downstream
+          # workflows (build-image in ci.yml). GHA's security policy
+          # suppresses both `push: tags` and `release: types: [published]`
+          # events created by GITHUB_TOKEN. Confirmed empirically on
+          # v0.3.0..v0.7.1 — every release until this PAT lands required
+          # manual recovery (re-push tag OR re-publish release from user
+          # context). PAT permissions: contents:write + pull-requests:write
+          # (least privilege; repo-scoped to thaynes43/todos-for-dues).
+          # Rotate per the runbook's expiry reminder.
+          token: ${{ secrets.RELEASE_PLEASE_PAT }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
