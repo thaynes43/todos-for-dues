@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+    tags: ["v*.*.*"]
   release:
     types: [published]
 
@@ -17,7 +18,10 @@ env:
 
 jobs:
   lint-and-typecheck:
-    if: github.event_name != 'release'
+    # Run on PRs + push to main. Skip on tag pushes and release events
+    # (build-image runs there; lint/test already ran on the same commit
+    # via the merge that produced the tag).
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +37,7 @@ jobs:
       - run: pnpm typecheck
 
   test:
-    if: github.event_name != 'release'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +52,21 @@ jobs:
       - run: pnpm test
 
   build-image:
-    if: github.event_name == 'release'
+    # Hybrid trigger: fires on both `release.published` AND tag pushes.
+    # Why both:
+    # - `release.published` is the "ideal" automated path post-PLAN-013, BUT
+    #   release-please's GITHUB_TOKEN-created Releases do NOT fire downstream
+    #   workflows (same GHA security limitation as GITHUB_TOKEN tag pushes).
+    #   Verified 2026-05-17 on v0.7.0: release was published at 00:07Z, no
+    #   build-image run fired with event=release for 15+ min.
+    # - `push: tags` restores the manual-user-context tag re-push escape
+    #   hatch as a fallback.
+    # - Re-publishing the release from user context via `gh release create`
+    #   DOES fire release.published (worked for v0.7.0 recovery).
+    # Long-term proper fix: mint a fine-grained PAT for release-please so
+    # release-please's actions originate from a real user identity. Tracked
+    # as PLAN-013 §3.1 #9 PAT follow-up.
+    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -56,7 +74,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          # `github.event.release.tag_name` for release events; `github.ref_name`
+          # for tag pushes (e.g. "v0.7.0").
+          ref: ${{ github.event.release.tag_name || github.ref_name }}
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -68,7 +88,7 @@ jobs:
         with:
           images: ghcr.io/thaynes43/todos-for-dues
           tags: |
-            type=raw,value=${{ github.event.release.tag_name }}
+            type=raw,value=${{ github.event.release.tag_name || github.ref_name }}
             type=raw,value=latest
       - uses: docker/build-push-action@v6
         with:
