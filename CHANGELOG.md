@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.3](https://github.com/thaynes43/todos-for-dues/compare/v0.7.2...v0.7.3) (2026-05-18)
+
+
+### Bug Fixes
+
+* **e2e:** signInAs waitForURL glob mismatch + full suite-level collapse ([#36](https://github.com/thaynes43/todos-for-dues/issues/36)) ([5b2ac85](https://github.com/thaynes43/todos-for-dues/commit/5b2ac85a579871442694f7e4b7c238874d5f11c1))
+
 ## [0.7.2](https://github.com/thaynes43/todos-for-dues/compare/v0.7.1...v0.7.2) (2026-05-18)
 
 
