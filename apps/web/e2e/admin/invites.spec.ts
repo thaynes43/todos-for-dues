@@ -113,7 +113,11 @@ test.describe('PLAN-014 / PRD-003 R-11..R-14 — Admin invite management UI', ()
         await externalPage.getByLabel('Display name').fill(`New Active ${suffix}`);
         await externalPage.getByLabel('Password').fill(signupPassword);
         await externalPage.getByRole('button', { name: /Create account/i }).click();
-        await externalPage.waitForURL('**/', { timeout: 20_000 });
+        // New Active lands on /jobs after `app/page.tsx` reads the role.
+        // The transient root `/` is sometimes invisible to Playwright under
+        // load, so match the final landing alongside it. (Same fix pattern
+        // as walking-skeleton/support/personas.ts:signInAs.)
+        await externalPage.waitForURL(/\/(jobs|moderation-queue)?$/, { timeout: 20_000 });
 
         // DB-state assertion (VALIDATION-014 §6): new user row exists with
         // role Active, and the invite_tokens row is now revoked.

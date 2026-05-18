@@ -58,32 +58,17 @@ jobs:
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
       - run: pnpm --filter web exec playwright install --with-deps chromium
 
-      # Suite isolation: each suite runs in its own Playwright invocation
-      # (fresh globalSetup → fresh testcontainer DB) so cross-suite state
-      # pollution doesn't surface here.
-      #
-      # PLAN-013 §3.1 #1 + #2 fixes shipped in this PR
-      # (`demoteAllOtherAdmins` scope-narrow + `invites.spec.ts` self-filter
-      # by minted UUID) closed the originally-named offenders, but local 3×
-      # verification under partial-collapse + full-collapse shapes still
-      # surfaced flake in `admin/dispute-resolve-*.spec.ts`,
-      # `admin/layout-shell.spec.ts`, and `mvp/revert-completion.spec.ts` —
-      # all timing out in `signInAs`'s `waitForURL('**/')` post-redirect, a
-      # pre-existing test-infra glob mismatch masked by per-suite isolation.
-      # PLAN-013 §3.1 #3 (parallel-vs-serial admin comparison) remains open;
-      # workflow collapse deferred until the signInAs glob is fixed.
-
-      - name: e2e — walking-skeleton (PLAN-006 per-page + PLAN-008 chained)
-        run: pnpm --filter web e2e -- e2e/walking-skeleton/ e2e/walking-skeleton.spec.ts
-
-      - name: e2e — SSO / auth (PLAN-008)
-        run: pnpm --filter web e2e -- __e2e__/auth/
-
-      - name: e2e — mvp (PLAN-010)
-        run: pnpm --filter web e2e -- e2e/mvp/
-
-      - name: e2e — admin (PLAN-011 + PLAN-014 invites)
-        run: pnpm --filter web e2e -- e2e/admin/
+      # PLAN-013 §3.1 #10 (signInAs glob mismatch) is closed in this PR —
+      # `signInAs` + `invites.spec.ts` external signup now match `/` and
+      # `/jobs` and `/moderation-queue` via regex instead of the trailing-
+      # slash-dependent `'**/'` glob. With that fix, non-chapter-state
+      # suites are safe to share a globalSetup → single testcontainer DB;
+      # walking-skeleton / __e2e__/auth / mvp / admin collapse into one
+      # invocation here. Cross-suite seed safety relies on UUID-suffixed
+      # personas + UUID-self-filter assertions (per PLAN-013 §3.1 #2 /
+      # PR #35 — `invites.spec.ts` filters by the minted invite UUID).
+      - name: e2e — main (collapsed walking-skeleton + auth + mvp + admin)
+        run: pnpm --filter web e2e -- e2e/walking-skeleton/ e2e/walking-skeleton.spec.ts __e2e__/auth/ e2e/mvp/ e2e/admin/
 
       # PLAN-013 §3.1 #1: `demoteAllOtherAdmins` is now scope-narrowed to a
       # per-spec ID allowlist, so the 5 chapter-safe roles specs (admin-grant,
