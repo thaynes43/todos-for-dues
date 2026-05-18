@@ -1,9 +1,30 @@
 name: e2e
 
+# Advisory CI. Skip on docs-only / agent-prompt / changelog changes —
+# Playwright covers UI + tRPC integration paths; none of those move when
+# only Markdown / .agents/ scaffolding changes. ~10 min runner-time saved
+# per docs PR.
+#
+# `lint-and-typecheck` + `test` in ci.yml still run on docs PRs (they're
+# required-status-checks and only ~2 min); structurally cheaper to keep
+# those always-on than to add the conditional-job pattern. If that 2 min
+# becomes an issue, revisit with dorny/paths-filter or equivalent.
 on:
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '.agents/**'
+      - 'CHANGELOG.md'
+      - '*.md'
+      - 'LICENSE'
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '.agents/**'
+      - 'CHANGELOG.md'
+      - '*.md'
+      - 'LICENSE'
 
 concurrency:
   group: e2e-${{ github.ref }}
