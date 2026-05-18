@@ -33,23 +33,35 @@ export function installPageerrorListener(page: Page): Error[] {
 }
 
 /**
- * Demote every Admin in the chapter except the one we want to keep, so the
- * deferred-CHECK trigger sees exactly one Admin at commit time. Uses the
- * domain helper (`transitionRole`) per ADR-011 / PRD-008 R-05 so the
- * single-writer invariant (`no-direct-state-writes` test in packages/domain)
- * stays intact.
+ * Demote every Admin in the caller's per-spec seeded set except `keepAdminId`.
+ * PLAN-013 §3.1 #1 lean: the previous chapter-wide variant (`WHERE role =
+ * 'Admin' AND id <> $keepId`) demoted concurrent specs' seeded admins under
+ * `fullyParallel: true`, so those specs' layouts saw their user as Alumni →
+ * assertion churn. Scope-narrowing the SELECT to `id = ANY($seededUserIds)`
+ * makes the helper safe for cross-spec parallelism: the only admins this
+ * helper touches are ones the caller seeded itself.
  *
- * This is destructive to the chapter's roster — last-Admin specs MUST run
- * under `--workers=1` so concurrent specs do not observe the briefly-empty
- * Admin set. Restore via `restoreAdmins` after the test.
+ * Trade-off: the helper no longer guarantees CHAPTER-WIDE sole-Admin state
+ * (the global Bootstrap Admin from `seedFixtures` + other specs' seeded
+ * admins remain Admin). Callers that need to trigger the min-Admin invariant
+ * via UI must either (a) be the only Playwright invocation running, or (b)
+ * include the Bootstrap Admin's ID in `seededUserIds` (knowing they'll
+ * temporarily clobber the global persona for the duration of the test —
+ * walking-skeleton + auth specs may flake until restore).
+ *
+ * Uses the domain helper (`transitionRole`) per ADR-011 / PRD-008 R-05 so the
+ * single-writer invariant (`no-direct-state-writes` test in packages/domain)
+ * stays intact. Restore via `restoreAdmins` after the test.
  */
 export async function demoteAllOtherAdmins(
   pool: Pool,
+  seededUserIds: readonly string[],
   keepAdminId: string,
 ): Promise<string[]> {
+  if (seededUserIds.length === 0) return [];
   const { rows } = await pool.query<{ id: string }>(
-    `SELECT id FROM users WHERE role = 'Admin' AND id <> $1`,
-    [keepAdminId],
+    `SELECT id FROM users WHERE role = 'Admin' AND id = ANY($1::uuid[]) AND id <> $2`,
+    [seededUserIds, keepAdminId],
   );
   const ids = rows.map((r) => r.id);
   for (const id of ids) {
@@ -61,6 +73,23 @@ export async function demoteAllOtherAdmins(
     });
   }
   return ids;
+}
+
+/**
+ * Look up the globally-seeded Bootstrap Admin row(s) by `BOOTSTRAP_ADMIN_EMAIL`
+ * so the per-spec ID allowlist passed to `demoteAllOtherAdmins` can include
+ * the chapter-wide Admin persona (otherwise the post-COMMIT chapter admin
+ * count remains ≥ 2 even after the demote, and the min-Admin trigger never
+ * fires).
+ */
+export async function fetchBootstrapAdminIds(pool: Pool): Promise<string[]> {
+  const bootstrapEmail = process.env.BOOTSTRAP_ADMIN_EMAIL;
+  if (!bootstrapEmail) return [];
+  const { rows } = await pool.query<{ id: string }>(
+    `SELECT id FROM users WHERE email = $1`,
+    [bootstrapEmail],
+  );
+  return rows.map((r) => r.id);
 }
 
 /**

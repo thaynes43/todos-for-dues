@@ -3,6 +3,7 @@ import {
   countRoleTransitions,
   createPool,
   demoteAllOtherAdmins,
+  fetchBootstrapAdminIds,
   getRoleFromDb,
   installPageerrorListener,
   newSuffix,
@@ -11,6 +12,9 @@ import {
   seedCast,
 } from './support';
 
+// See `last-admin-blocked.spec.ts` top-of-file note — this spec also relies
+// on chapter-wide sole-Admin state at the moment of self-demote, so it must
+// also run in its own Playwright invocation (`.github/workflows/e2e.yml`).
 test.describe.configure({ mode: 'serial' });
 
 test.describe('PRD-008 AC-05 — atomic swap via UI round-trip', () => {
@@ -24,7 +28,14 @@ test.describe('PRD-008 AC-05 — atomic swap via UI round-trip', () => {
     try {
       const suffix = newSuffix();
       const cast = await seedCast(pool, suffix);
-      demoted = await demoteAllOtherAdmins(pool, cast.admin.id);
+      const seededUserIds = [
+        cast.admin.id,
+        cast.alumni.id,
+        cast.mod.id,
+        cast.active.id,
+        ...(await fetchBootstrapAdminIds(pool)),
+      ];
+      demoted = await demoteAllOtherAdmins(pool, seededUserIds, cast.admin.id);
 
       const beforeAlumniTransitions = await countRoleTransitions(
         pool,
