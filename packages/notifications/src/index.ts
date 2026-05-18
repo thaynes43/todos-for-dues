@@ -3,6 +3,7 @@ export {
   __setResendForTests,
   getRecordedEmails,
   clearRecordedEmails,
+  assertValidResendFromAddressOrThrow,
 } from './send-email';
 export type {
   SendEmailInput,

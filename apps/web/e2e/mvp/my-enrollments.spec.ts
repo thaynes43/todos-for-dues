@@ -3,15 +3,17 @@ import {
   approveAsMod,
   createPool,
   enrollAsActive,
-  futureLocalDatetimeMinutes,
+  installPageerrorListener,
+  lockAsAlumni,
   newSuffix,
-  pollJobState,
   postJob,
   reAuth,
   seedCast,
 } from './support';
 
 test.describe('PRD-004 R-06 — /my-enrollments list', () => {
+  test.beforeEach(({ page }) => installPageerrorListener(page));
+
   test('Active enrolled in (locked + future date) and (enrollment_open) → locked listed first', async ({
     page,
     context,
@@ -26,13 +28,7 @@ test.describe('PRD-004 R-06 — /my-enrollments list', () => {
       const jobA = await postJob(page, `MyEnroll A — ${suffix}`);
       await approveAsMod(page, context, cast.mod, pool, jobA);
       await enrollAsActive(page, context, cast.active, pool, jobA);
-      await reAuth(page, context, cast.alumni);
-      await page.goto(`/jobs/${jobA}`);
-      await page
-        .getByTestId('lock-job-work-date')
-        .fill(futureLocalDatetimeMinutes(60 * 24 * 5));
-      await page.getByTestId('lock-job-submit').click();
-      await pollJobState(pool, jobA, 'locked');
+      await lockAsAlumni(page, context, cast.alumni, pool, jobA);
 
       // Job B — will be left in enrollment_open.
       await reAuth(page, context, cast.alumni);

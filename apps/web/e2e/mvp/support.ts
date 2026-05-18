@@ -1,6 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import { expect, type BrowserContext, type Page } from '@playwright/test';
 import { Pool } from 'pg';
+
+/**
+ * VALIDATION-010 noted that PLAN-010's MVP specs never installed a
+ * `pageerror` listener (PLAN-006 walking-skeleton specs had it). Every
+ * spec under `e2e/mvp/` MUST install this listener so an uncaught
+ * browser error fails the spec rather than silently passing.
+ *
+ * Mirrors `apps/web/e2e/admin/support.ts:installPageerrorListener`
+ * line-for-line.
+ */
+export function installPageerrorListener(page: Page): Error[] {
+  const errors: Error[] = [];
+  page.on('pageerror', (err) => errors.push(err));
+  return errors;
+}
 import {
   createPool,
   seedPersona,
@@ -70,6 +85,13 @@ export async function reAuth(
 ): Promise<void> {
   await context.clearCookies();
   await signInAs(page, persona.email, persona.password);
+  // After the post-signin redirect to '/', wait for the network to go idle
+  // so Better Auth's Set-Cookie has been fully processed by Playwright's
+  // cookie jar AND any layout-level role lookup has completed. Without this,
+  // a fast goto('/admin/X') immediately after reAuth can race the session
+  // hydration — the admin layout reads a stale or missing session role and
+  // redirects to '/' instead of rendering the admin page.
+  await page.waitForLoadState('load');
 }
 
 export async function pollJobState(
@@ -104,9 +126,14 @@ export async function postJob(
   recommended = '1',
 ): Promise<string> {
   await page.goto('/jobs/new');
+  // Dev-server compile-lag (PLAN-013 Track B Path A): under parallel-spec load,
+  // Next.js may still be compiling /jobs/new when goto resolves. Wait for the
+  // network to go idle so the page is fully hydrated before driving the form.
+  await page.waitForLoadState('load');
   // Wait for the form to mount + hydrate. The submit button is initially
   // disabled until React state has caught up to the form's inputs, so a
-  // stable "submit is disabled and visible" tells us hydration finished.
+  // stable "submit is enabled" tells us hydration finished AND validation
+  // accepted the inputs.
   const submit = page.getByRole('button', { name: /Post job/i });
   await expect(submit).toBeVisible();
   const descBox = page.getByPlaceholder(/Describe the job/i);
@@ -118,7 +145,7 @@ export async function postJob(
   const countBox = page.locator('input[name="recommendedPeopleCount"]');
   await countBox.click();
   await countBox.fill(recommended);
-  await expect(submit).toBeEnabled({ timeout: 10_000 });
+  await expect(submit).toBeEnabled({ timeout: 30_000 });
   await submit.click();
   await page.waitForURL(/\/jobs\/[0-9a-f-]+$/, { timeout: 15_000 });
   return page.url().split('/').pop()!;
@@ -181,10 +208,16 @@ export async function lockAsAlumni(
 ): Promise<void> {
   await reAuth(page, context, alumni);
   await page.goto(`/jobs/${jobId}`);
+  // Wait for hydration: the lock-job submit stays disabled until validation
+  // accepts the work-date. On cold GHA runners the form hydration can lag
+  // past the default click timeout.
+  await page.waitForLoadState('load');
   await page
     .getByTestId('lock-job-work-date')
     .fill(futureLocalDatetimeMinutes(60 * 24 * 3));
-  await page.getByTestId('lock-job-submit').click();
+  const submit = page.getByTestId('lock-job-submit');
+  await expect(submit).toBeEnabled({ timeout: 30_000 });
+  await submit.click();
   await pollJobState(pool, jobId, 'locked');
 }
 
@@ -197,7 +230,10 @@ export async function completeAsAlumni(
 ): Promise<void> {
   await reAuth(page, context, alumni);
   await page.goto(`/jobs/${jobId}`);
-  await page.getByTestId('complete-job-submit').click();
+  await page.waitForLoadState('load');
+  const submit = page.getByTestId('complete-job-submit');
+  await expect(submit).toBeEnabled({ timeout: 30_000 });
+  await submit.click();
   await pollJobState(pool, jobId, 'completed');
 }
 
@@ -210,6 +246,9 @@ export async function markPaymentSentAsAlumni(
 ): Promise<void> {
   await reAuth(page, context, alumni);
   await page.goto(`/jobs/${jobId}`);
-  await page.getByTestId('mark-payment-sent-button').click();
+  await page.waitForLoadState('load');
+  const submit = page.getByTestId('mark-payment-sent-button');
+  await expect(submit).toBeEnabled({ timeout: 30_000 });
+  await submit.click();
   await pollJobState(pool, jobId, 'payment_sent');
 }

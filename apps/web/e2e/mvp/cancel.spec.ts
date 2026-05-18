@@ -3,6 +3,7 @@ import {
   approveAsMod,
   createPool,
   enrollAsActive,
+  installPageerrorListener,
   newSuffix,
   postJob,
   pollJobState,
@@ -11,6 +12,8 @@ import {
 } from './support';
 
 test.describe('PRD-004 R-11 + AC-13..AC-15 — cancel flow', () => {
+  test.beforeEach(({ page }) => installPageerrorListener(page));
+
   test('Alumni cancels with reason → state cancelled; Active sees banner; reason stored in audit log', async ({
     page,
     context,
