@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.2](https://github.com/thaynes43/todos-for-dues/compare/v0.7.1...v0.7.2) (2026-05-18)
+
+
+### Bug Fixes
+
+* **e2e:** scope-narrow demoteAllOtherAdmins + self-filter invites count + partial e2e.yml collapse ([#35](https://github.com/thaynes43/todos-for-dues/issues/35)) ([73df916](https://github.com/thaynes43/todos-for-dues/commit/73df916289eb33b3faaa142f49bce54fd8fcc02d))
+
+
+### Documentation
+
+* **agents:** handoff 013 + commit deploy prompt 032 ([#32](https://github.com/thaynes43/todos-for-dues/issues/32)) ([1694de1](https://github.com/thaynes43/todos-for-dues/commit/1694de1dc564042bef0b3ec65bd8f61d44a7c040))
+
 ## [0.7.1](https://github.com/thaynes43/todos-for-dues/compare/v0.7.0...v0.7.1) (2026-05-18)
 
 
