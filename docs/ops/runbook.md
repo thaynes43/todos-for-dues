@@ -279,6 +279,12 @@ applied row — Drizzle uses a content-hash, not idempotent re-runs.
 
 ## 9. `GITHUB_TOKEN` tag-trap workaround
 
+> **RESOLVED 2026-05-18 by `RELEASE_PLEASE_PAT` (PR #31).** Verified by the
+> v0.7.2 + v0.7.3 auto-builds firing `build-image` on `release.published`
+> without manual intervention. The two workarounds below remain documented
+> as a fallback in case the PAT is ever rotated, revoked, or
+> mis-permissioned; under normal operation neither should be needed.
+
 Symptom: a `vX.Y.Z` tag + GitHub Release exist but no matching image
 appeared in `ghcr.io/thaynes43/todos-for-dues` within 5 min of the
 release-PR merge.
@@ -322,16 +328,20 @@ gh release create vX.Y.Z --target main --title "vX.Y.Z" --notes-file /tmp/notes.
 The re-create fires `build-image` via the `release.published` trigger
 (from your user, not `GITHUB_TOKEN`).
 
-### Proper long-term fix (NOT yet landed)
+### Proper long-term fix (LANDED 2026-05-18, PR #31)
 
-Mint a fine-grained PAT for release-please (repo: contents:write +
-actions:read+write); add as repo secret `RELEASE_PLEASE_PAT`; update
-`.github/workflows/release-please.yml` to consume it. Then
-release-please's tag pushes + Release creations originate from a real
-user identity and fire downstream workflows automatically. Tracked as
-PLAN-013 §3.1 PAT follow-up.
+A fine-grained PAT (`repo:contents:write` + `actions:read+write`) is stored
+as repo secret `RELEASE_PLEASE_PAT` and consumed by
+`.github/workflows/release-please.yml`. release-please's tag pushes +
+Release creations now originate from that PAT identity, and the
+`release.published` event fires `build-image` automatically. First
+verification: v0.7.2 (commit `22f8a4a`, release CI run on event=`release`,
+`build-image` job conclusion: success). Second verification: v0.7.3.
 
-<!-- Last verified: 2026-05-18 (v0.7.0 deploy) -->
+If the PAT is ever rotated, revoked, or mis-permissioned, fall back to
+workarounds (A) or (B) above and re-mint the secret.
+
+<!-- Last verified: 2026-05-18 (v0.7.3 build, PAT auto-fire confirmed) -->
 
 ---
 
