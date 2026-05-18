@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import {
   createPool,
   demoteAllOtherAdmins,
+  fetchBootstrapAdminIds,
   installPageerrorListener,
   newSuffix,
   reAuth,
@@ -10,9 +11,18 @@ import {
 } from './support';
 
 // Last-Admin specs need EXACTLY one Admin in the chapter at the moment of
-// the self-demote attempt. We demote every other Admin before the test and
-// restore them after; run this file under `--workers=1` to avoid clashing
-// with other suites that assume their seeded Admin remains Admin.
+// the self-demote attempt — the DB trigger fires only when the post-COMMIT
+// chapter-wide admin count would drop below 1. We demote every Admin in
+// the per-spec allowlist (own cast + the globally-seeded Bootstrap Admin)
+// before the test and restore them after.
+//
+// PLAN-013 §3.1 #1 (revisited): the helper is now scope-narrowed to a per-
+// spec ID allowlist — passing the Bootstrap Admin's ID is still safe vs. the
+// rest of the roles/admin/mvp suites (no other suite mutates that user) but
+// races walking-skeleton's BOOTSTRAP_ADMIN signin path (bootstrap-admin
+// databaseHook re-promotes on signin → trigger no longer sees 1 admin →
+// banner doesn't appear). Hence this spec file still runs in its own
+// Playwright invocation in `.github/workflows/e2e.yml`.
 test.describe.configure({ mode: 'serial' });
 
 test.describe('PRD-008 AC-04 / AC-06 — last-Admin self-demote blocked + banner', () => {
@@ -26,14 +36,22 @@ test.describe('PRD-008 AC-04 / AC-06 — last-Admin self-demote blocked + banner
     try {
       const suffix = newSuffix();
       const cast = await seedCast(pool, suffix);
-      demoted = await demoteAllOtherAdmins(pool, cast.admin.id);
+      const seededUserIds = [
+        cast.admin.id,
+        cast.alumni.id,
+        cast.mod.id,
+        cast.active.id,
+        ...(await fetchBootstrapAdminIds(pool)),
+      ];
+      demoted = await demoteAllOtherAdmins(pool, seededUserIds, cast.admin.id);
 
       await reAuth(page, context, cast.admin);
       await page.goto('/profile');
       await expect(page.getByTestId('profile-page')).toBeVisible();
       await expect(page.getByTestId('profile-role')).toHaveText('Admin');
 
-      // Sole-Admin: count(Admin) must be 1 right now.
+      // Sole-Admin: count(Admin) must be 1 right now (chapter-wide — the
+      // banner-vs-422 path depends on the chapter trigger firing).
       const { rows: countRows } = await pool.query<{ c: number }>(
         `SELECT count(*)::int AS c FROM users WHERE role = 'Admin'`,
       );

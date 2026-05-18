@@ -60,8 +60,18 @@ jobs:
 
       # Suite isolation: each suite runs in its own Playwright invocation
       # (fresh globalSetup → fresh testcontainer DB) so cross-suite state
-      # pollution doesn't surface here. See .zprompt.md "E2E isolation
-      # follow-ups" for the per-spec details.
+      # pollution doesn't surface here.
+      #
+      # PLAN-013 §3.1 #1 + #2 fixes shipped in this PR
+      # (`demoteAllOtherAdmins` scope-narrow + `invites.spec.ts` self-filter
+      # by minted UUID) closed the originally-named offenders, but local 3×
+      # verification under partial-collapse + full-collapse shapes still
+      # surfaced flake in `admin/dispute-resolve-*.spec.ts`,
+      # `admin/layout-shell.spec.ts`, and `mvp/revert-completion.spec.ts` —
+      # all timing out in `signInAs`'s `waitForURL('**/')` post-redirect, a
+      # pre-existing test-infra glob mismatch masked by per-suite isolation.
+      # PLAN-013 §3.1 #3 (parallel-vs-serial admin comparison) remains open;
+      # workflow collapse deferred until the signInAs glob is fixed.
 
       - name: e2e — walking-skeleton (PLAN-006 per-page + PLAN-008 chained)
         run: pnpm --filter web e2e -- e2e/walking-skeleton/ e2e/walking-skeleton.spec.ts
@@ -75,16 +85,33 @@ jobs:
       - name: e2e — admin (PLAN-011 + PLAN-014 invites)
         run: pnpm --filter web e2e -- e2e/admin/
 
-      # Roles specs share GLOBAL chapter admin state — `demoteAllOtherAdmins`
-      # in last-admin-blocked / admin-swap clobbers other concurrent specs'
-      # seeded admins. Each spec file gets its own playwright invocation
-      # (fresh DB) until the test architecture is reshaped.
-      - name: e2e — roles (PLAN-012, per-spec for isolation)
+      # PLAN-013 §3.1 #1: `demoteAllOtherAdmins` is now scope-narrowed to a
+      # per-spec ID allowlist, so the 5 chapter-safe roles specs (admin-grant,
+      # admin-demote-admin, admin-users-list, role-history, self-service) no
+      # longer race each other's seeded admins. Collapse them into one
+      # invocation.
+      - name: e2e — roles (chapter-safe set, single invocation)
         run: |
-          set -e
-          for f in apps/web/e2e/roles/*.spec.ts; do
-            rel="${f#apps/web/}"
-            echo "::group::$rel"
-            pnpm --filter web e2e -- "$rel"
-            echo "::endgroup::"
-          done
+          pnpm --filter web e2e -- \
+            e2e/roles/admin-grant.spec.ts \
+            e2e/roles/admin-demote-admin.spec.ts \
+            e2e/roles/admin-users-list.spec.ts \
+            e2e/roles/role-history.spec.ts \
+            e2e/roles/self-service.spec.ts
+
+      # `last-admin-blocked` + `admin-swap` each need their OWN Playwright
+      # invocation (fresh testcontainer DB). Both depend on chapter-wide
+      # count(Admin) = 1 at the moment of self-demote — achieved by demoting
+      # the globally-seeded Bootstrap Admin via the scope-narrowed helper +
+      # `fetchBootstrapAdminIds`. Sharing a DB across these two specs would
+      # leave each prior spec's `cast.admin` lingering as Admin (no spec
+      # demotes another spec's seeded admin post scope-narrow), pushing
+      # count(Admin) ≥ 2 by the second spec's run. Sharing a DB with any
+      # other suite would also race walking-skeleton's BOOTSTRAP_ADMIN
+      # signin path. Per-spec isolation is the only safe option until the
+      # min-Admin trigger is made chapter-scoped (out of scope here).
+      - name: e2e — roles last-admin-blocked (own invocation)
+        run: pnpm --filter web e2e -- e2e/roles/last-admin-blocked.spec.ts
+
+      - name: e2e — roles admin-swap (own invocation)
+        run: pnpm --filter web e2e -- e2e/roles/admin-swap.spec.ts

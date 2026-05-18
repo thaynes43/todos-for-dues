@@ -46,12 +46,6 @@ test.describe('PLAN-014 / PRD-003 R-11..R-14 — Admin invite management UI', ()
       await page.waitForURL('**/admin/invites');
       await expect(page.getByTestId('admin-invites')).toBeVisible();
 
-      // Snapshot the pre-existing outstanding-invite count so we can detect
-      // the row we add without depending on other parallel specs.
-      const baselineRowCount = await page
-        .locator('[data-testid="invite-list-row"]')
-        .count();
-
       // === Mint an Active invite via the modal.
       await page.getByTestId('mint-invite-button').click();
       const mintModal = page.getByTestId('mint-invite-modal');
@@ -71,17 +65,11 @@ test.describe('PLAN-014 / PRD-003 R-11..R-14 — Admin invite management UI', ()
       await mintModal.getByTestId('mint-invite-submit').click();
       await expect(mintModal).not.toBeVisible();
 
-      // The newly-minted invite appears as a row. Poll for it.
-      await expect
-        .poll(
-          async () =>
-            page.locator('[data-testid="invite-list-row"]').count(),
-          { timeout: 10_000 },
-        )
-        .toBeGreaterThan(baselineRowCount);
-
-      // Pull the freshly-minted row out of the DB so we know which token
-      // belongs to "this" mint (other parallel specs may have minted too).
+      // PLAN-013 §3.1 #2: the previous "count > baseline" assertion raced
+      // concurrent suites that minted/revoked invite rows in the same DB. The
+      // spec's own discriminator is the freshly-minted invite_tokens.id —
+      // pull it out of the DB and assert THAT specific row appears, so the
+      // assertion ignores other suites' rows entirely.
       const adminUserId = cast.admin.id;
       const { rows: mintedRows } = await pool.query<{
         id: string;
@@ -99,7 +87,7 @@ test.describe('PLAN-014 / PRD-003 R-11..R-14 — Admin invite management UI', ()
       const mintedRow = page.locator(
         `[data-testid="invite-list-row"][data-invite-id="${mintedInvite.id}"]`,
       );
-      await expect(mintedRow).toBeVisible();
+      await expect(mintedRow).toBeVisible({ timeout: 10_000 });
       await expect(mintedRow.getByTestId('invite-list-role-chip')).toHaveText('Active');
       const urlInput = mintedRow.getByTestId('invite-list-url');
       await expect(urlInput).toBeVisible();
