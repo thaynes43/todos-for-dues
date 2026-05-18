@@ -277,16 +277,29 @@ applied row — Drizzle uses a content-hash, not idempotent re-runs.
 
 ---
 
-## 9. `GITHUB_TOKEN` tag-trap workaround (legacy)
+## 9. `GITHUB_TOKEN` tag-trap workaround
 
-Used 4× during the v0.3.0..v0.6.0 launch. The release-please-created
-tag was pushed under the default `GITHUB_TOKEN`, which does NOT trigger
-the `build-image` workflow on the tag. Symptom: a `vX.Y.Z` tag exists,
-but no matching image is in GHCR.
+Symptom: a `vX.Y.Z` tag + GitHub Release exist but no matching image
+appeared in `ghcr.io/thaynes43/todos-for-dues` within 5 min of the
+release-PR merge.
 
-**This should not recur for new tags after PLAN-013 Track A lands**
-(the release workflow switches to a PAT or `workflow_dispatch` trigger).
-The procedure below is documented only for re-building a legacy tag:
+Root cause: GitHub Actions suppresses downstream-workflow triggers for
+events created by the default `GITHUB_TOKEN`. release-please uses
+`GITHUB_TOKEN` by default, so neither the tag-push event NOR the
+`release.published` event fires `build-image`.
+
+History:
+- v0.3.0 / v0.4.0 / v0.5.0 / v0.6.0 — original symptom (tag-push
+  suppressed). Workaround was manual tag re-push from user context.
+- v0.7.0 — confirmed `release.published` is suppressed too (PLAN-013
+  Track A's swap to `release: types: [published]` did not close the
+  trap on its own). The hybrid trigger fix (`push: tags` restored
+  alongside the release trigger) brought back the original workaround
+  AS A FALLBACK; PAT remains the proper long-term fix.
+
+Two workarounds, both work; pick whichever is faster:
+
+### (A) Re-push the tag from your local user context
 
 ```sh
 git fetch --tags origin
@@ -294,14 +307,31 @@ git push origin :refs/tags/vX.Y.Z   # delete tag remotely
 git push origin vX.Y.Z              # re-push from local; now under your PAT
 ```
 
-The re-push fires the `build-image` workflow normally and produces
-`ghcr.io/thaynes43/todos-for-dues:vX.Y.Z`. Check Actions tab to confirm
-the run started.
+The re-push fires `build-image` via the `push: tags` trigger and
+produces `ghcr.io/thaynes43/todos-for-dues:vX.Y.Z`. Check Actions tab
+to confirm the run started with `headBranch=vX.Y.Z`.
 
-Do NOT use this for new tags after Track A — investigate the workflow
-trigger first.
+### (B) Re-publish the GitHub Release from your local user context
 
-<!-- Last verified: 2026-05-17 -->
+```sh
+gh release view vX.Y.Z --json body --jq '.body' > /tmp/notes.md
+gh release delete vX.Y.Z --yes
+gh release create vX.Y.Z --target main --title "vX.Y.Z" --notes-file /tmp/notes.md
+```
+
+The re-create fires `build-image` via the `release.published` trigger
+(from your user, not `GITHUB_TOKEN`).
+
+### Proper long-term fix (NOT yet landed)
+
+Mint a fine-grained PAT for release-please (repo: contents:write +
+actions:read+write); add as repo secret `RELEASE_PLEASE_PAT`; update
+`.github/workflows/release-please.yml` to consume it. Then
+release-please's tag pushes + Release creations originate from a real
+user identity and fire downstream workflows automatically. Tracked as
+PLAN-013 §3.1 PAT follow-up.
+
+<!-- Last verified: 2026-05-18 (v0.7.0 deploy) -->
 
 ---
 
