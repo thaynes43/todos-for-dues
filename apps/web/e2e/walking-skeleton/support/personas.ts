@@ -21,10 +21,15 @@ export async function signInAs(
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
   await page.locator('button[type=submit]').click();
-  // Successful sign-in redirects to /. If credentials are wrong the form
-  // renders an inline error and we'll fail below. 30s tolerates GHA
-  // cold-runner compile-lag on the post-redirect homepage.
-  await page.waitForURL('**/', { timeout: 30_000 });
+  // Successful sign-in lands on one of three URLs: `/` (transient, before
+  // `app/page.tsx` reads the role and re-redirects), `/jobs` (Active /
+  // Alumni / Admin), or `/moderation-queue` (Moderator). The previous glob
+  // `'**/'` only matched URLs ending in a trailing slash, so under load
+  // the transient root sometimes wasn't visible to Playwright while the
+  // final landing (no trailing slash) was — yielding a 30s timeout. A
+  // regex matching the three actual landings is timing-independent.
+  // 30s tolerates GHA cold-runner compile-lag on the post-redirect page.
+  await page.waitForURL(/\/(jobs|moderation-queue)?$/, { timeout: 30_000 });
 }
 
 export async function signOut(context: BrowserContext): Promise<void> {
