@@ -6,6 +6,7 @@ import { TRPCProvider } from '@/lib/trpc-provider';
 import { ChapterHeader } from '@/components/ChapterHeader';
 import { RoleAwareNav } from '@/components/RoleAwareNav';
 import { Footer } from '@/components/Footer';
+import { RealtimeProvider } from '@/components/RealtimeProvider';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -31,6 +32,7 @@ export default async function RootLayout({
     <html lang="en">
       <body className="flex min-h-screen flex-col bg-background text-foreground">
         <TRPCProvider>
+          <RealtimeProvider signedIn={Boolean(session?.user?.id)} />
           <ChapterHeader displayName={displayName} />
           <RoleAwareNav role={role} />
           <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">

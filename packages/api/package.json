@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./trpc": "./src/trpc.ts",
     "./routers": "./src/routers/index.ts",
-    "./settings-shared": "./src/settings-shared.ts"
+    "./settings-shared": "./src/settings-shared.ts",
+    "./events": "./src/events/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
