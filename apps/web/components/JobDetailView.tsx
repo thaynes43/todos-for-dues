@@ -202,12 +202,21 @@ export function JobDetailView({
             </>
           )}
 
-          {(viewerEnrolled || isAdmin) && job.state === 'payment_sent' && (
-            <>
-              <ConfirmReceivedButton jobId={job.id} />
-              <DisputeJobModal jobId={job.id} />
-            </>
-          )}
+          {/* MVP-FIX-B #6: Hide the recipient-side affordances from the
+              poster — they're waiting on the Active to confirm/dispute, not
+              acting themselves. An Admin who is NOT the poster still sees
+              them per PRD-006 R-02 (Admin-on-behalf confirm). An enrolled
+              Active sees them per PRD-006 R-01. The previous (viewerEnrolled
+              || isAdmin) check let the Admin-as-poster see both buttons,
+              which was the reported bug. */}
+          {!isPoster &&
+            (viewerEnrolled || isAdmin) &&
+            job.state === 'payment_sent' && (
+              <>
+                <ConfirmReceivedButton jobId={job.id} />
+                <DisputeJobModal jobId={job.id} />
+              </>
+            )}
 
           {isMod && job.state === 'awaiting_moderation' && (
             <ApproveRejectButtons jobId={job.id} />

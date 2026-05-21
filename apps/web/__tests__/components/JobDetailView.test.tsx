@@ -274,3 +274,61 @@ describe('<JobDetailView> PLAN-010 MVP additions', () => {
     expect(screen.getByTestId('completed-not-confirmed')).toBeInTheDocument();
   });
 });
+
+describe('<JobDetailView> payment_sent RBAC (MVP-FIX-B #6)', () => {
+  it('Alumni poster on payment_sent does NOT see Confirm Received or Dispute', () => {
+    const job = baseJob({ state: 'payment_sent' });
+    render(<JobDetailView job={job} viewer={viewer('Alumni', 'alumni-1')} />);
+    expect(
+      screen.queryByTestId('confirm-received-button'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('dispute-button')).not.toBeInTheDocument();
+  });
+
+  it('Admin who IS the poster on payment_sent does NOT see Confirm or Dispute', () => {
+    // The Admin-as-poster shouldn't act as recipient on their own job. The
+    // previous (viewerEnrolled || isAdmin) check incorrectly let them.
+    const job = baseJob({ state: 'payment_sent', postedBy: 'admin-1' });
+    render(<JobDetailView job={job} viewer={viewer('Admin', 'admin-1')} />);
+    expect(
+      screen.queryByTestId('confirm-received-button'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('dispute-button')).not.toBeInTheDocument();
+  });
+
+  it('Admin (not poster, not enrolled) on payment_sent DOES see Confirm + Dispute (PRD-006 R-02)', () => {
+    // PRD-006 R-02: any Admin may confirm receipt on chapter authority.
+    const job = baseJob({ state: 'payment_sent', postedBy: 'alumni-1' });
+    render(<JobDetailView job={job} viewer={viewer('Admin', 'admin-2')} />);
+    expect(screen.getByTestId('confirm-received-button')).toBeInTheDocument();
+    expect(screen.getByTestId('dispute-button')).toBeInTheDocument();
+  });
+
+  it('Moderator (not poster, not enrolled) on payment_sent does NOT see Confirm or Dispute', () => {
+    // Moderator is not Admin and is not enrolled — no recipient-side access.
+    const job = baseJob({ state: 'payment_sent' });
+    render(<JobDetailView job={job} viewer={viewer('Moderator', 'mod-1')} />);
+    expect(
+      screen.queryByTestId('confirm-received-button'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('dispute-button')).not.toBeInTheDocument();
+  });
+
+  it('Non-enrolled non-Admin Active on payment_sent does NOT see Confirm or Dispute (PRD-006 R-03)', () => {
+    const job = baseJob({ state: 'payment_sent' });
+    render(
+      <JobDetailView job={job} viewer={viewer('Active', 'outsider-active')} />,
+    );
+    expect(
+      screen.queryByTestId('confirm-received-button'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('dispute-button')).not.toBeInTheDocument();
+  });
+
+  it('Enrolled Active on payment_sent DOES see Confirm + Dispute (PRD-006 R-01)', () => {
+    const job = baseJob({ state: 'payment_sent' });
+    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    expect(screen.getByTestId('confirm-received-button')).toBeInTheDocument();
+    expect(screen.getByTestId('dispute-button')).toBeInTheDocument();
+  });
+});

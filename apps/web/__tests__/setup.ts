@@ -12,7 +12,9 @@ import { cleanup } from '@testing-library/react';
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
-  usePathname: () => '/',
+  // vi.fn() so individual tests can override the return value
+  // (`vi.mocked(usePathname).mockReturnValue('/jobs/new')`).
+  usePathname: vi.fn(() => '/'),
 }));
 
 afterEach(() => {
