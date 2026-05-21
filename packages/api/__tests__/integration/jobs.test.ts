@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { __setResendForTests } from '@app/notifications';
+import { JobNotEditableError, NoEditChangesError } from '@app/domain';
 import {
   caller,
   getAuditRows,
@@ -513,6 +514,172 @@ describe('jobs router', () => {
           reason: 'oops',
         }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+  });
+
+  // ─── edit — PRD-011 CMD-15 ─────────────────────────────────────────
+  describe('edit — PRD-011 CMD-15', () => {
+    it('AC-01: poster edits description in awaiting_moderation; state stays; content row written', async () => {
+      const jobId = await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'awaiting_moderation',
+        description: 'Clean garage',
+      });
+      const result = await caller(
+        makeCtx({ userId: users.alumni, role: 'Alumni' }),
+      ).jobs.edit({
+        jobId,
+        edits: { description: 'Clean garage and shed' },
+      });
+      expect(result.state).toBe('awaiting_moderation');
+      expect(result.material).toBe(true);
+      expect(result.diff).toEqual({
+        description: { before: 'Clean garage', after: 'Clean garage and shed' },
+      });
+      expect(await getJobState(testDb.pool, jobId)).toBe('awaiting_moderation');
+      const { rows } = await testDb.pool.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM job_content_changes WHERE job_id = $1`,
+        [jobId],
+      );
+      expect(rows[0]?.count).toBe('1');
+    });
+
+    it('AC-02: rejects edit on locked job — BAD_REQUEST w/ JobNotEditableError cause', async () => {
+      const jobId = await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'locked',
+        workDate: new Date(Date.now() + 86_400_000),
+      });
+      try {
+        await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).jobs.edit({
+          jobId,
+          edits: { description: 'cannot' },
+        });
+        throw new Error('expected throw');
+      } catch (err) {
+        // In-process: TRPCError carries the typed cause. The wire-shape
+        // data.appCode is produced by errorFormatter when serialized over HTTP.
+        const e = err as { code?: string; cause?: unknown };
+        expect(e.code).toBe('BAD_REQUEST');
+        expect(e.cause).toBeInstanceOf(JobNotEditableError);
+        expect((e.cause as JobNotEditableError).code).toBe('JOB_NOT_EDITABLE_IN_STATE');
+      }
+    });
+
+    it('AC-03: material edit in enrollment_open demotes job; enrollees stay; re-review email fires', async () => {
+      await seedNotificationSettings();
+      const jobId = await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'enrollment_open',
+        duesAmount: '50.00',
+      });
+      await insertEnrollment(testDb.pool, jobId, users.active1);
+      await insertEnrollment(testDb.pool, jobId, users.active2);
+
+      mockSend.mockClear();
+      await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).jobs.edit({
+        jobId,
+        edits: { duesAmount: 75 },
+      });
+
+      expect(await getJobState(testDb.pool, jobId)).toBe('awaiting_moderation');
+
+      // Enrollees preserved.
+      const { rows: enrolled } = await testDb.pool.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM job_enrollments WHERE job_id = $1`,
+        [jobId],
+      );
+      expect(enrolled[0]?.count).toBe('2');
+
+      // Moderator + 2x Active emails fired (3 total).
+      expect(mockSend).toHaveBeenCalled();
+      const calls = mockSend.mock.calls.map((c) => c[0] as { to: string; subject: string });
+      const modCall = calls.find((c) => c.subject.startsWith('[Re-review]'));
+      expect(modCall).toBeDefined();
+      expect(modCall?.to).toBe('mods@chapter.invalid');
+
+      const activeCalls = calls.filter(
+        (c) =>
+          c.to === 'active1@test.invalid' || c.to === 'active2@test.invalid',
+      );
+      expect(activeCalls).toHaveLength(2);
+    });
+
+    it('AC-04: notes-only edit in enrollment_open stays in state; NO re-review email; NO active email', async () => {
+      await seedNotificationSettings();
+      const jobId = await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'enrollment_open',
+      });
+      await insertEnrollment(testDb.pool, jobId, users.active1);
+
+      mockSend.mockClear();
+      await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).jobs.edit({
+        jobId,
+        edits: { additionalNotes: 'Gate code: 1234' },
+      });
+
+      expect(await getJobState(testDb.pool, jobId)).toBe('enrollment_open');
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it('AC-07: rejects payload with non-whitelisted field (posterId) — Zod error', async () => {
+      const jobId = await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'awaiting_moderation',
+      });
+      await expect(
+        caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).jobs.edit({
+          jobId,
+          // The tRPC client type rejects this at compile time; cast to bypass for the runtime check.
+          edits: { posterId: users.alumni2 } as unknown as Record<string, never>,
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    });
+
+    it('rejects non-poster — FORBIDDEN', async () => {
+      const jobId = await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'awaiting_moderation',
+      });
+      await expect(
+        caller(makeCtx({ userId: users.alumni2, role: 'Alumni' })).jobs.edit({
+          jobId,
+          edits: { description: 'sneaky' },
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
+    it('rejects unauthenticated caller — UNAUTHORIZED', async () => {
+      const jobId = await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'awaiting_moderation',
+      });
+      await expect(
+        caller(unauthedCtx()).jobs.edit({
+          jobId,
+          edits: { description: 'attempt' },
+        }),
+      ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    });
+
+    it('no-op edit (same values) → BAD_REQUEST with NoEditChangesError cause', async () => {
+      const jobId = await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'awaiting_moderation',
+        description: 'Original',
+      });
+      try {
+        await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).jobs.edit({
+          jobId,
+          edits: { description: 'Original' },
+        });
+        throw new Error('expected throw');
+      } catch (err) {
+        const e = err as { code?: string; cause?: unknown };
+        expect(e.code).toBe('BAD_REQUEST');
+        expect(e.cause).toBeInstanceOf(NoEditChangesError);
+      }
     });
   });
 

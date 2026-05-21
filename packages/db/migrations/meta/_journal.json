@@ -64,6 +64,13 @@
       "when": 1778809056000,
       "tag": "0009_job_content_enrichment",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778809057000,
+      "tag": "0010_job_content_changes",
+      "breakpoints": true
     }
   ]
 }

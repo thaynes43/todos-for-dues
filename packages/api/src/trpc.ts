@@ -5,7 +5,9 @@ import type { Role } from '@app/db/schema';
 import {
   ConcurrentTransitionError,
   FsmViolationError,
+  JobNotEditableError,
   MinAdminInvariantError,
+  NoEditChangesError,
 } from '@app/domain';
 
 export interface TRPCContext {
@@ -70,6 +72,24 @@ const t = initTRPC.context<TRPCContext>().create({
         },
       };
     }
+    if (cause instanceof JobNotEditableError) {
+      return {
+        ...shape,
+        data: {
+          ...shape.data,
+          appCode: 'JOB_NOT_EDITABLE_IN_STATE' as const,
+        },
+      };
+    }
+    if (cause instanceof NoEditChangesError) {
+      return {
+        ...shape,
+        data: {
+          ...shape.data,
+          appCode: 'NO_EDIT_CHANGES' as const,
+        },
+      };
+    }
     return shape;
   },
 });
@@ -121,6 +141,20 @@ export async function mapDomainErrors<T>(fn: () => Promise<T>): Promise<T> {
     if (err instanceof FsmViolationError) {
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
+        message: err.message,
+        cause: err,
+      });
+    }
+    if (err instanceof JobNotEditableError) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: err.message,
+        cause: err,
+      });
+    }
+    if (err instanceof NoEditChangesError) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
         message: err.message,
         cause: err,
       });

@@ -12,11 +12,13 @@ import {
 import {
   approveJob,
   createJob,
+  editJob,
   recordRelationshipEvent,
   transitionJob,
   ConcurrentTransitionError,
 } from '@app/domain';
 import {
+  sendActiveJobEditedEmails,
   sendAdminDisputeEmail,
   sendModeratorQueueEmail,
   sendTreasurerEmail,
@@ -307,6 +309,80 @@ export const jobsRouter = router({
               .where(eq(jobs.id, input.jobId));
           },
         });
+      });
+    }),
+
+  // CMD-15 EditJob — PRD-011 R-01..R-10. Poster-only; allowed in
+  // awaiting_moderation / approved / enrollment_open (jobPosterProcedure +
+  // domain editJob enforces R-04). Whitelist input shape (R-03). Material
+  // edits in approved|enrollment_open demote to awaiting_moderation (R-05).
+  edit: jobPosterProcedure
+    .input(
+      z.object({
+        jobId: z.string().uuid(),
+        edits: z
+          .object({
+            description: z.string().trim().min(1).optional(),
+            duesAmount: z.number().positive().optional(),
+            recommendedPeopleCount: z.number().int().min(1).optional(),
+            posterContactKind: z.enum(['email', 'phone']).optional(),
+            posterContactValue: z.string().trim().min(1).max(200).optional(),
+            location: z.string().trim().min(1).max(200).optional(),
+            estimatedDurationHours: z.number().positive().max(24).optional(),
+            additionalNotes: z
+              .string()
+              .max(500)
+              .transform((v) => (v.trim().length === 0 ? null : v))
+              .nullable()
+              .optional(),
+          })
+          .strict(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return mapDomainErrors(async () => {
+        const result = await editJob({
+          jobId: input.jobId,
+          actorId: ctx.userId,
+          edits: input.edits,
+        });
+
+        // Post-commit fan-out (PRD-011 R-08, R-10). Failures here are logged
+        // but do not roll back — the edit committed; emails are best-effort.
+        if (result.material && result.stateBeforeEdit !== 'awaiting_moderation') {
+          try {
+            await sendModeratorQueueEmail({
+              jobId: input.jobId,
+              subjectPrefix: '[Re-review]',
+              idempotencyKeySuffix: `re_review:${Date.now()}`,
+            });
+          } catch (err) {
+            console.error(
+              `jobs.edit: sendModeratorQueueEmail failed for job ${input.jobId}:`,
+              err,
+            );
+          }
+          try {
+            await sendActiveJobEditedEmails({
+              jobId: input.jobId,
+              diff: result.diff,
+              newJobState: result.state,
+              editId: `${Date.now()}`,
+            });
+          } catch (err) {
+            console.error(
+              `jobs.edit: sendActiveJobEditedEmails failed for job ${input.jobId}:`,
+              err,
+            );
+          }
+        }
+
+        return {
+          jobId: input.jobId,
+          state: result.state,
+          material: result.material,
+          diff: result.diff,
+        };
       });
     }),
 

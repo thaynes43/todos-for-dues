@@ -27,6 +27,11 @@ export {
   sendAlumniRejectionEmail,
   type SendAlumniRejectionEmailInput,
 } from './helpers/alumni-rejection';
+export {
+  sendActiveJobEditedEmails,
+  type SendActiveJobEditedEmailsInput,
+  type SendActiveJobEditedResult,
+} from './helpers/active-job-edited';
 
 export { TreasurerBreakdown } from './templates/TreasurerBreakdown';
 export type { TreasurerBreakdownProps } from './templates/TreasurerBreakdown';
@@ -36,3 +41,8 @@ export { ModeratorNewPosting } from './templates/ModeratorNewPosting';
 export type { ModeratorNewPostingProps } from './templates/ModeratorNewPosting';
 export { AlumniRejection } from './templates/AlumniRejection';
 export type { AlumniRejectionProps } from './templates/AlumniRejection';
+export { ActiveJobEdited } from './templates/ActiveJobEdited';
+export type {
+  ActiveJobEditedProps,
+  ActiveJobEditedChange,
+} from './templates/ActiveJobEdited';

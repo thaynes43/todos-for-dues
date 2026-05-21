@@ -103,8 +103,30 @@ Postgres CHECK constraints + BEFORE-UPDATE triggers reject illegal state transit
 - ADR-004 (Drizzle + Postgres) — the transaction wrapping state + audit-log writes uses Drizzle's `db.transaction()`.
 - ADR-009 (audit log) — defines the row shape `transitionJob()` writes.
 
+## Addendum 1 — Material-edit transitions (PRD-011, 2026-05-21)
+
+PRD-011 R-05 introduces the `MaterialEditJob` command: when an Alumni poster edits one of the material fields (`description`, `dues_cents`, `recommended_people_count`, `location`, `estimated_duration_hours`) on a job currently in `approved` or `enrollment_open`, the job demotes back to `awaiting_moderation` for re-review by a moderator. Cosmetic-only edits (additional_notes, poster contact) do NOT change state — they're handled outside `transitionJob` via the new `editJob` helper, which routes any state change through `transitionJob` so the single-writer invariant on `jobs.state` is preserved.
+
+The two new arrows are an *extension* of ADR-008's decision (Option A — hand-rolled FSM), not a change of decision: the map remains the source of truth, atomic state + audit writes still flow through `transitionJob`, and the type narrowing pattern is unchanged. Status remains `Accepted`.
+
+### Transitions table — material-edit additions
+
+| ID | From | Event | To | Command | Source |
+|----|------|-------|----|---------|--------|
+| ST-18 | `approved` | `material_edit` | `awaiting_moderation` | `MaterialEditJob` | PRD-011 R-05 |
+| ST-19 | `enrollment_open` | `material_edit` | `awaiting_moderation` | `MaterialEditJob` | PRD-011 R-05 |
+
+ST-18 is runtime-unreachable today (no job ever rests in `approved` — see C-01 / the `approveJob` collapse pattern), but recorded in the FSM map for completeness with PRD-011's wording. ST-19 is the realistic case.
+
+### Consequences (addendum)
+
+- **C-08 (good)** — The single-writer invariant on `jobs.state` is preserved: `editJob` writes content fields via UPDATE, but any state change goes through `transitionJob` exactly as before. The static-analysis test in `packages/domain/__tests__/no-direct-state-writes.test.ts` continues to pass.
+- **C-09 (neutral)** — A job can now loop `awaiting_moderation → enrollment_open → awaiting_moderation` indefinitely via repeated material edits. PRD-011 §9 explicitly accepts this; moderators see `[Re-review]` subject prefixes (PRD-011 R-08).
+- **C-10 (neutral)** — Audit-log shape: every edit (material or cosmetic) writes a `job_content_changes` row (new table, ADR-009 pattern); material edits additionally write a `job_state_transitions` row via `transitionJob`. Both inside the same DB transaction.
+
 ## Changelog
 
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial Proposed. Recommendation: Option A (hand-rolled TS FSM). |
+| 2026-05-21 | Tom Haynes | Addendum 1 — Add ST-18 (`approved → awaiting_moderation`) + ST-19 (`enrollment_open → awaiting_moderation`) for PRD-011's `MaterialEditJob` command. Status remains Accepted (extension, not supersession). |
