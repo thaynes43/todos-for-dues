@@ -32,6 +32,27 @@ import {
 } from '../middleware/role';
 import { jobPosterProcedure } from '../middleware/job';
 import { computeDuesSplit } from '../dues';
+import { chapterBus } from '../events';
+import type { ChapterEventKind } from '../events';
+
+// PRD-012 / ADR-012 / PLAN-018 — publish a chapter SSE event AFTER the txn
+// commits (Q-PLN-04). Failures are logged + swallowed: the DB is consistent
+// and a missed event recovers via the client's reconnect + Last-Event-ID
+// replay + the existing pull-on-page-load behavior.
+function publishJobEvent(
+  jobId: string,
+  eventKind: ChapterEventKind,
+  actorId: string,
+): void {
+  try {
+    chapterBus.publish({ jobId, eventKind, actorId });
+  } catch (err) {
+    console.error(
+      `chapterBus.publish failed (${eventKind} on ${jobId}):`,
+      err,
+    );
+  }
+}
 
 const jobIdInput = z.object({ jobId: z.string().uuid() });
 
@@ -76,6 +97,7 @@ export const jobsRouter = router({
             await sendModeratorQueueEmail({ jobId: id });
           },
         });
+        publishJobEvent(jobId, 'job.posted', ctx.userId);
         return { jobId };
       });
     }),
@@ -86,6 +108,7 @@ export const jobsRouter = router({
     .mutation(async ({ ctx, input }) => {
       return mapDomainErrors(async () => {
         await approveJob({ jobId: input.jobId, moderatorId: ctx.userId });
+        publishJobEvent(input.jobId, 'job.approved', ctx.userId);
       });
     }),
 
@@ -112,6 +135,7 @@ export const jobsRouter = router({
               .where(eq(jobs.id, input.jobId));
           },
         });
+        publishJobEvent(input.jobId, 'job.rejected', ctx.userId);
       });
     }),
 
@@ -155,6 +179,7 @@ export const jobsRouter = router({
               .onConflictDoNothing();
           },
         });
+        publishJobEvent(input.jobId, 'job.enrolled', ctx.userId);
       });
     }),
 
@@ -202,6 +227,7 @@ export const jobsRouter = router({
               );
           },
         });
+        publishJobEvent(input.jobId, 'job.unenrolled', ctx.userId);
       });
     }),
 
@@ -247,6 +273,7 @@ export const jobsRouter = router({
               .where(eq(jobs.id, input.jobId));
           },
         });
+        publishJobEvent(input.jobId, 'job.locked', ctx.userId);
       });
     }),
 
@@ -272,6 +299,7 @@ export const jobsRouter = router({
               .where(eq(jobs.id, input.jobId));
           },
         });
+        publishJobEvent(input.jobId, 'job.rescheduled', ctx.userId);
       });
     }),
 
@@ -309,6 +337,7 @@ export const jobsRouter = router({
               .where(eq(jobs.id, input.jobId));
           },
         });
+        publishJobEvent(input.jobId, 'job.cancelled', ctx.userId);
       });
     }),
 
@@ -346,6 +375,7 @@ export const jobsRouter = router({
           actorId: ctx.userId,
           edits: input.edits,
         });
+        publishJobEvent(input.jobId, 'job.edited', ctx.userId);
 
         // Post-commit fan-out (PRD-011 R-08, R-10). Failures here are logged
         // but do not roll back — the edit committed; emails are best-effort.
@@ -446,6 +476,7 @@ export const jobsRouter = router({
               .where(eq(jobs.id, input.jobId));
           },
         });
+        publishJobEvent(input.jobId, 'job.completed', ctx.userId);
       });
     }),
 
@@ -470,6 +501,7 @@ export const jobsRouter = router({
               .where(eq(jobs.id, input.jobId));
           },
         });
+        publishJobEvent(input.jobId, 'job.revert_completion', ctx.userId);
       });
     }),
 
@@ -487,6 +519,7 @@ export const jobsRouter = router({
             await sendTreasurerEmail({ jobId: input.jobId });
           },
         });
+        publishJobEvent(input.jobId, 'job.payment_sent', ctx.userId);
       });
     }),
 
@@ -527,6 +560,7 @@ export const jobsRouter = router({
           event: 'confirm_receipt',
           actor: { id: ctx.userId, kind: 'user' },
         });
+        publishJobEvent(input.jobId, 'job.confirmed_received', ctx.userId!);
         return { state: 'closed' as const, closedBy: ctx.userId, alreadyClosed: false };
       } catch (err) {
         if (err instanceof ConcurrentTransitionError) {
@@ -604,6 +638,7 @@ export const jobsRouter = router({
             });
           },
         });
+        publishJobEvent(input.jobId, 'job.disputed', ctx.userId!);
       });
     }),
 
@@ -630,6 +665,7 @@ export const jobsRouter = router({
               .where(eq(jobs.id, input.jobId));
           },
         });
+        publishJobEvent(input.jobId, 'job.dispute_resolved', ctx.userId);
       });
     }),
 
@@ -656,6 +692,7 @@ export const jobsRouter = router({
               .where(eq(jobs.id, input.jobId));
           },
         });
+        publishJobEvent(input.jobId, 'job.dispute_resolved', ctx.userId);
       });
     }),
 
@@ -682,6 +719,7 @@ export const jobsRouter = router({
               .where(eq(jobs.id, input.jobId));
           },
         });
+        publishJobEvent(input.jobId, 'job.dispute_resolved', ctx.userId);
       });
     }),
 
