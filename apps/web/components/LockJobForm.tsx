@@ -1,16 +1,10 @@
 'use client';
 
-import { useMemo, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-
-function toLocalDatetimeMin(): string {
-  const now = new Date();
-  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-  return now.toISOString().slice(0, 16);
-}
 
 export function LockJobForm({
   jobId,
@@ -22,7 +16,6 @@ export function LockJobForm({
   const router = useRouter();
   const utils = trpc.useUtils();
   const [workDate, setWorkDate] = useState('');
-  const min = useMemo(() => toLocalDatetimeMin(), []);
 
   const lock = trpc.jobs.lock.useMutation({
     onSuccess: async () => {
@@ -31,9 +24,14 @@ export function LockJobForm({
     },
   });
 
+  // MVP-FIX-B #7: deliberately no client-side "future date" check here. The
+  // server (jobs.lock procedure) is the source of truth; if the user submits
+  // a current or past time, the server returns "Work date must be in the
+  // future." and the existing `lock.error` block surfaces it. A duplicate
+  // client check would silently no-op the submission (the original bug).
   const parsed = workDate ? new Date(workDate) : null;
-  const isFuture = parsed != null && !Number.isNaN(parsed.getTime()) && parsed > new Date();
-  const canSubmit = isFuture && enrolleeCount > 0 && !lock.isPending;
+  const parseable = parsed != null && !Number.isNaN(parsed.getTime());
+  const canSubmit = parseable && enrolleeCount > 0 && !lock.isPending;
 
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -48,7 +46,6 @@ export function LockJobForm({
         <Input
           type="datetime-local"
           required
-          min={min}
           value={workDate}
           onChange={(e) => setWorkDate(e.target.value)}
           data-testid="lock-job-work-date"
@@ -60,7 +57,11 @@ export function LockJobForm({
         </p>
       ) : null}
       {lock.error ? (
-        <p role="alert" className="text-sm text-red-700">
+        <p
+          role="alert"
+          className="text-sm text-red-700"
+          data-testid="lock-job-error"
+        >
           {lock.error.message}
         </p>
       ) : null}

@@ -1,9 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { usePathname } from 'next/navigation';
 import type { Role } from '@app/db/schema';
 import { RoleAwareNav } from '@/components/RoleAwareNav';
 
 const ALL_ROLES: ReadonlyArray<Role> = ['Active', 'Alumni', 'Moderator', 'Admin'];
+
+const usePathnameMock = vi.mocked(usePathname);
+
+beforeEach(() => {
+  usePathnameMock.mockReturnValue('/');
+});
 
 describe('<RoleAwareNav>', () => {
   it('renders nothing when role is null', () => {
@@ -62,6 +69,57 @@ describe('<RoleAwareNav>', () => {
           screen.queryByRole('link', { name: 'Moderation queue' }),
         ).not.toBeInTheDocument();
         unmount();
+      }
+    });
+  });
+
+  describe('Active-state highlighting (MVP-FIX-B #3)', () => {
+    it('marks the matching link with aria-current="page" and data-active="true"', () => {
+      usePathnameMock.mockReturnValue('/moderation-queue');
+      render(<RoleAwareNav role="Admin" />);
+      const active = screen.getByRole('link', { name: 'Moderation queue' });
+      expect(active).toHaveAttribute('aria-current', 'page');
+      expect(active).toHaveAttribute('data-active', 'true');
+      const inactive = screen.getByRole('link', { name: 'Jobs' });
+      expect(inactive).not.toHaveAttribute('aria-current');
+      expect(inactive).toHaveAttribute('data-active', 'false');
+    });
+
+    it('picks the longest-prefix match — /jobs/new highlights "Post a job", not "Jobs"', () => {
+      usePathnameMock.mockReturnValue('/jobs/new');
+      render(<RoleAwareNav role="Alumni" />);
+      expect(
+        screen.getByRole('link', { name: 'Post a job' }),
+      ).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('link', { name: 'Jobs' })).toHaveAttribute(
+        'data-active',
+        'false',
+      );
+    });
+
+    it('treats nested job-detail routes as a Jobs match — /jobs/abc highlights "Jobs"', () => {
+      usePathnameMock.mockReturnValue('/jobs/abc-123');
+      render(<RoleAwareNav role="Active" />);
+      expect(screen.getByRole('link', { name: 'Jobs' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+    });
+
+    it('highlights Admin for any /admin/* subroute', () => {
+      usePathnameMock.mockReturnValue('/admin/users');
+      render(<RoleAwareNav role="Admin" />);
+      expect(screen.getByRole('link', { name: 'Admin' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+    });
+
+    it('marks no link active when on a non-nav route', () => {
+      usePathnameMock.mockReturnValue('/login');
+      render(<RoleAwareNav role="Active" />);
+      for (const link of screen.getAllByRole('link')) {
+        expect(link).toHaveAttribute('data-active', 'false');
       }
     });
   });
