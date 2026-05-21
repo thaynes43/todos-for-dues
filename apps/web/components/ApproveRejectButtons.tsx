@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc-client';
 import { Button } from '@/components/ui/button';
 import { RejectModal } from './RejectModal';
@@ -14,6 +15,7 @@ export function ApproveRejectButtons({
   onApproved?: () => void;
   onRejected?: () => void;
 }) {
+  const router = useRouter();
   const utils = trpc.useUtils();
   const [rejectOpen, setRejectOpen] = useState(false);
 
@@ -22,6 +24,7 @@ export function ApproveRejectButtons({
       await utils.jobs.listModerationQueue.invalidate();
       await utils.jobs.getById.invalidate({ jobId });
       await utils.jobs.listByState.invalidate();
+      router.refresh();
       onApproved?.();
     },
   });
@@ -32,6 +35,7 @@ export function ApproveRejectButtons({
       await utils.jobs.getById.invalidate({ jobId });
       await utils.jobs.listByState.invalidate();
       setRejectOpen(false);
+      router.refresh();
       onRejected?.();
     },
   });

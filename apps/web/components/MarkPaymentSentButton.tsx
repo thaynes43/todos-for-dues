@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc-client';
 import { Button } from '@/components/ui/button';
 
@@ -10,10 +11,12 @@ export function MarkPaymentSentButton({
   jobId: string;
   treasurerRecipient?: string | null;
 }) {
+  const router = useRouter();
   const utils = trpc.useUtils();
   const mark = trpc.jobs.markPaymentSent.useMutation({
     onSuccess: async () => {
       await utils.jobs.getById.invalidate({ jobId });
+      router.refresh();
     },
   });
 

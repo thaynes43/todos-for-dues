@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc-client';
 import { Button } from '@/components/ui/button';
 import type { JobState } from '@app/db/schema';
@@ -11,10 +12,12 @@ export function EnrollButton({
   jobId: string;
   state: JobState;
 }) {
+  const router = useRouter();
   const utils = trpc.useUtils();
   const enroll = trpc.jobs.enroll.useMutation({
     onSuccess: async () => {
       await utils.jobs.getById.invalidate({ jobId });
+      router.refresh();
     },
   });
 
