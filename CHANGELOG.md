@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.8.0](https://github.com/thaynes43/todos-for-dues/compare/v0.7.3...v0.8.0) (2026-05-21)
+
+
+### Features
+
+* **web:** job content enrichment — poster contact / location / duration / notes (PRD-010 / PLAN-016) ([#44](https://github.com/thaynes43/todos-for-dues/issues/44)) ([6b2453f](https://github.com/thaynes43/todos-for-dues/commit/6b2453f3d2ab199365a00f6bae80272ec6f2bbc1))
+* **web:** job editability before lock (PRD-011 / PLAN-017) — EditJob command + re-moderation + diff audit ([#45](https://github.com/thaynes43/todos-for-dues/issues/45)) ([8beb09b](https://github.com/thaynes43/todos-for-dues/commit/8beb09bab684e0ef8a0614b35ca0c0fb3ff16033))
+* **web:** real-time UI updates via SSE (PRD-012 / ADR-012 / PLAN-018) ([#46](https://github.com/thaynes43/todos-for-dues/issues/46)) ([7f710c5](https://github.com/thaynes43/todos-for-dues/commit/7f710c5774880a63670348529ad424e5d5aed14e))
+
+
+### Bug Fixes
+
+* **web:** MVP polish — active-nav highlight + RBAC payment-sent buttons + lock validation surfacing ([#43](https://github.com/thaynes43/todos-for-dues/issues/43)) ([3dc3c44](https://github.com/thaynes43/todos-for-dues/commit/3dc3c4499d4a88a3749653996d293d9e73ac285d))
+* **web:** router.refresh after mutation onSuccess in server-component pages (stale UI bug) ([#42](https://github.com/thaynes43/todos-for-dues/issues/42)) ([64ee210](https://github.com/thaynes43/todos-for-dues/commit/64ee2101b36722c82075f17a166d0abefdf82375))
+
+
+### Documentation
+
+* **agents:** reorganize prompts (implemented/mvp + mvp_fixes) + add prompts 036 + 037 ([#40](https://github.com/thaynes43/todos-for-dues/issues/40)) ([cc2fdf4](https://github.com/thaynes43/todos-for-dues/commit/cc2fdf4ce2ff119dcf27e90357a1afb6966a2a7f))
+* **plan-013 + runbook + handoff-014:** MVP wrap-up — §3.1 closeouts + trap-resolution banner + deploy prompt 035 ([#38](https://github.com/thaynes43/todos-for-dues/issues/38)) ([07d442a](https://github.com/thaynes43/todos-for-dues/commit/07d442a1f71d1db9be5826c262095a0456c68d04))
+* **prd/adr/plans:** MVP-FIX-C feature wave — PRD-010/011/012 + ADR-012 + PLAN-016/017/018 + 6 prompts ([#41](https://github.com/thaynes43/todos-for-dues/issues/41)) ([f29f7fc](https://github.com/thaynes43/todos-for-dues/commit/f29f7fc0e2b1ea284ff80c545305340791cda4f1))
+
 ## [0.7.3](https://github.com/thaynes43/todos-for-dues/compare/v0.7.2...v0.7.3) (2026-05-18)
 
 
