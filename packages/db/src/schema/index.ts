@@ -4,6 +4,7 @@ export * from './invite-tokens';
 export * from './jobs';
 export * from './job-enrollments';
 export * from './job-state-transitions';
+export * from './job-content-changes';
 export * from './user-role-transitions';
 export * from './chapter-settings';
 export * from './session';

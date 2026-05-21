@@ -33,10 +33,13 @@ describe('JOB_TRANSITIONS map (unit, no DB)', () => {
     expect(JOB_TRANSITIONS.rejected).toEqual({});
   });
 
-  it('approved is transient (no outgoing transitions via transitionJob)', () => {
+  it('approved is transient at the data layer (only the PRD-011 material_edit arrow is documented)', () => {
     // approveJob() handles the awaiting_moderation -> approved -> enrollment_open
     // two-row pattern atomically. `approved` is never persisted in jobs.state.
-    expect(JOB_TRANSITIONS.approved).toEqual({});
+    // ADR-008 addendum (2026-05-21) added a documented material_edit arrow per
+    // PRD-011 R-05 — runtime-unreachable today because no job ever rests in
+    // `approved`, but recorded in the map so FSM authority covers the PRD.
+    expect(JOB_TRANSITIONS.approved).toEqual({ material_edit: 'awaiting_moderation' });
   });
 
   it('encodes ADC-01 ST-03..ST-17 (excluding ST-01/ST-02 createJob + ST-05 system step)', () => {

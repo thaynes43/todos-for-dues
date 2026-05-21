@@ -14,6 +14,7 @@ vi.mock('@/lib/trpc-client', () => {
           listModerationQueue: { invalidate: vi.fn() },
           listByState: { invalidate: vi.fn() },
           listMyEnrolled: { invalidate: vi.fn() },
+          listMyPosted: { invalidate: vi.fn() },
         },
       }),
       jobs: {
@@ -27,6 +28,7 @@ vi.mock('@/lib/trpc-client', () => {
         reject: stubMutation(),
         reschedule: stubMutation(),
         cancel: stubMutation(),
+        edit: stubMutation(),
         revertCompletion: stubMutation(),
         dispute: stubMutation(),
       },

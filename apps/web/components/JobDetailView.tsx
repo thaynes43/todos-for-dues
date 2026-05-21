@@ -13,6 +13,7 @@ import { ApproveRejectButtons } from './ApproveRejectButtons';
 import { UnenrollButton } from './UnenrollButton';
 import { RescheduleButton } from './RescheduleButton';
 import { CancelJobModal } from './CancelJobModal';
+import { EditJobForm, EDITABLE_STATES } from './EditJobForm';
 import { RevertCompletionButton } from './RevertCompletionButton';
 import { DisputeJobModal } from './DisputeJobModal';
 import { RejectedJobBanner } from './RejectedJobBanner';
@@ -109,7 +110,12 @@ export function JobDetailView({
   return (
     <article className="space-y-6" data-testid="job-detail-view">
       <header className="flex flex-wrap items-start justify-between gap-3">
-        <h1 className="text-2xl font-semibold leading-tight">{job.description}</h1>
+        <h1
+          className="text-2xl font-semibold leading-tight"
+          data-testid="job-description"
+        >
+          {job.description}
+        </h1>
         <JobStateBadge state={job.state} />
       </header>
 
@@ -230,6 +236,26 @@ export function JobDetailView({
       {/* Action affordances. Suppressed entirely for terminal states. */}
       {!isTerminal && (
         <section className="space-y-3" data-testid="job-actions">
+          {/* PRD-011 R-01 — Edit-job affordance: poster only, only while
+              the job is in awaiting_moderation, approved, or enrollment_open.
+              Hidden everywhere else per R-02. */}
+          {isPoster && EDITABLE_STATES.has(job.state) && (
+            <EditJobForm
+              job={{
+                id: job.id,
+                state: job.state,
+                description: job.description,
+                duesAmount: job.duesAmount,
+                recommendedPeopleCount: job.recommendedPeopleCount,
+                posterContactKind: job.posterContactKind,
+                posterContactValue: job.posterContactValue,
+                location: job.location,
+                estimatedDurationHours: job.estimatedDurationHours,
+                additionalNotes: job.additionalNotes,
+              }}
+            />
+          )}
+
           {viewer.role === 'Active' &&
             job.state === 'enrollment_open' &&
             !viewerEnrolled && (
