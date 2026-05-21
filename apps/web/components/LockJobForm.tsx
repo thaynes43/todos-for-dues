@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,7 @@ export function LockJobForm({
   jobId: string;
   enrolleeCount: number;
 }) {
+  const router = useRouter();
   const utils = trpc.useUtils();
   const [workDate, setWorkDate] = useState('');
   const min = useMemo(() => toLocalDatetimeMin(), []);
@@ -25,6 +27,7 @@ export function LockJobForm({
   const lock = trpc.jobs.lock.useMutation({
     onSuccess: async () => {
       await utils.jobs.getById.invalidate({ jobId });
+      router.refresh();
     },
   });
 

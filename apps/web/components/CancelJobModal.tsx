@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc-client';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Modal } from '@/components/ui/modal';
 
 export function CancelJobModal({ jobId }: { jobId: string }) {
+  const router = useRouter();
   const utils = trpc.useUtils();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
@@ -16,6 +18,7 @@ export function CancelJobModal({ jobId }: { jobId: string }) {
       await utils.jobs.getById.invalidate({ jobId });
       setOpen(false);
       setReason('');
+      router.refresh();
     },
   });
 

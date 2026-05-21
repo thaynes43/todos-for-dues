@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc-client';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,6 +16,7 @@ const RESOLUTION_TITLES: Record<ResolutionKind, string> = {
 };
 
 export function ResolveDisputeModal({ jobId }: { jobId: string }) {
+  const router = useRouter();
   const utils = trpc.useUtils();
   const [open, setOpen] = useState<ResolutionKind | null>(null);
   const [note, setNote] = useState('');
@@ -27,6 +29,7 @@ export function ResolveDisputeModal({ jobId }: { jobId: string }) {
   const onSettled = async () => {
     await utils.admin.listDisputed.invalidate();
     closeAll();
+    router.refresh();
   };
 
   const resolveClosed = trpc.jobs.resolveDisputeAsClosed.useMutation({

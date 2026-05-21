@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc-client';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 
 export function RescheduleButton({ jobId }: { jobId: string }) {
+  const router = useRouter();
   const utils = trpc.useUtils();
   const [open, setOpen] = useState(false);
 
@@ -13,6 +15,7 @@ export function RescheduleButton({ jobId }: { jobId: string }) {
     onSuccess: async () => {
       await utils.jobs.getById.invalidate({ jobId });
       setOpen(false);
+      router.refresh();
     },
   });
 

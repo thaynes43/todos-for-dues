@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { trpc } from '@/lib/trpc-client';
 import { Button } from '@/components/ui/button';
 
@@ -16,6 +17,7 @@ export function CompleteJobForm({
   jobId: string;
   roster: ReadonlyArray<RosterEntry>;
 }) {
+  const router = useRouter();
   const utils = trpc.useUtils();
   const [confirmed, setConfirmed] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(roster.map((r) => [r.activeId, true])),
@@ -24,6 +26,7 @@ export function CompleteJobForm({
   const complete = trpc.jobs.complete.useMutation({
     onSuccess: async () => {
       await utils.jobs.getById.invalidate({ jobId });
+      router.refresh();
     },
   });
 
