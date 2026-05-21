@@ -42,6 +42,8 @@ test.describe('walking-skeleton — post → approve → enroll', () => {
       await page.getByPlaceholder(/Describe the job/i).fill(description);
       await page.locator('input[name="duesAmount"]').fill('30');
       await page.locator('input[name="recommendedPeopleCount"]').fill('1');
+      await page.getByTestId('post-job-location').fill('Test Location');
+      await page.getByTestId('post-job-duration').fill('1.5');
       await page.getByRole('button', { name: /Post job/i }).click();
       await page.waitForURL(/\/jobs\/[0-9a-f-]+$/);
       const jobId = (await getJobIdByDescription(pool, description))!;

@@ -67,6 +67,10 @@ describe('jobs router', () => {
         description: 'Clean the lawn',
         duesAmount: 50,
         recommendedPeopleCount: 3,
+        posterContactKind: 'email',
+        posterContactValue: 'test-contact@example.com',
+        location: 'Test location',
+        estimatedDurationHours: 1.5,
       });
       expect(await getJobState(testDb.pool, jobId)).toBe('awaiting_moderation');
       const audit = await getAuditRows(testDb.pool, jobId);
@@ -85,6 +89,10 @@ describe('jobs router', () => {
           description: 'x',
           duesAmount: 0,
           recommendedPeopleCount: 1,
+          posterContactKind: 'email',
+          posterContactValue: 'test-contact@example.com',
+          location: 'Test location',
+          estimatedDurationHours: 1.5,
         }),
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     });
@@ -95,6 +103,10 @@ describe('jobs router', () => {
           description: 'x',
           duesAmount: -10,
           recommendedPeopleCount: 1,
+          posterContactKind: 'email',
+          posterContactValue: 'test-contact@example.com',
+          location: 'Test location',
+          estimatedDurationHours: 1.5,
         }),
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     });
@@ -105,6 +117,10 @@ describe('jobs router', () => {
           description: '   ',
           duesAmount: 25,
           recommendedPeopleCount: 1,
+          posterContactKind: 'email',
+          posterContactValue: 'test-contact@example.com',
+          location: 'Test location',
+          estimatedDurationHours: 1.5,
         }),
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     });
@@ -115,6 +131,10 @@ describe('jobs router', () => {
           description: 'x',
           duesAmount: 25,
           recommendedPeopleCount: 0,
+          posterContactKind: 'email',
+          posterContactValue: 'test-contact@example.com',
+          location: 'Test location',
+          estimatedDurationHours: 1.5,
         }),
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     });
@@ -125,6 +145,10 @@ describe('jobs router', () => {
           description: 'x',
           duesAmount: 25,
           recommendedPeopleCount: 1,
+          posterContactKind: 'email',
+          posterContactValue: 'test-contact@example.com',
+          location: 'Test location',
+          estimatedDurationHours: 1.5,
         }),
       ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
     });
@@ -135,6 +159,10 @@ describe('jobs router', () => {
           description: 'x',
           duesAmount: 25,
           recommendedPeopleCount: 1,
+          posterContactKind: 'email',
+          posterContactValue: 'test-contact@example.com',
+          location: 'Test location',
+          estimatedDurationHours: 1.5,
         }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     });
@@ -163,6 +191,10 @@ describe('jobs router', () => {
         description: 'mod self-post',
         duesAmount: 10,
         recommendedPeopleCount: 1,
+        posterContactKind: 'email',
+        posterContactValue: 'test-contact@example.com',
+        location: 'Test location',
+        estimatedDurationHours: 1.5,
       });
       await c.jobs.approve({ jobId });
       expect(await getJobState(testDb.pool, jobId)).toBe('enrollment_open');
@@ -911,6 +943,10 @@ describe('jobs router', () => {
         description: 'closeable',
         duesAmount: 20,
         recommendedPeopleCount: 1,
+        posterContactKind: 'email',
+        posterContactValue: 'test-contact@example.com',
+        location: 'Test location',
+        estimatedDurationHours: 1.5,
       });
       await caller(makeCtx({ userId: users.moderator, role: 'Moderator' })).jobs.approve({
         jobId,
@@ -991,6 +1027,10 @@ describe('jobs router', () => {
         description: 'x',
         duesAmount: 10,
         recommendedPeopleCount: 1,
+        posterContactKind: 'email',
+        posterContactValue: 'test-contact@example.com',
+        location: 'Test location',
+        estimatedDurationHours: 1.5,
       });
       await caller(makeCtx({ userId: users.moderator, role: 'Moderator' })).jobs.approve({
         jobId,
@@ -1084,6 +1124,10 @@ describe('jobs router', () => {
         description: 'Plant some shrubs',
         duesAmount: 25,
         recommendedPeopleCount: 2,
+        posterContactKind: 'email',
+        posterContactValue: 'test-contact@example.com',
+        location: 'Test location',
+        estimatedDurationHours: 1.5,
       });
 
       expect(mockSend).toHaveBeenCalledTimes(1);

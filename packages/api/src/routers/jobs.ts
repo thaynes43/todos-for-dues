@@ -36,13 +36,26 @@ const jobIdInput = z.object({ jobId: z.string().uuid() });
 export const jobsRouter = router({
   // ─── Mutations ─────────────────────────────────────────────────────
 
-  // CMD-01 PostJob — PRD-002 R-01..R-05 + R-12
+  // CMD-01 PostJob — PRD-002 R-01..R-05 + R-12, extended by PRD-010 R-01..R-07.
   post: alumniProcedure
     .input(
       z.object({
         description: z.string().trim().min(1),
         duesAmount: z.number().positive(),
         recommendedPeopleCount: z.number().int().min(1),
+        // PRD-010 R-01 / R-02 — contact (email OR phone), location, duration,
+        // optional notes. All validated server-side; the migration DEFAULTs are
+        // a one-time backfill safety net only.
+        posterContactKind: z.enum(['email', 'phone']),
+        posterContactValue: z.string().trim().min(1).max(200),
+        location: z.string().trim().min(1).max(200),
+        estimatedDurationHours: z.number().positive().max(24),
+        additionalNotes: z
+          .string()
+          .max(500)
+          .transform((v) => (v.trim().length === 0 ? null : v))
+          .nullable()
+          .optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -52,6 +65,11 @@ export const jobsRouter = router({
           description: input.description,
           duesAmount: input.duesAmount,
           recommendedPeopleCount: input.recommendedPeopleCount,
+          posterContactKind: input.posterContactKind,
+          posterContactValue: input.posterContactValue,
+          location: input.location,
+          estimatedDurationHours: input.estimatedDurationHours,
+          additionalNotes: input.additionalNotes ?? null,
           afterCommit: async (id) => {
             await sendModeratorQueueEmail({ jobId: id });
           },
@@ -636,7 +654,10 @@ export const jobsRouter = router({
         .offset(input.offset);
     }),
 
-  // Q-02 GetJobById — role-aware roster projection per PRD-004 R-05
+  // Q-02 GetJobById — role-aware roster projection per PRD-004 R-05.
+  // PRD-010 R-03/R-06: enriched fields + poster displayName projected for the
+  // detail view. The poster's *account* email is never selected here — only
+  // the contact value the poster supplied on the form is exposed.
   getById: authedProcedure
     .input(jobIdInput)
     .query(async ({ ctx, input }) => {
@@ -645,6 +666,11 @@ export const jobsRouter = router({
         .from(jobs)
         .where(eq(jobs.id, input.jobId));
       if (!job) throw new TRPCError({ code: 'NOT_FOUND' });
+
+      const [poster] = await ctx.db
+        .select({ displayName: users.displayName })
+        .from(users)
+        .where(eq(users.id, job.postedBy));
 
       const role = ctx.userRole;
       const isPoster = job.postedBy === ctx.userId;
@@ -717,7 +743,14 @@ export const jobsRouter = router({
         }
       }
 
-      return { ...job, enrolleeCount, roster, closedBy, viewerCredit };
+      return {
+        ...job,
+        posterDisplayName: poster?.displayName ?? null,
+        enrolleeCount,
+        roster,
+        closedBy,
+        viewerCredit,
+      };
     }),
 
   // Q-03 GetJobHistory — PRD-007 R-06 (Admin)

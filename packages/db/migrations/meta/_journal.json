@@ -57,6 +57,13 @@
       "when": 1778809055000,
       "tag": "0008_fix_min_admin_trigger_bootstrap",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1778809056000,
+      "tag": "0009_job_content_enrichment",
+      "breakpoints": true
     }
   ]
 }

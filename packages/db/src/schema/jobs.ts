@@ -31,6 +31,23 @@ export const jobs = pgTable(
     rejectionReason: text('rejection_reason'),
     cancellationReason: text('cancellation_reason'),
     disputeReason: text('dispute_reason'),
+    // PRD-010 R-01..R-07: poster contact / location / duration / optional notes.
+    // Drizzle 0.36 maps `numeric` to TS `string` (no `mode` option); the tRPC
+    // layer parses it back to a number on read and stringifies on write — same
+    // pattern as `duesAmount` above.
+    posterContactKind: text('poster_contact_kind')
+      .$type<'email' | 'phone'>()
+      .notNull()
+      .default('email'),
+    posterContactValue: text('poster_contact_value').notNull().default('unknown'),
+    location: text('location').notNull().default('unknown'),
+    estimatedDurationHours: numeric('estimated_duration_hours', {
+      precision: 4,
+      scale: 2,
+    })
+      .notNull()
+      .default('1.0'),
+    additionalNotes: text('additional_notes'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -42,6 +59,14 @@ export const jobs = pgTable(
     check('jobs_dues_positive', sql`${table.duesAmount} > 0`),
     check('jobs_count_positive', sql`${table.recommendedPeopleCount} >= 1`),
     check('jobs_description_non_empty', sql`length(trim(${table.description})) > 0`),
+    check(
+      'jobs_poster_contact_kind_enum',
+      sql`${table.posterContactKind} IN ('email','phone')`,
+    ),
+    check(
+      'jobs_estimated_duration_range',
+      sql`${table.estimatedDurationHours} > 0 AND ${table.estimatedDurationHours} <= 24`,
+    ),
     index('jobs_state_idx').on(table.state),
     index('jobs_posted_by_created_at_idx').on(table.postedBy, table.createdAt.desc()),
   ],
