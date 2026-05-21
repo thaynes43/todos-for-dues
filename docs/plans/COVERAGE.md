@@ -281,6 +281,51 @@ All 16 commands per BCC-02 §7.1 (CMD-14 split a/b/c).
 
 ---
 
+### PRD-010 — Job content enrichment
+
+| PRD ref | Plan | Validation |
+|---|---|---|
+| R-01 (form captures contact/location/duration) | PLAN-016 §3 Track B + C | VALIDATION-016 |
+| R-02 (validation rejects missing/invalid values) | PLAN-016 §3 Track B + D | VALIDATION-016 |
+| R-03 (detail view renders new fields) | PLAN-016 §3 Track C | VALIDATION-016 |
+| R-04 (persistence + audit-log payload) | PLAN-016 §3 Track A + B | VALIDATION-016 |
+| R-05 (`tel:`/`mailto:` rendering) | PLAN-016 §3 Track C | VALIDATION-016 |
+| R-06 (privacy: account email not exposed) | PLAN-016 §3 Track C | VALIDATION-016 |
+| R-07 (optional `additional_notes`) | PLAN-016 §3 Track A + B + C | VALIDATION-016 |
+| AC-01..AC-07 | PLAN-016 §3 Track D | VALIDATION-016 |
+
+### PRD-011 — Job editability before lock
+
+| PRD ref | Plan | Validation |
+|---|---|---|
+| R-01..R-02 (Edit affordance + state gates) | PLAN-017 §3 Track D | VALIDATION-017 |
+| R-03 (editable field whitelist) | PLAN-017 §3 Track C | VALIDATION-017 |
+| R-04 (server-side state gate / typed error) | PLAN-017 §3 Track A + C | VALIDATION-017 |
+| R-05 (material edit → re-moderation) | PLAN-017 §3 Track A | VALIDATION-017 |
+| R-06 (cosmetic edit stays in state) | PLAN-017 §3 Track A | VALIDATION-017 |
+| R-07 (`job_content_changes` audit row) | PLAN-017 §3 Track A + B | VALIDATION-017 |
+| R-08 (`[Re-review]` moderator email) | PLAN-017 §3 Track E | VALIDATION-017 |
+| R-09 (diff in moderation queue UI) | PLAN-017 §3 Track D [P1; may defer] | VALIDATION-017 |
+| R-10 (per-Active edit notification email) | PLAN-017 §3 Track E | VALIDATION-017 |
+| AC-01..AC-07 | PLAN-017 §3 Track F | VALIDATION-017 |
+| ADR-008 addendum (new transitions) | PLAN-017 §3 Track A | VALIDATION-017 G-6 |
+
+### PRD-012 — Real-time UI updates
+
+| PRD ref | Plan | Validation |
+|---|---|---|
+| R-01 (publish events for every mutation) | PLAN-018 §3 Track C | VALIDATION-018 |
+| R-02 (SSE endpoint + auth gate) | PLAN-018 §3 Track B | VALIDATION-018 |
+| R-03 (30s keepalive) | PLAN-018 §3 Track B | VALIDATION-018 (§3 C-09) |
+| R-04 (reconnect + Last-Event-ID replay) | PLAN-018 §3 Track A + B | VALIDATION-018 |
+| R-05 (client invalidates + router.refresh on event) | PLAN-018 §3 Track D | VALIDATION-018 (§5 stale-page guard) |
+| R-06 (graceful degradation if SSE blocked) | PLAN-018 §3 Track D | VALIDATION-018 |
+| R-07 (privacy: IDs only in payload) | PLAN-018 §3 Track A + B | VALIDATION-018 (G-8) |
+| R-08 (moderator new-arrival badge) | PLAN-018 §3 Track D [P1] | VALIDATION-018 |
+| R-09 (capacity floor) | PLAN-018 §3 Track A | VALIDATION-018 (§3 C-01) |
+| AC-01..AC-07 | PLAN-018 §3 Track E | VALIDATION-018 |
+| ADR-012 C-01..C-10 | PLAN-018 §3 across tracks | VALIDATION-018 §3 |
+
 ## 5. Plan ordering DAG
 
 ```
@@ -298,7 +343,13 @@ PLAN-001 scaffolding
                            ├── PLAN-011 Admin view UI                  [depends on PLAN-005/006/007]
                            │     └── PLAN-012 Role management UI       [depends on PLAN-011's /admin/users shell]
                            │
-                           [PLAN-010/011/012 ship via CI to the deployed instance; no separate deploy plan]
+                           ├── PLAN-013 SDLC hardening (live deploy ops)  [shipped post-PLAN-014]
+                           └── PLAN-014 Invite management UI + admin nav  [post-MVP-launch]
+
+[Post-MVP / post-click-through fixes wave — feature work, sequential]
+PLAN-016 Job content enrichment (PRD-010)
+   └── PLAN-017 Job editability pre-lock (PRD-011)
+         └── PLAN-018 Real-time UI updates (PRD-012 + ADR-012)
 ```
 
 Each implementation plan is paired 1-to-1 with a `*-validation.md` sibling that runs after it.
@@ -310,3 +361,4 @@ Each implementation plan is paired 1-to-1 with a `*-validation.md` sibling that 
 | Date | Author | Change |
 |------|--------|--------|
 | 2026-05-14 | Tom Haynes | Initial coverage matrix from plan-decomposition pass. All MVP PRD R-NN/AC-NN, all DESIGN §4 subsections, and all BCC-02 CMD-NN have a plan + validation. Deferred items enumerated with REL-002+ target. Plan ordering DAG sane: every prerequisite resolves to an earlier plan. |
+| 2026-05-20 | Coordinator | Post-MVP click-through. Added PRD-010 (job content enrichment) → PLAN-016, PRD-011 (job editability) → PLAN-017, PRD-012 (real-time UI) → PLAN-018 + ADR-012 (SSE transport). Plan ordering DAG extended: 016 → 017 → 018 (sequential — 017 depends on 016's new schema; 018 depends on 017's edit mutation as one of the events it broadcasts). |
