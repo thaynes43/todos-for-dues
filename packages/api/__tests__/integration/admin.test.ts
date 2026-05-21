@@ -60,6 +60,10 @@ describe('admin router', () => {
         description: 'Pull weeds',
         duesAmount: 30,
         recommendedPeopleCount: 1,
+        posterContactKind: 'email',
+        posterContactValue: 'test-contact@example.com',
+        location: 'Test location',
+        estimatedDurationHours: 1.5,
       });
       await moderator.jobs.approve({ jobId });
       await active.jobs.enroll({ jobId });
@@ -95,6 +99,10 @@ describe('admin router', () => {
         description: 'Pull weeds II',
         duesAmount: 30,
         recommendedPeopleCount: 1,
+        posterContactKind: 'email',
+        posterContactValue: 'test-contact@example.com',
+        location: 'Test location',
+        estimatedDurationHours: 1.5,
       });
       await moderator.jobs.approve({ jobId });
       await active.jobs.enroll({ jobId });

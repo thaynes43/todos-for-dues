@@ -24,6 +24,7 @@ import {
   type ViewerCredit,
 } from './CompletedJobActiveView';
 import { formatChapterLocal } from '@/lib/formatters';
+import { sanitizeTel } from './PostJobForm';
 
 export interface JobForDetailView {
   id: string;
@@ -32,6 +33,12 @@ export interface JobForDetailView {
   recommendedPeopleCount: number;
   state: JobState;
   postedBy: string;
+  posterDisplayName?: string | null;
+  posterContactKind?: 'email' | 'phone';
+  posterContactValue?: string;
+  location?: string;
+  estimatedDurationHours?: string;
+  additionalNotes?: string | null;
   workDate?: string | Date | null;
   rejectionReason?: string | null;
   cancellationReason?: string | null;
@@ -85,12 +92,70 @@ export function JobDetailView({
     job.state === 'closed' ||
     job.state === 'disputed';
 
+  // PRD-010 R-03/R-05/R-06: enriched detail card. Render only the values the
+  // poster explicitly entered; the poster's account email is never projected
+  // here, so it cannot leak even if it differs from `posterContactValue`.
+  const contactKind = job.posterContactKind ?? 'email';
+  const contactValue = job.posterContactValue ?? '';
+  const contactHref =
+    contactKind === 'phone'
+      ? `tel:${sanitizeTel(contactValue)}`
+      : `mailto:${contactValue}`;
+  const durationDisplay = job.estimatedDurationHours
+    ? parseFloat(job.estimatedDurationHours).toString()
+    : null;
+  const trimmedNotes = (job.additionalNotes ?? '').trim();
+
   return (
     <article className="space-y-6" data-testid="job-detail-view">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <h1 className="text-2xl font-semibold leading-tight">{job.description}</h1>
         <JobStateBadge state={job.state} />
       </header>
+
+      <section
+        className="space-y-1 rounded-md border p-4 text-sm"
+        data-testid="job-details-card"
+      >
+        <p>
+          <strong>Posted by:</strong>{' '}
+          <span data-testid="job-poster-display-name">
+            {job.posterDisplayName ?? 'Unknown'}
+          </span>
+        </p>
+        <p>
+          <strong>Contact ({contactKind}):</strong>{' '}
+          <a
+            href={contactHref}
+            data-testid="job-contact-link"
+            className="underline"
+          >
+            {contactValue}
+          </a>
+        </p>
+        <p>
+          <strong>Location:</strong>{' '}
+          <span data-testid="job-location">{job.location ?? 'Unknown'}</span>
+        </p>
+        {durationDisplay ? (
+          <p>
+            <strong>Estimated duration:</strong>{' '}
+            <span data-testid="job-duration">{durationDisplay}</span> hours
+          </p>
+        ) : null}
+      </section>
+
+      {trimmedNotes.length > 0 ? (
+        <section
+          className="space-y-1 rounded-md border p-4 text-sm"
+          data-testid="job-notes-card"
+        >
+          <p className="font-semibold">Additional notes</p>
+          <p data-testid="job-notes-body" className="whitespace-pre-wrap">
+            {trimmedNotes}
+          </p>
+        </section>
+      ) : null}
 
       <section className="space-y-1 text-sm">
         <p>

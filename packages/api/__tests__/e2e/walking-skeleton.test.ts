@@ -52,6 +52,10 @@ describe('walking skeleton — full happy path through tRPC procedures', () => {
       description: 'Walking skeleton job',
       duesAmount: 60,
       recommendedPeopleCount: 1,
+      posterContactKind: 'email',
+      posterContactValue: 'test-contact@example.com',
+      location: 'Test location',
+      estimatedDurationHours: 1.5,
     });
     expect(await getJobState(testDb.pool, jobId)).toBe('awaiting_moderation');
 
@@ -106,6 +110,10 @@ describe('walking skeleton — full happy path through tRPC procedures', () => {
         description: `iteration ${i}`,
         duesAmount: 25,
         recommendedPeopleCount: 1,
+        posterContactKind: 'email',
+        posterContactValue: 'test-contact@example.com',
+        location: 'Test location',
+        estimatedDurationHours: 1.5,
       });
       await mod.jobs.approve({ jobId });
       await active.jobs.enroll({ jobId });

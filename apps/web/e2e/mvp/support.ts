@@ -124,6 +124,12 @@ export async function postJob(
   description: string,
   duesAmount = '40',
   recommended = '1',
+  // PRD-010 R-01/R-02 (PLAN-016): location + duration are required on the
+  // form. Default the rest so existing specs don't need to know about
+  // poster contact / location / duration — the contact-value field is
+  // pre-filled server-side with the Alumni's account email.
+  location = 'Test Location',
+  durationHours = '1.5',
 ): Promise<string> {
   await page.goto('/jobs/new');
   // Dev-server compile-lag (PLAN-013 Track B Path A): under parallel-spec load,
@@ -145,6 +151,12 @@ export async function postJob(
   const countBox = page.locator('input[name="recommendedPeopleCount"]');
   await countBox.click();
   await countBox.fill(recommended);
+  const locationBox = page.getByTestId('post-job-location');
+  await locationBox.click();
+  await locationBox.fill(location);
+  const durationBox = page.getByTestId('post-job-duration');
+  await durationBox.click();
+  await durationBox.fill(durationHours);
   await expect(submit).toBeEnabled({ timeout: 30_000 });
   await submit.click();
   await page.waitForURL(/\/jobs\/[0-9a-f-]+$/, { timeout: 15_000 });

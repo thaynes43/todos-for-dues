@@ -28,6 +28,10 @@ test.describe('PRD-002 R-01..R-05 — Alumni posts a job', () => {
         .fill('Rake the leaves at the chapter house');
       await page.locator('input[name="duesAmount"]').fill('40');
       await page.locator('input[name="recommendedPeopleCount"]').fill('2');
+      // PRD-010 R-01/R-02: location + duration are required; contact-value
+      // is pre-filled with the Alumni's account email.
+      await page.getByTestId('post-job-location').fill('Chapter house');
+      await page.getByTestId('post-job-duration').fill('1.5');
       await page.getByRole('button', { name: /Post job/i }).click();
 
       await page.waitForURL(/\/jobs\/[0-9a-f-]+$/, { timeout: 10_000 });

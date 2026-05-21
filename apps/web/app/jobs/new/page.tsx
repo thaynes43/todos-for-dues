@@ -17,10 +17,14 @@ export default async function NewJobPage() {
       </section>
     );
   }
+  // PRD-010 Q-PLN-03 / Trap 5: pre-fill the contact-value field with the
+  // poster's account email from the server-side session — no client-side
+  // useSession() round-trip.
+  const defaultContactEmail = session.user.email ?? '';
   return (
     <section className="mx-auto max-w-xl space-y-4">
       <h1 className="text-2xl font-semibold">Post a job</h1>
-      <PostJobForm />
+      <PostJobForm defaultContactEmail={defaultContactEmail} />
     </section>
   );
 }

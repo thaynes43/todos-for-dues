@@ -118,6 +118,8 @@ test.describe('PLAN-008 walking skeleton — full happy-path job loop', () => {
         await page.getByPlaceholder(/Describe the job/i).fill(description);
         await page.locator('input[name="duesAmount"]').fill('50');
         await page.locator('input[name="recommendedPeopleCount"]').fill('2');
+        await page.getByTestId('post-job-location').fill('Test Location');
+        await page.getByTestId('post-job-duration').fill('1.5');
         await page.getByRole('button', { name: /Post job/i }).click();
         await page.waitForURL(/\/jobs\/[0-9a-f-]+$/, { timeout: 15_000 });
         jobId = page.url().split('/').pop()!;

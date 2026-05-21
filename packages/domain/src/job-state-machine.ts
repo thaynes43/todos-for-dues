@@ -116,6 +116,16 @@ export interface CreateJobInput {
   description: string;
   duesAmount: number;
   recommendedPeopleCount: number;
+  // PRD-010 R-01..R-07 — the tRPC layer (Zod on jobs.post) is the canonical
+  // validation gate and always sends explicit values. These are optional on
+  // the domain helper so unit tests that don't care about the enrichment
+  // fields can omit them and fall back to the DB-default fill — matching the
+  // same DEFAULTs the migration applies on a populated DB.
+  posterContactKind?: 'email' | 'phone';
+  posterContactValue?: string;
+  location?: string;
+  estimatedDurationHours?: number;
+  additionalNotes?: string | null;
   afterCommit?: (jobId: string) => Promise<void>;
 }
 
@@ -129,6 +139,19 @@ export async function createJob(input: CreateJobInput): Promise<{ jobId: string 
         duesAmount: input.duesAmount.toFixed(2),
         recommendedPeopleCount: input.recommendedPeopleCount,
         state: 'awaiting_moderation',
+        // When omitted, the DB DEFAULTs from migration 0009 fill these in;
+        // production traffic always provides them via the tRPC layer.
+        ...(input.posterContactKind !== undefined && {
+          posterContactKind: input.posterContactKind,
+        }),
+        ...(input.posterContactValue !== undefined && {
+          posterContactValue: input.posterContactValue,
+        }),
+        ...(input.location !== undefined && { location: input.location }),
+        ...(input.estimatedDurationHours !== undefined && {
+          estimatedDurationHours: input.estimatedDurationHours.toFixed(2),
+        }),
+        additionalNotes: input.additionalNotes ?? null,
       })
       .returning({ id: jobs.id });
 
