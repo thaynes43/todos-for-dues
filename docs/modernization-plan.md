@@ -45,7 +45,7 @@ separately; the hotfixes must not wait on dep churn).
 | S-06 pool crash | `packages/db/src/index.ts` | `pool.on('error', …)` logging a one-line message (no client-object dumps); prevents `uncaughtException` on CNPG failover |
 | Headers | `apps/web/next.config.ts` | `poweredByHeader: false` + `headers()` with HSTS, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY` (skip CSP for now — Tailwind/Next inline styles make it a project of its own) |
 | Test endpoint | `apps/web/app/api/test/resend-calls/route.ts` | Add `NODE_ENV !== 'production'` to the gate; fix the stale path comment in `packages/notifications/src/send-email.ts:64` |
-| Repo settings | GitHub | Enable Dependabot alerts + security updates (settings toggle, no code) |
+| Repo settings | GitHub | Enable Dependabot alerts + security updates (settings toggle, no code). **P1 outcome (2026-08-10): NEEDS TOM** — the dev-bot app token gets 403 `Resource not accessible by integration` on both `PUT /vulnerability-alerts` and `PUT /automated-security-fixes`; flip the two toggles in repo Settings → Security manually (~1 min) |
 
 Tests to add: unit for the new `users.getById` projection split; integration
 asserting a non-privileged viewer of `jobs.getById` gets no `perActiveDuesCredit`
