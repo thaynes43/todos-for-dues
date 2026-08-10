@@ -13,8 +13,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  NODE_VERSION: "22"
-  PNPM_VERSION: "11.1.2"
+  NODE_VERSION: "24"
+  PNPM_VERSION: "11.21.0"
 
 jobs:
   lint-and-typecheck:

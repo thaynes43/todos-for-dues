@@ -57,7 +57,12 @@ const oidcPlugins = oidcEnabled
 
 // S-00 (AUDIT-2026-08): never fall back to a baked-in secret. In production a
 // missing secret/base URL is a fatal misconfiguration — refuse to boot.
-if (process.env.NODE_ENV === 'production') {
+// `next build` imports route modules for page-data collection with
+// NODE_ENV=production and no runtime secrets; Next marks that phase via
+// NEXT_PHASE, and the real server (standalone runtime) never sets it, so the
+// guard still fires on actual boot.
+const isNextBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
+if (process.env.NODE_ENV === 'production' && !isNextBuildPhase) {
   for (const name of ['BETTER_AUTH_SECRET', 'BETTER_AUTH_URL'] as const) {
     if (!process.env[name]) {
       throw new Error(`${name} must be set in production`);

@@ -3,12 +3,12 @@
 # -----------------------------------------------------------------------------
 # Stage 1: install all workspace dependencies (frozen).
 # -----------------------------------------------------------------------------
-FROM node:22-alpine AS deps
+FROM node:24-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /repo
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
-RUN corepack enable && corepack prepare pnpm@11.1.2 --activate
+RUN corepack enable && corepack prepare pnpm@11.21.0 --activate
 
 # Copy lockfile + workspace manifests so the install layer caches well.
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
@@ -48,9 +48,9 @@ RUN pnpm --filter @app/db deploy --legacy --prod /migrator-deploy
 #   - The init container in Kubernetes overrides the command to run
 #     `tsx /migrator/src/scripts/migrate.ts` against the same image.
 # -----------------------------------------------------------------------------
-FROM node:22-alpine AS runtime
+FROM node:24-alpine AS runtime
 RUN apk add --no-cache libc6-compat curl tini \
-  && npm install -g tsx@4.21.0 \
+  && npm install -g tsx@4.23.12 \
   && npm cache clean --force
 WORKDIR /app
 ENV NODE_ENV=production

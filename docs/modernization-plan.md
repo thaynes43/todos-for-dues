@@ -96,6 +96,12 @@ Known-churn risks (budget time here):
   re-check (wait strategies / container types renamed across majors).
 - **eslint 9 → 10 in apps/web**: needs `eslint-config-next` compatible with
   eslint 10 (ships with next 16.3) — keep them in one bump.
+  **P1 outcome (2026-08-10): DEFERRED** — `eslint-config-next@16.3.0` still
+  depends on `eslint-plugin-react@^7.37`, which crashes under eslint 10
+  (peer range caps at `^9.7`; `context.getFilename` removed). apps/web is
+  pinned to `eslint@^9.39.5` with a `TODO(modernization)` in its
+  `eslint.config.mjs`; root stays on eslint 10. Everything else in the 1b
+  wave landed at target.
 
 ### 1c. Verification (Phase 1 definition of done)
 

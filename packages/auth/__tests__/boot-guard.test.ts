@@ -43,6 +43,19 @@ describe('S-00 production boot guard', () => {
     );
   });
 
+  it('does not throw during `next build` page-data collection (NEXT_PHASE)', async () => {
+    process.env = {
+      ...ORIGINAL_ENV,
+      NODE_ENV: 'production',
+      NEXT_PHASE: 'phase-production-build',
+    };
+    delete process.env.BETTER_AUTH_SECRET;
+    delete process.env.BETTER_AUTH_URL;
+
+    const mod = await import('../src/config');
+    expect(mod.auth).toBeDefined();
+  });
+
   it('boots outside production without the vars (dev ergonomics)', async () => {
     process.env = { ...ORIGINAL_ENV, NODE_ENV: 'test' };
     delete process.env.BETTER_AUTH_SECRET;

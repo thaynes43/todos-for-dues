@@ -32,9 +32,10 @@ export const jobs = pgTable(
     cancellationReason: text('cancellation_reason'),
     disputeReason: text('dispute_reason'),
     // PRD-010 R-01..R-07: poster contact / location / duration / optional notes.
-    // Drizzle 0.36 maps `numeric` to TS `string` (no `mode` option); the tRPC
-    // layer parses it back to a number on read and stringifies on write — same
-    // pattern as `duesAmount` above.
+    // Drizzle maps `numeric` to TS `string` by default; 0.45 added a `mode`
+    // option, but we deliberately stay in string mode — money-ish values must
+    // not round-trip through IEEE floats. The tRPC layer parses on read and
+    // stringifies on write — same pattern as `duesAmount` above.
     posterContactKind: text('poster_contact_kind')
       .$type<'email' | 'phone'>()
       .notNull()
