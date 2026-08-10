@@ -9,7 +9,6 @@ import {
   type SeedUsers,
   type TestDb,
 } from '../integration/_setup';
-import { verifyInviteToken } from '@app/auth';
 
 let testDb: TestDb;
 let users: SeedUsers;
@@ -32,20 +31,13 @@ beforeEach(async () => {
  * job state + the audit-log shape.
  */
 describe('walking skeleton — full happy path through tRPC procedures', () => {
-  it('invites.mint → jobs.post → approve → enroll → lock → complete → markPaymentSent → confirmReceipt = closed; 7 audit rows', async () => {
-    const admin = caller(makeCtx({ userId: users.admin, role: 'Admin' }));
+  it('jobs.post → approve → enroll → lock → complete → markPaymentSent → confirmReceipt = closed; 7 audit rows', async () => {
     const alumni = caller(makeCtx({ userId: users.alumni, role: 'Alumni' }));
     const mod = caller(makeCtx({ userId: users.moderator, role: 'Moderator' }));
     const active = caller(makeCtx({ userId: users.active1, role: 'Active' }));
 
-    // 1. Admin mints an Active invite token; the verify helper accepts it.
-    const invite = await admin.invites.mint({ preselectedRole: 'Active' });
-    await expect(verifyInviteToken(invite.token)).resolves.toEqual({
-      preselectedRole: 'Active',
-    });
-
-    // (signup is owned by DESIGN-004; here we use the seed roster as the
-    // already-signed-up Active for the procedure-level walking skeleton.)
+    // (Onboarding is portal SSO now — ADR-013. The seed roster stands in for
+    // already-signed-up members at the procedure layer.)
 
     // 2. Alumni posts a job.
     const { jobId } = await alumni.jobs.post({

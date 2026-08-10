@@ -17,7 +17,6 @@ test.describe('walking-skeleton smoke — routes load', () => {
         email: 'admin@walking-skel.test',
         displayName: 'Admin',
         role: 'Admin',
-        password: 'correct-horse-battery',
       });
 
       // Public routes when signed-out.
@@ -27,7 +26,7 @@ test.describe('walking-skeleton smoke — routes load', () => {
       await expect(page).toHaveURL(/\/signup/);
 
       // Authed routes — sign in as Admin so all walking-skeleton routes resolve.
-      await signInAs(page, admin.email, admin.password);
+      await signInAs(page, admin.email);
 
       await page.goto('/jobs');
       await expect(page.getByRole('heading', { name: 'Jobs' })).toBeVisible();

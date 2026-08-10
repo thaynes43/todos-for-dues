@@ -2,7 +2,7 @@
 
 Next.js 16 (App Router) + TypeScript + Tailwind v4 + shadcn/ui. Tailwind picked v4 from the Next.js wizard (Q-PLN-01).
 
-The full MVP web app (v0.8.0): job posting/moderation/enrollment/completion flows, admin views with audit log, role management, invite management, SSE real-time updates, and Better Auth (credential + Google Workspace OIDC). <!-- Updated by the 2026-08 modernization audit; this file previously described the PLAN-001 scaffold. -->
+The full MVP web app: job posting/moderation/enrollment/completion flows, admin views with audit log, role management, SSE real-time updates, and Better Auth as an OIDC client of the sigoalumni.org portal — the only sign-in path (ADR-013). <!-- Updated by the 2026-08 modernization audit + ADR-013 auth restructure; this file previously described the PLAN-001 scaffold. -->
 
 ## Quickstart
 
@@ -42,9 +42,9 @@ pnpm --filter web build           # production build
 ## Routes
 
 - `/` — landing (redirects signed-in users into the app).
-- `/login`, `/signup?token=…`, `/forgot-password` — auth pages (credential + SSO; see `docs/adrs/002` + `007`).
+- `/login` — single portal-SSO sign-in surface (ADR-013; signup/forgot-password no longer exist — membership lives at the portal).
 - `/jobs`, `/jobs/[jobId]`, `/jobs/new`, `/my-postings`, `/my-enrollments`, `/moderation-queue`, `/profile` — the job loop.
-- `/admin` + `/admin/{users,invites,disputes,audit-log,settings}` — Admin views.
+- `/admin` + `/admin/{users,disputes,audit-log,settings}` — Admin views.
 - `/api/auth/[...all]` — Better Auth handler (credential + `genericOAuth`).
-- `/api/trpc/[trpc]` — tRPC fetch adapter (`jobs`/`users`/`invites`/`settings`/`admin` routers).
+- `/api/trpc/[trpc]` — tRPC fetch adapter (`jobs`/`users`/`settings`/`admin` routers).
 - `/api/events/chapter` — SSE stream; `/api/webhooks/resend` — delivery webhook; `/api/health` — probe.

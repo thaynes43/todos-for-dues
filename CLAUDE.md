@@ -104,12 +104,13 @@ Job state and user role state are **never** written by direct UPDATE. All transi
 
 Role demotions are gated by a DB trigger that enforces "min 1 Admin per chapter" (PRD-001 Q-08, migration `0003_min_admin_trigger.sql`). The `transitionRole` helper maps the trigger error to a typed domain error.
 
-## Auth wiring
+## Auth wiring (ADR-013 — portal SSO only)
 
-- Two account paths: (a) Google Workspace OIDC SSO via Better Auth's `genericOAuth` plugin (HD-restricted at the OAuth callback in `mapProfileToUser` — non-HD aborts before any user row is created); (b) email+password gated by an invite-token. SSO users do not need an invite token; same email = same account (Better Auth account linking with the OIDC provider as a trusted provider).
-- OIDC is enabled iff all three of `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_HOSTED_DOMAIN` are set; otherwise the SSO button is hidden.
-- `BOOTSTRAP_ADMIN_EMAIL` is checked on every session-create via the `bootstrapAdminOnSignin` databaseHook (idempotent; routes through `transitionRole`, so the audit trail is honored).
-- All Better Auth tables (`users`, `session`, `account`, `verification`) are owned by `packages/db/src/schema/` — Better Auth uses the Drizzle adapter with `modelName: 'users'` and the `name` column mapped to `displayName`. The Better Auth-managed credential plugin owns passwords; the legacy `users.password_hash` column was dropped in migration `0006`.
+- **One account path**: OIDC authorization-code + PKCE against the sigoalumni.org portal (Better Auth `genericOAuth`, `providerId: 'sigo-portal'`). No local credentials, no invite tokens — membership is granted at the portal. The registered redirect URI is `<BETTER_AUTH_URL>/api/auth/oauth2/callback/sigo-portal`; renaming the provider id breaks it.
+- OIDC is enabled iff all three of `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_DISCOVERY_URL` are set; otherwise sign-in is disabled (fail closed) and `/login` shows a terse operator note — the app still boots.
+- **Tier → role mapping** (`packages/auth/src/portal-tiers.ts`): portal `tier` claim `admin → Admin`, `operator → Moderator`, `brother → Alumni`, `pending → refused` ("membership pending" screen). `Active` is app-granted on top of `brother` (self-service/admin switch survives). Mapping runs in `mapProfileToUser` at first sign-in and re-syncs on every session create (`hooks/claim-sync.ts`) through `transitionRole`, so the audit trail is honored. Demotions that would violate the min-1-Admin trigger are kept-as-is and logged loudly.
+- All Better Auth tables (`users`, `session`, `account`, `verification`) are owned by `packages/db/src/schema/` — Better Auth uses the Drizzle adapter with `modelName: 'users'` and the `name` column mapped to `displayName`. `account.password` is dormant (kept for Better Auth's schema shape).
+- E2E runs against a portal-shaped OIDC mock (`apps/web/e2e/fixtures/oidc-mock-server.ts`) that serves tier claims in id_token + userinfo — no live portal needed.
 
 ## Packaging notes
 

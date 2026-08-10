@@ -24,16 +24,19 @@ const state: GlobalState = {};
 (globalThis as unknown as { __PLAYWRIGHT_E2E_STATE__?: GlobalState }).__PLAYWRIGHT_E2E_STATE__ =
   state;
 
-const PASSWORD = 'correct-horse-battery';
 const ADMIN_EMAIL = 'admin@chapter.test';
 const MODERATOR_EMAIL = 'standing-mod@chapter.test';
-const HOSTED_DOMAIN = 'chapter.test';
 
 const TREASURER_EMAIL = 'treasurer@chapter.test';
 const MODERATORS_RECIPIENT_EMAIL = 'mods@chapter.test';
 const ADMIN_RECIPIENT_EMAIL = 'admins@chapter.test';
 const CHAPTER_DISPLAY_NAME = 'Test Chapter';
 const CHAPTER_TIMEZONE = 'America/New_York';
+
+// Mirrors the live portal client registration (client id `todos-for-dues`,
+// confidential; secret is test-only here).
+const OIDC_CLIENT_ID = 'todos-for-dues';
+const OIDC_CLIENT_SECRET = 'test-portal-client-secret';
 
 async function waitForReady(url: string, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -72,8 +75,6 @@ async function prewarmRoutes(baseUrl: string): Promise<void> {
   const routes = [
     '/',
     '/login',
-    '/signup',
-    '/forgot-password',
     '/profile',
     '/jobs',
     '/jobs/new',
@@ -88,7 +89,6 @@ async function prewarmRoutes(baseUrl: string): Promise<void> {
     '/admin/disputes',
     '/admin/settings',
     '/admin/audit-log',
-    '/admin/invites',
     '/api/health',
   ];
   const start = Date.now();
@@ -134,36 +134,39 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     throw new Error(`Migrations failed (exit ${migrate.status})`);
   }
 
+  // ── Portal-shaped OIDC mock (ADR-013) ────────────────────────────────
+  // Starts before seeding: seedFixtures registers the global personas'
+  // portal identities against it.
+  const oidc = await startOidcMockServer({
+    clientId: OIDC_CLIENT_ID,
+    clientSecret: OIDC_CLIENT_SECRET,
+  });
+  state.oidc = oidc;
+
   await seedFixtures({
     databaseUrl,
     adminEmail: ADMIN_EMAIL,
     moderatorEmail: MODERATOR_EMAIL,
-    password: PASSWORD,
+    portalMockUrl: oidc.baseUrl,
   });
-
-  // ── OIDC mock ────────────────────────────────────────────────────────
-  const oidc = await startOidcMockServer();
-  state.oidc = oidc;
 
   // ── Persist runtime env for workers ──────────────────────────────────
   const runtimeEnv: RuntimeEnv = {
     DATABASE_URL: databaseUrl,
     OIDC_DISCOVERY_URL: oidc.discoveryUrl,
     OIDC_BASE_URL: oidc.baseUrl,
-    OIDC_CLIENT_ID: 'test-client',
-    OIDC_CLIENT_SECRET: 'test-secret',
-    OIDC_HOSTED_DOMAIN: HOSTED_DOMAIN,
+    OIDC_CLIENT_ID,
+    OIDC_CLIENT_SECRET,
     BETTER_AUTH_SECRET:
       'test-better-auth-secret-not-for-prod-not-for-prod-not-for-prod',
     BETTER_AUTH_URL: DEV_URL,
-    BOOTSTRAP_ADMIN_EMAIL: ADMIN_EMAIL,
     BOOTSTRAP_TREASURER_RECIPIENT_EMAIL: TREASURER_EMAIL,
     BOOTSTRAP_MODERATORS_RECIPIENT_EMAIL: MODERATORS_RECIPIENT_EMAIL,
     BOOTSTRAP_ADMIN_RECIPIENT_EMAIL: ADMIN_RECIPIENT_EMAIL,
     BOOTSTRAP_CHAPTER_DISPLAY_NAME: CHAPTER_DISPLAY_NAME,
     BOOTSTRAP_CHAPTER_TIMEZONE: CHAPTER_TIMEZONE,
     RESEND_TEST_MODE: 'true',
-    E2E_SEED_PASSWORD: PASSWORD,
+    E2E_SEED_ADMIN_EMAIL: ADMIN_EMAIL,
     E2E_SEED_MODERATOR_EMAIL: MODERATOR_EMAIL,
   };
   for (const [k, v] of Object.entries(runtimeEnv)) {

@@ -36,7 +36,7 @@ export async function startAuthTestDb(): Promise<AuthTestDb> {
 
 export async function truncateAll(pool: Pool): Promise<void> {
   await pool.query(
-    `TRUNCATE users, jobs, job_enrollments, job_state_transitions, user_role_transitions, invite_tokens, "session", "account", "verification" RESTART IDENTITY CASCADE`,
+    `TRUNCATE users, jobs, job_enrollments, job_state_transitions, user_role_transitions, "session", "account", "verification" RESTART IDENTITY CASCADE`,
   );
 }
 
@@ -53,19 +53,7 @@ export async function insertAdminBootstrap(
   return rows[0]!.id;
 }
 
-export async function insertInviteToken(
-  pool: Pool,
-  opts: { token: string; preselectedRole: 'Active' | 'Alumni'; createdBy: string },
-): Promise<void> {
-  await pool.query(
-    `INSERT INTO invite_tokens (token, preselected_role, created_by) VALUES ($1, $2, $3)`,
-    [opts.token, opts.preselectedRole, opts.createdBy],
-  );
-}
 
-export async function revokeInviteToken(pool: Pool, token: string): Promise<void> {
-  await pool.query(`UPDATE invite_tokens SET revoked_at = now() WHERE token = $1`, [token]);
-}
 
 export async function getUserRoleByEmail(
   pool: Pool,

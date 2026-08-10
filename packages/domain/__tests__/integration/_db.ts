@@ -76,7 +76,7 @@ export interface SeedUsers {
 export async function resetAndSeedUsers(pool: Pool): Promise<SeedUsers> {
   return withTx(pool, async (client) => {
     await client.query(
-      `TRUNCATE users, jobs, job_enrollments, job_state_transitions, user_role_transitions, invite_tokens, "session", "account", "verification" RESTART IDENTITY CASCADE`,
+      `TRUNCATE users, jobs, job_enrollments, job_state_transitions, user_role_transitions, "session", "account", "verification" RESTART IDENTITY CASCADE`,
     );
     const roster: Array<{ email: string; name: string; role: Role }> = [
       { email: 'admin@test.invalid', name: 'Admin User', role: 'Admin' },

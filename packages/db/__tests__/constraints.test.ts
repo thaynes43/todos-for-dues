@@ -78,28 +78,8 @@ describe('schema constraints', () => {
     });
   });
 
-  describe('invite_tokens CHECK constraints', () => {
-    it('rejects preselected_role outside {Active, Alumni}', async () => {
-      await expectPgError(
-        pool.query(
-          `INSERT INTO invite_tokens (token, preselected_role, created_by) VALUES ($1, $2, $3)`,
-          [`tok-${Math.random()}`, 'Admin', adminId],
-        ),
-        '23514',
-      );
-    });
-
-    it('accepts Active and Alumni preselected_role', async () => {
-      await pool.query(
-        `INSERT INTO invite_tokens (token, preselected_role, created_by) VALUES ($1, $2, $3)`,
-        [`tok-active-${Math.random()}`, 'Active', adminId],
-      );
-      await pool.query(
-        `INSERT INTO invite_tokens (token, preselected_role, created_by) VALUES ($1, $2, $3)`,
-        [`tok-alumni-${Math.random()}`, 'Alumni', adminId],
-      );
-    });
-  });
+  // invite_tokens CHECK-constraint coverage removed with the table itself
+  // (migration 0011, ADR-013).
 
   describe('jobs CHECK constraints', () => {
     async function insertJob(overrides: Partial<{

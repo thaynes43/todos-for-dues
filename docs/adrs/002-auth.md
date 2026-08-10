@@ -12,8 +12,13 @@ related:
   flows: []                     # docs/flows/walking-skeleton.md pending — will trace signup
   designs: []                   # docs/design/auth.md pending — invite-token table, MFA enforcement
   supersedes: null
-  superseded_by: null
+  superseded_by: null       # PARTLY superseded by ADR-013 — see note below
 ---
+
+> **Partial supersession (ADR-013, 2026-08-10):** the invite-token-gated
+> signup, email+password credential path, and MFA/passkey plans below are
+> removed — the sigoalumni.org portal is the only identity source. The
+> Better Auth library choice itself stands and is what ADR-013 builds on.
 
 ## Context and problem statement
 

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
 import { startPostgres, type StartedPostgres } from '@app/test-utils';
 import { runMigrations } from '../src/migrate';
-import { JOB_STATES, ROLES, INVITE_TOKEN_ROLES } from '../src/schema/enums';
+import { JOB_STATES, ROLES } from '../src/schema/enums';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const INIT_SQL = readFileSync(join(HERE, '..', 'migrations', '0002_init.sql'), 'utf8');
@@ -29,14 +29,8 @@ describe('enums match generated migration CHECK lists', () => {
     expect(fromMigration).toEqual([...ROLES]);
   });
 
-  it('INVITE_TOKEN_ROLES array matches invite_tokens_role_non_privileged CHECK', () => {
-    const match = INIT_SQL.match(/invite_tokens_role_non_privileged.*ARRAY\[([^\]]+)\]/);
-    expect(match).not.toBeNull();
-    const fromMigration = match![1]!
-      .split(',')
-      .map((s) => s.trim().replace(/^'/, '').replace(/'$/, ''));
-    expect(fromMigration).toEqual([...INVITE_TOKEN_ROLES]);
-  });
+  // invite_tokens (created in the immutable 0002_init) is DROPPED by
+  // migration 0011 (ADR-013) — no runtime enum to cross-check anymore.
 });
 
 describe('enum values round-trip via insert', () => {

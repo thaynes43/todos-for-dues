@@ -29,9 +29,9 @@ test.describe('live smoke (read-only)', () => {
     const errors = installPageerrorListener(page);
     const response = await page.goto('/login');
     expect(response?.ok()).toBe(true);
-    // SSO button visibility is env-dependent (OIDC_CLIENT_ID + secret + HD
-    // must all be set per `packages/auth`). We record presence as an
-    // annotation rather than asserting on it.
+    // SSO button visibility is env-dependent (OIDC_CLIENT_ID + secret +
+    // discovery URL must all be set per `packages/auth`, ADR-013). We record
+    // presence as an annotation rather than asserting on it.
     const ssoButton = page.getByTestId('sso-button');
     const visible = await ssoButton.isVisible().catch(() => false);
     test.info().annotations.push({ type: 'sso', description: `visible=${visible}` });

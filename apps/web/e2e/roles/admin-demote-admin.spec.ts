@@ -22,7 +22,6 @@ test.describe('PRD-008 §6 — Admin demotes another Admin requires confirm', ()
         email: `roles-admin-b-${suffix}@chapter.test`,
         displayName: `Admin B ${suffix}`,
         role: 'Admin',
-        password: 'correct-horse-battery',
       });
 
       await reAuth(page, context, cast.admin);
@@ -101,7 +100,6 @@ test.describe('PRD-008 §6 — Admin demotes another Admin requires confirm', ()
         email: `roles-admin-cancel-${suffix}@chapter.test`,
         displayName: `Admin Cancel ${suffix}`,
         role: 'Admin',
-        password: 'correct-horse-battery',
       });
 
       await reAuth(page, context, cast.admin);

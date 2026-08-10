@@ -17,6 +17,13 @@ related:
   supersedes: null
 ---
 
+> **Superseded by ADR-013 wiring (2026-08-10):** Workspace OIDC, HD
+> restriction, invite tokens, and the credential path described below were
+> removed — the app is now a portal OIDC client of sigoalumni.org
+> (`packages/auth/src/config.ts`, `src/portal-tiers.ts`,
+> `src/hooks/claim-sync.ts`). This doc remains as historical context for
+> the Better Auth adapter/table layout, which is unchanged.
+
 ## 1. Purpose
 
 Realises BCC-01 Identity & Access end-to-end: Better Auth instance configuration, Workspace OIDC plugin wiring with HD restriction at the OAuth callback, invite-token-gated app-managed signup, account-linking on first SSO sign-in for an existing app-managed account, and `BOOTSTRAP_ADMIN_EMAIL` boot-time promotion. Defines the three Server-Action forms permitted by ADR-003 (signup, login, password reset).
