@@ -18,14 +18,14 @@
   "dependencies": {
     "@app/db": "workspace:*",
     "@app/domain": "workspace:*",
-    "better-auth": "^1.6.11",
-    "drizzle-orm": "^0.36.4",
+    "better-auth": "^1.6.26",
+    "drizzle-orm": "^0.45.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@app/test-utils": "workspace:*",
-    "@types/pg": "^8.11.10",
-    "pg": "^8.13.1",
-    "vitest": "^4.1.6"
+    "@types/pg": "^8.21.0",
+    "pg": "^8.23.0",
+    "vitest": "^4.1.10"
   }
 }

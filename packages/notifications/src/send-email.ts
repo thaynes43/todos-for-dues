@@ -61,7 +61,7 @@ export function __setResendForTests(client: ResendLike | undefined): void {
  * `__setResendForTests` hook above can't reach the separate Next.js dev
  * server, so when `RESEND_TEST_MODE === 'true'` we record every send into an
  * in-memory store that the dev server exposes via the test-only
- * `/api/_test/resend-calls` route. No-ops in production (the env var is set
+ * `/api/test/resend-calls` route. No-ops in production (the env var is set
  * only by Playwright's globalSetup).
  */
 export interface RecordedEmail {

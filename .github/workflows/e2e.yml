@@ -31,8 +31,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  NODE_VERSION: "22"
-  PNPM_VERSION: "11.1.2"
+  NODE_VERSION: "24"
+  PNPM_VERSION: "11.21.0"
 
 jobs:
   playwright:
@@ -67,8 +67,18 @@ jobs:
       # invocation here. Cross-suite seed safety relies on UUID-suffixed
       # personas + UUID-self-filter assertions (per PLAN-013 §3.1 #2 /
       # PR #35 — `invites.spec.ts` filters by the minted invite UUID).
+      # Failure tail → check-run annotation (see ci.yml `pnpm test` note:
+      # operator pods can read annotations but not Actions log blobs).
       - name: e2e — main (collapsed walking-skeleton + auth + mvp + admin)
-        run: pnpm --filter web e2e -- e2e/walking-skeleton/ e2e/walking-skeleton.spec.ts __e2e__/auth/ e2e/mvp/ e2e/admin/
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! pnpm --filter web e2e e2e/walking-skeleton/ e2e/walking-skeleton.spec.ts __e2e__/auth/ e2e/mvp/ e2e/admin/ 2>&1 | tee /tmp/e2e.log; then
+            tail=$(grep -aE "✘|[0-9]+\) \[chromium\]|Error|Timeout|timed out|toomanyrequests|failed|passed" /tmp/e2e.log | tail -60 | head -c 3500)
+            tail="${tail//'%'/%25}"; tail="${tail//$'\n'/%0A}"; tail="${tail//$'\r'/%0D}"
+            echo "::error title=e2e main failure tail::${tail}"
+            exit 1
+          fi
 
       # PLAN-013 §3.1 #1: `demoteAllOtherAdmins` is now scope-narrowed to a
       # per-spec ID allowlist, so the 5 chapter-safe roles specs (admin-grant,
@@ -77,7 +87,7 @@ jobs:
       # invocation.
       - name: e2e — roles (chapter-safe set, single invocation)
         run: |
-          pnpm --filter web e2e -- \
+          pnpm --filter web e2e \
             e2e/roles/admin-grant.spec.ts \
             e2e/roles/admin-demote-admin.spec.ts \
             e2e/roles/admin-users-list.spec.ts \
@@ -96,7 +106,7 @@ jobs:
       # signin path. Per-spec isolation is the only safe option until the
       # min-Admin trigger is made chapter-scoped (out of scope here).
       - name: e2e — roles last-admin-blocked (own invocation)
-        run: pnpm --filter web e2e -- e2e/roles/last-admin-blocked.spec.ts
+        run: pnpm --filter web e2e e2e/roles/last-admin-blocked.spec.ts
 
       - name: e2e — roles admin-swap (own invocation)
-        run: pnpm --filter web e2e -- e2e/roles/admin-swap.spec.ts
+        run: pnpm --filter web e2e e2e/roles/admin-swap.spec.ts

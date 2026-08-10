@@ -36,7 +36,9 @@ export interface JobForDetailView {
   postedBy: string;
   posterDisplayName?: string | null;
   posterContactKind?: 'email' | 'phone';
-  posterContactValue?: string;
+  // Null for viewers outside the S-M2 scoped-projection predicate
+  // (owner / privileged / enrolled).
+  posterContactValue?: string | null;
   location?: string;
   estimatedDurationHours?: string;
   additionalNotes?: string | null;
@@ -129,16 +131,18 @@ export function JobDetailView({
             {job.posterDisplayName ?? 'Unknown'}
           </span>
         </p>
-        <p>
-          <strong>Contact ({contactKind}):</strong>{' '}
-          <a
-            href={contactHref}
-            data-testid="job-contact-link"
-            className="underline"
-          >
-            {contactValue}
-          </a>
-        </p>
+        {contactValue ? (
+          <p>
+            <strong>Contact ({contactKind}):</strong>{' '}
+            <a
+              href={contactHref}
+              data-testid="job-contact-link"
+              className="underline"
+            >
+              {contactValue}
+            </a>
+          </p>
+        ) : null}
         <p>
           <strong>Location:</strong>{' '}
           <span data-testid="job-location">{job.location ?? 'Unknown'}</span>

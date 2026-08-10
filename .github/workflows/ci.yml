@@ -13,8 +13,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  NODE_VERSION: "22"
-  PNPM_VERSION: "11.1.2"
+  NODE_VERSION: "24"
+  PNPM_VERSION: "11.21.0"
 
 jobs:
   lint-and-typecheck:
@@ -49,7 +49,21 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test
+      # Surface the failing suite's output tail as a check-run annotation.
+      # The in-cluster operator pods that babysit CI are egress-allowlisted:
+      # they can read annotations via api.github.com but cannot fetch the
+      # Actions log blobs (Azure-hosted). Without this, a red `test` check is
+      # undebuggable from the pod. (Added in the 2026-08 modernization P1.)
+      - name: pnpm test
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! pnpm test 2>&1 | tee /tmp/test-out.log; then
+            tail=$(grep -aE "FAIL|✖|Error|AssertionError|expected|ELIFECYCLE|toomanyrequests|pull|Command failed" /tmp/test-out.log | tail -60 | head -c 3500)
+            tail="${tail//'%'/%25}"; tail="${tail//$'\n'/%0A}"; tail="${tail//$'\r'/%0D}"
+            echo "::error title=pnpm test failure tail::${tail}"
+            exit 1
+          fi
 
   build-image:
     # Hybrid trigger: fires on both `release.published` AND tag pushes.

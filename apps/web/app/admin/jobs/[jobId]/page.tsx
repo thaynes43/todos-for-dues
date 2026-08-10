@@ -63,11 +63,12 @@ export default async function AdminJobAuditPage({ params }: PageProps) {
   }> = await Promise.all(
     actorIds.map(async (id) => {
       try {
-        const u = await caller.users.getById({ userId: id });
+        // Admin-only page; role comes from the admin-gated projection (S-M1).
+        const u = await caller.users.getByIdAdmin({ userId: id });
         return {
           id,
           displayName: u.displayName ?? null,
-          role: (u as { role?: string }).role ?? null,
+          role: u.role ?? null,
         };
       } catch {
         return { id, displayName: null, role: null };

@@ -18,7 +18,9 @@ export interface EditableJobSnapshot {
   duesAmount: string;
   recommendedPeopleCount: number;
   posterContactKind?: 'email' | 'phone';
-  posterContactValue?: string;
+  // Null when the API's scoped projection withheld it (S-M2) — never the case
+  // for the poster, who is the only viewer offered this form.
+  posterContactValue?: string | null;
   location?: string;
   estimatedDurationHours?: string;
   additionalNotes?: string | null;

@@ -55,9 +55,26 @@ const oidcPlugins = oidcEnabled
     ]
   : [];
 
+// S-00 (AUDIT-2026-08): never fall back to a baked-in secret. In production a
+// missing secret/base URL is a fatal misconfiguration — refuse to boot.
+// `next build` imports route modules for page-data collection with
+// NODE_ENV=production and no runtime secrets; Next marks that phase via
+// NEXT_PHASE, and the real server (standalone runtime) never sets it, so the
+// guard still fires on actual boot.
+const isNextBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
+if (process.env.NODE_ENV === 'production' && !isNextBuildPhase) {
+  for (const name of ['BETTER_AUTH_SECRET', 'BETTER_AUTH_URL'] as const) {
+    if (!process.env[name]) {
+      throw new Error(`${name} must be set in production`);
+    }
+  }
+}
+
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL ?? 'http://localhost:3000',
-  secret: process.env.BETTER_AUTH_SECRET ?? 'dev-only-not-for-prod-not-for-prod',
+  // No fallback: when unset outside production, Better Auth's own dev-mode
+  // handling applies (loud warning); production is guarded above.
+  secret: process.env.BETTER_AUTH_SECRET,
   advanced: {
     // UUID id columns (DESIGN-001) — let Postgres generate via gen_random_uuid().
     database: { generateId: 'uuid' },

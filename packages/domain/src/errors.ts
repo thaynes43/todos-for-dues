@@ -21,13 +21,32 @@ export class NoEditChangesError extends Error {
   readonly code = 'NO_EDIT_CHANGES' as const;
 }
 
-export function isPostgresCheckViolation(
+export interface PostgresCheckViolation {
+  code: '23514';
+  message: string;
+}
+
+/**
+ * Find a Postgres CHECK-violation (ERRCODE 23514) anywhere in an error's
+ * `cause` chain. drizzle-orm ≥0.44 wraps driver errors in DrizzleQueryError
+ * (e.g. `Failed query: commit` for a DEFERRABLE trigger firing at COMMIT)
+ * with the original pg DatabaseError as `cause`, so the raw error is no
+ * longer the thrown value itself.
+ */
+export function findPostgresCheckViolation(
   err: unknown,
-): err is { code: '23514'; message: string } {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    (err as { code: string }).code === '23514'
-  );
+): PostgresCheckViolation | null {
+  let current: unknown = err;
+  const seen = new Set<unknown>();
+  while (typeof current === 'object' && current !== null && !seen.has(current)) {
+    seen.add(current);
+    if (
+      'code' in current &&
+      (current as { code?: unknown }).code === '23514'
+    ) {
+      return current as PostgresCheckViolation;
+    }
+    current = (current as { cause?: unknown }).cause;
+  }
+  return null;
 }

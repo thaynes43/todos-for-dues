@@ -735,22 +735,19 @@ export const jobsRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
+      // S-M3 (AUDIT-2026-08) gating:
+      //   Admin / Moderator — any state (the /jobs state-filter UI is
+      //     privileged-only), full chapter visibility.
+      //   Active — enrollment_open only.
+      //   Alumni — enrollment_open freely; every other state restricted to
+      //     their own postings (no chapter-wide credit maps / reasons).
       const role = ctx.userRole;
-      if (role !== 'Admin') {
-        if (role === 'Active' && input.state !== 'enrollment_open') {
-          throw new TRPCError({ code: 'FORBIDDEN' });
-        }
-        if (
-          (role === 'Alumni' || role === 'Moderator') &&
-          input.state === 'awaiting_moderation' &&
-          role === 'Alumni'
-        ) {
-          // Alumni can see only their own awaiting_moderation jobs — fall through to filter below
-        }
+      if (role === 'Active' && input.state !== 'enrollment_open') {
+        throw new TRPCError({ code: 'FORBIDDEN' });
       }
 
       let whereExpr;
-      if (role === 'Alumni' && input.state === 'awaiting_moderation') {
+      if (role === 'Alumni' && input.state !== 'enrollment_open') {
         whereExpr = and(
           eq(jobs.state, input.state),
           eq(jobs.postedBy, ctx.userId),
@@ -759,8 +756,16 @@ export const jobsRouter = router({
         whereExpr = eq(jobs.state, input.state);
       }
 
+      // Narrow projection: exactly what the JobCard list rendering consumes.
       return ctx.db
-        .select()
+        .select({
+          id: jobs.id,
+          description: jobs.description,
+          duesAmount: jobs.duesAmount,
+          recommendedPeopleCount: jobs.recommendedPeopleCount,
+          state: jobs.state,
+          createdAt: jobs.createdAt,
+        })
         .from(jobs)
         .where(whereExpr)
         .orderBy(desc(jobs.createdAt))
@@ -857,8 +862,31 @@ export const jobsRouter = router({
         }
       }
 
+      // S-M2 (AUDIT-2026-08): explicit allow-list projection — never spread the
+      // raw row. The per-Active dues-credit map, the poster's contact value,
+      // and dispute/cancellation/rejection reasons are scoped to the same
+      // predicate as the roster (owner / privileged / enrolled viewer);
+      // everyone else gets nulls.
+      const seesScopedFields = seesRoster;
       return {
-        ...job,
+        id: job.id,
+        postedBy: job.postedBy,
+        description: job.description,
+        duesAmount: job.duesAmount,
+        recommendedPeopleCount: job.recommendedPeopleCount,
+        state: job.state,
+        workDate: job.workDate,
+        posterContactKind: job.posterContactKind,
+        location: job.location,
+        estimatedDurationHours: job.estimatedDurationHours,
+        additionalNotes: job.additionalNotes,
+        createdAt: job.createdAt,
+        updatedAt: job.updatedAt,
+        perActiveDuesCredit: seesScopedFields ? job.perActiveDuesCredit : null,
+        posterContactValue: seesScopedFields ? job.posterContactValue : null,
+        rejectionReason: seesScopedFields ? job.rejectionReason : null,
+        cancellationReason: seesScopedFields ? job.cancellationReason : null,
+        disputeReason: seesScopedFields ? job.disputeReason : null,
         posterDisplayName: poster?.displayName ?? null,
         enrolleeCount,
         roster,

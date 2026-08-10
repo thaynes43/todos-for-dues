@@ -206,25 +206,17 @@ describe('users router', () => {
     });
   });
 
-  describe('getById — BCC-01 Q-02', () => {
-    it('returns selected user fields', async () => {
+  describe('getById — BCC-01 Q-02 (S-M1 display-only projection)', () => {
+    it('returns only id + displayName to a non-admin caller', async () => {
       const u = await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).users.getById({
         userId: users.active1,
       });
-      expect(u).toMatchObject({
-        id: users.active1,
-        role: 'Active',
-      });
-    });
-
-    // PLAN-012 Step 6 needs email on the per-user Admin detail page.
-    it('projects email + displayName for the Admin detail view', async () => {
-      const u = await caller(makeCtx({ userId: users.admin, role: 'Admin' })).users.getById({
-        userId: users.active1,
-      });
-      expect(u.email).toBe('active1@test.invalid');
+      expect(u.id).toBe(users.active1);
       expect(typeof u.displayName).toBe('string');
-      expect(u.displayName.length).toBeGreaterThan(0);
+      // S-M1: email + role are PII — must NOT appear in the authed projection.
+      expect(u).not.toHaveProperty('email');
+      expect(u).not.toHaveProperty('role');
+      expect(Object.keys(u).sort()).toEqual(['displayName', 'id']);
     });
 
     it('rejects without session', async () => {
@@ -236,6 +228,42 @@ describe('users router', () => {
     it('returns NOT_FOUND for unknown user', async () => {
       await expect(
         caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).users.getById({
+          userId: '00000000-0000-0000-0000-000000000000',
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+  });
+
+  describe('getByIdAdmin — S-M1 admin-gated projection (PLAN-012 Step 6)', () => {
+    it('projects email + role + displayName for the Admin detail view', async () => {
+      const u = await caller(makeCtx({ userId: users.admin, role: 'Admin' })).users.getByIdAdmin(
+        { userId: users.active1 },
+      );
+      expect(u.email).toBe('active1@test.invalid');
+      expect(u.role).toBe('Active');
+      expect(typeof u.displayName).toBe('string');
+      expect(u.displayName.length).toBeGreaterThan(0);
+    });
+
+    it('FORBIDDEN for every non-admin role', async () => {
+      for (const role of ['Active', 'Alumni', 'Moderator'] as const) {
+        const callerId =
+          role === 'Active'
+            ? users.active1
+            : role === 'Alumni'
+              ? users.alumni
+              : users.moderator;
+        await expect(
+          caller(makeCtx({ userId: callerId, role })).users.getByIdAdmin({
+            userId: users.active1,
+          }),
+        ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      }
+    });
+
+    it('returns NOT_FOUND for unknown user', async () => {
+      await expect(
+        caller(makeCtx({ userId: users.admin, role: 'Admin' })).users.getByIdAdmin({
           userId: '00000000-0000-0000-0000-000000000000',
         }),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
