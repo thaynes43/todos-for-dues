@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.1](https://github.com/thaynes43/todos-for-dues/compare/v0.8.0...v0.8.1) (2026-08-10)
+
+
+### Documentation
+
+* **agents:** deploy prompt 044 — v0.8.0 MVP-FIX-C wave to haynes-ops ([#47](https://github.com/thaynes43/todos-for-dues/issues/47)) ([48cdbd2](https://github.com/thaynes43/todos-for-dues/commit/48cdbd2a9ac6cfbcea3b035b1baa3d23aeb0a2cb))
+* **audit:** 2026-08 modernization audit + phased implementation plan ([#49](https://github.com/thaynes43/todos-for-dues/issues/49)) ([eb28953](https://github.com/thaynes43/todos-for-dues/commit/eb28953513e99ce6664ea0aa5b2d290abb69f7bc))
+
 ## [0.8.0](https://github.com/thaynes43/todos-for-dues/compare/v0.7.3...v0.8.0) (2026-05-21)
 
 
