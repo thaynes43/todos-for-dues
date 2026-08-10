@@ -67,7 +67,8 @@ jobs:
       # invocation here. Cross-suite seed safety relies on UUID-suffixed
       # personas + UUID-self-filter assertions (per PLAN-013 §3.1 #2 /
       # PR #35 — `invites.spec.ts` filters by the minted invite UUID).
-      # TEMP(agent/modernization-p1): surface failure tail as annotation.
+      # Failure tail → check-run annotation (see ci.yml `pnpm test` note:
+      # operator pods can read annotations but not Actions log blobs).
       - name: e2e — main (collapsed walking-skeleton + auth + mvp + admin)
         shell: bash
         run: |
