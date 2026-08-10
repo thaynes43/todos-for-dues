@@ -74,6 +74,15 @@ jobs:
             tail=$(grep -aE "✘|[0-9]+\) \[chromium\]|Error|Timeout|timed out|toomanyrequests|failed|passed" /tmp/e2e.log | tail -60 | head -c 3500)
             tail="${tail//'%'/%25}"; tail="${tail//$'\n'/%0A}"; tail="${tail//$'\r'/%0D}"
             echo "::error title=e2e main failure tail::${tail}"
+            # Operator pods can read check-run annotations but not Actions log
+            # blobs — surface the first failure's page snapshot (error-context)
+            # too, so failures are diagnosable from the annotation alone.
+            ctx_file=$(find apps/web/test-results -name 'error-context.md' 2>/dev/null | sort | head -1)
+            if [ -n "$ctx_file" ]; then
+              ctx=$(head -c 3500 "$ctx_file")
+              ctx="${ctx//'%'/%25}"; ctx="${ctx//$'\n'/%0A}"; ctx="${ctx//$'\r'/%0D}"
+              echo "::error title=e2e first error-context (${ctx_file})::${ctx}"
+            fi
             exit 1
           fi
 
