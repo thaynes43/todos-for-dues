@@ -10,5 +10,16 @@ DROP TABLE "invite_tokens";
 -- rather than strand rows that can never sign in again, reset the instance.
 -- CASCADE truncates everything FK-chained to users: session, account, jobs,
 -- job_enrollments, job_state_transitions, job_content_changes,
--- user_role_transitions. chapter_settings (no user FK) survives.
+-- user_role_transitions — AND chapter_settings (updated_by → users), whose
+-- rows are configuration, not identity data. Snapshot chapter_settings
+-- around the truncate so the 0004 bootstrap values (and any live edits)
+-- survive; updated_by is dropped to NULL because the referenced user is gone.
+CREATE TEMPORARY TABLE "_chapter_settings_wipe_backup" AS
+  SELECT "key", "value", "updated_at" FROM "chapter_settings";
+--> statement-breakpoint
 TRUNCATE TABLE "users" CASCADE;
+--> statement-breakpoint
+INSERT INTO "chapter_settings" ("key", "value", "updated_at")
+  SELECT "key", "value", "updated_at" FROM "_chapter_settings_wipe_backup";
+--> statement-breakpoint
+DROP TABLE "_chapter_settings_wipe_backup";
