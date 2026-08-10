@@ -9,7 +9,7 @@ import { sql } from 'drizzle-orm';
 import {
   ConcurrentTransitionError,
   MinAdminInvariantError,
-  isPostgresCheckViolation,
+  findPostgresCheckViolation,
 } from './errors';
 
 export interface TransitionRoleInput {
@@ -65,7 +65,8 @@ export async function transitionRole(input: TransitionRoleInput): Promise<void> 
       await performRoleTransition(tx, input);
     });
   } catch (err) {
-    if (isPostgresCheckViolation(err) && err.message.includes('min-Admin')) {
+    const violation = findPostgresCheckViolation(err);
+    if (violation?.message.includes('min-Admin')) {
       throw new MinAdminInvariantError(
         'Cannot demote — chapter must always have at least one Admin',
       );
@@ -91,7 +92,8 @@ export async function transitionRolesAtomically(
       }
     });
   } catch (err) {
-    if (isPostgresCheckViolation(err) && err.message.includes('min-Admin')) {
+    const violation = findPostgresCheckViolation(err);
+    if (violation?.message.includes('min-Admin')) {
       throw new MinAdminInvariantError(
         'Cannot demote — chapter must always have at least one Admin',
       );
