@@ -49,7 +49,19 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test
+      # TEMP(agent/modernization-p1): tee output and surface the failure tail
+      # as an annotation — the dev pod's egress allowlist can't reach the
+      # Actions log blobs. Reverted before merge.
+      - name: pnpm test
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! pnpm test 2>&1 | tee /tmp/test-out.log; then
+            tail=$(grep -aE "FAIL|✖|Error:|AssertionError|expected|ELIFECYCLE|Command failed" /tmp/test-out.log | tail -60 | head -c 3500)
+            tail="${tail//'%'/%25}"; tail="${tail//$'\n'/%0A}"; tail="${tail//$'\r'/%0D}"
+            echo "::error title=pnpm test failure tail::${tail}"
+            exit 1
+          fi
 
   build-image:
     # Hybrid trigger: fires on both `release.published` AND tag pushes.
