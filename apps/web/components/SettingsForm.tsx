@@ -49,7 +49,7 @@ const FIELDS: ReadonlyArray<FieldDef> = [
   {
     key: 'chapter_display_name',
     label: 'Chapter display name',
-    helper: 'Shown in the header and in outbound email subjects.',
+    helper: 'Used in outbound email subjects.',
     type: 'text',
   },
 ];
