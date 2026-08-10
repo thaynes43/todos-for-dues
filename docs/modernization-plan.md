@@ -116,6 +116,16 @@ Known-churn risks (budget time here):
 
 ## Phase 2 — auth restructure (remove local auth, become a portal OIDC client)
 
+> **P2 outcome (2026-08-10):** landed per this section; decisions recorded in
+> `docs/adrs/013-portal-oidc-client.md` (§2.0 mapping adopted-by-default,
+> `TODO(tom)` to bless; min-Admin demotions keep-and-log). Deltas vs the
+> text below: migration 0011 also wipes pre-SSO identity rows
+> (chapter_settings preserved via snapshot/restore — its `updated_by` FK
+> would otherwise be caught in the CASCADE); live IdP discovery verified
+> in-pod (S256-only, userinfo present) but its `claims_supported` does NOT
+> advertise `tier`/`capabilities` — ADR-013 C-08 makes confirming
+> tier-in-token a Phase-4 gate.
+
 **Gate:** the portal's OIDC-provider endpoints (ADR 0007, Better Auth provider
 plugin on sigoalumni.org) must exist for the live cutover; the code + tests can
 be built NOW against the repo's e2e OIDC mock reshaped to the portal's claim
