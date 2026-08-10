@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { unsignedPortalIdToken } from './personas';
 
 /**
  * One-time seed for the e2e suite. Runs in globalSetup after the migrations
@@ -10,11 +11,13 @@ import { Pool } from 'pg';
  *   - chapter Admin (portal tier `admin`)
  *   - standing Moderator (portal tier `operator`)
  *
- * Rows are inserted directly (fast, idempotent); the matching portal
- * identity is registered at the mock so `signInAs` links the sigo-portal
- * account on first sign-in (ADR-013 — no credential accounts exist anymore).
- * Per-spec unique personas are seeded inside each spec with UUID-suffixed
- * emails (Trap 6 — workers > 1 safety).
+ * Rows are inserted directly (fast, idempotent) and PRE-LINKED: the
+ * sigo-portal account row is seeded alongside the user so parallel workers'
+ * simultaneous first sign-ins of a shared persona never race Better Auth's
+ * account-linking unique constraint (and prod post-wipe has no linking path
+ * anyway — every prod user is portal-created). The matching identity is
+ * registered at the mock. Per-spec unique personas are seeded inside each
+ * spec with UUID-suffixed emails (Trap 6 — workers > 1 safety).
  */
 export interface SeededFixtures {
   adminId: string;
@@ -74,15 +77,23 @@ async function upsertUser(
     `SELECT id FROM users WHERE email = $1`,
     [email],
   );
-  if (existing.rows[0]) {
-    return existing.rows[0].id;
-  }
-  const inserted = await pool.query<{ id: string }>(
-    `INSERT INTO users (email, display_name, role, email_verified)
-     VALUES ($1, $2, $3, true) RETURNING id`,
-    [email, displayName, role],
+  const userId =
+    existing.rows[0]?.id ??
+    (
+      await pool.query<{ id: string }>(
+        `INSERT INTO users (email, display_name, role, email_verified)
+         VALUES ($1, $2, $3, true) RETURNING id`,
+        [email, displayName, role],
+      )
+    ).rows[0]!.id;
+  const tier = role === 'Admin' ? 'admin' : 'operator';
+  await pool.query(
+    `INSERT INTO "account" (user_id, provider_id, account_id, id_token)
+     VALUES ($1::uuid, 'sigo-portal', $1::uuid::text, $2)
+     ON CONFLICT ON CONSTRAINT account_provider_account_unique DO NOTHING`,
+    [userId, unsignedPortalIdToken({ sub: userId, email, name: displayName, tier })],
   );
-  return inserted.rows[0]!.id;
+  return userId;
 }
 
 async function registerIdentity(

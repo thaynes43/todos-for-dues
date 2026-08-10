@@ -47,6 +47,32 @@ function portalMockBaseUrl(): string {
 }
 
 /**
+ * Unsigned id_token (header.payload.sig) carrying the portal claim set.
+ * Used to PRE-LINK seeded personas' `sigo-portal` account rows so their
+ * first sign-in takes the existing-account path instead of Better Auth's
+ * linking path. Two reasons: (a) prod has no linking path at all post-wipe
+ * (every prod user is portal-created), so pre-linked is the prod-shaped
+ * fixture; (b) concurrent FIRST sign-ins of a shared persona (the global
+ * Admin/Moderator under parallel workers) would race linkAccount's unique
+ * constraint and bounce one flow to /login?error=….
+ * Claim-sync only decodes the payload; sign-ins overwrite it with a
+ * freshly-signed token from the mock (updateAccountOnSignIn).
+ */
+export function unsignedPortalIdToken(claims: {
+  sub: string;
+  email: string;
+  name: string;
+  tier: string;
+}): string {
+  const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  return `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64({
+    ...claims,
+    email_verified: true,
+    capabilities: [],
+  })}.e2e-seed`;
+}
+
+/**
  * Upsert an identity at the portal mock (keyed by email). `tier` is a plain
  * string on the wire so specs can exercise unknown-tier fail-closed paths.
  */
@@ -65,32 +91,65 @@ export async function registerPortalIdentity(
   }
 }
 
+/** Fill the mock's members door (static HTML — no hydration race). Identity
+ * selection is per-browser-session, so parallel workers can't race each
+ * other. */
+async function completeMembersDoor(page: Page, email: string): Promise<void> {
+  await page.getByTestId('portal-email').fill(email);
+  await page.getByTestId('portal-continue').click();
+}
+
 /**
- * Kick off the portal SSO flow and drive the mock's members door up to the
- * point the browser is redirected back to the app. Does NOT assert the
- * outcome — refusal specs land on /login?error=…, happy paths land signed-in.
+ * Kick off the portal SSO flow THROUGH THE /login UI and drive the mock's
+ * members door up to the point the browser is redirected back to the app.
+ * Does NOT assert the outcome — refusal specs land on /login?error=…, happy
+ * paths land signed-in. Use `signInAs` for bulk sign-ins; this UI path is
+ * for the specs that assert the login surface itself.
  */
 export async function startPortalSignIn(page: Page, email: string): Promise<void> {
   await page.goto('/login');
   // Wait for /login to hydrate. On a cold dev server (esp. GHA runners) the
-  // button may still be mounting when goto resolves.
+  // button may still be mounting when goto resolves; re-click once if the
+  // first click was swallowed pre-hydration (repo pattern, cf. enrollAsActive).
   await page.waitForLoadState('load');
   const sso = page.getByTestId('sso-button');
   await sso.click();
-  // Members door (mock) — identity selection is per-browser-session, so
-  // parallel workers can't race each other.
-  await page.waitForURL(/\/oauth\/authorize/, { timeout: 30_000 });
-  await page.getByTestId('portal-email').fill(email);
-  await page.getByTestId('portal-continue').click();
+  try {
+    await page.waitForURL(/\/oauth\/authorize/, { timeout: 10_000 });
+  } catch {
+    await sso.click();
+    await page.waitForURL(/\/oauth\/authorize/, { timeout: 20_000 });
+  }
+  await completeMembersDoor(page, email);
 }
 
 /**
  * Full portal sign-in for a registered identity, waiting for a signed-in
  * landing. Successful sign-in lands on `/` (transient), `/jobs`
  * (Active/Alumni/Admin) or `/moderation-queue` (Moderator).
+ *
+ * Fast path: starts the OAuth flow via the sign-in API (page.request shares
+ * the browser context's cookie jar, so the state cookie persists) instead of
+ * loading + hydrating /login for every re-auth — the suite re-auths dozens
+ * of times per run and the dev-server page churn was tripping form-hydration
+ * timeouts on GHA. The /login UI itself is covered by
+ * e2e/auth/portal-sso.spec.ts via `startPortalSignIn`.
  */
 export async function signInAs(page: Page, email: string): Promise<void> {
-  await startPortalSignIn(page, email);
+  const res = await page.request.post('/api/auth/sign-in/oauth2', {
+    data: {
+      providerId: 'sigo-portal',
+      callbackURL: '/',
+      errorCallbackURL: '/login',
+    },
+  });
+  if (!res.ok()) {
+    throw new Error(`sign-in POST failed (${res.status()}): ${await res.text()}`);
+  }
+  const { url } = (await res.json()) as { url?: string };
+  if (!url) throw new Error('sign-in POST returned no authorization url');
+  await page.goto(url);
+  await completeMembersDoor(page, email);
   await page.waitForURL(/\/(jobs|moderation-queue)?$/, { timeout: 30_000 });
 }
 
