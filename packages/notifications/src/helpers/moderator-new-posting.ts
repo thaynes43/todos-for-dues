@@ -42,7 +42,7 @@ export async function sendModeratorQueueEmail(
 
   return sendEmail({
     to: recipient,
-    subject: `${prefix}${chapterName} — new posting awaiting moderation: "${subjectSuffix}"`,
+    subject: `${prefix}${chapterName} — new posting: "${subjectSuffix}"`,
     template: ModeratorNewPosting({
       jobDescription: job.description,
       jobId: job.id,

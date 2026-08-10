@@ -1,13 +1,12 @@
 import * as React from 'react';
+import { Heading, Html, Link, Section, Text } from '@react-email/components';
 import {
-  Container,
-  Heading,
-  Html,
-  Link,
-  Section,
-  Text,
-} from '@react-email/components';
-import { Layout } from './_components/Layout';
+  Layout,
+  emailButton,
+  emailColors,
+  emailHeading,
+  emailText,
+} from './_components/Layout';
 
 export interface AdminDisputeProps {
   jobDescription: string;
@@ -28,31 +27,31 @@ export function AdminDispute({
 }: AdminDisputeProps): React.ReactElement {
   return (
     <Html>
-      <Layout preview="Admin attention needed — dispute opened">
-        <Container>
-          <Heading as="h2">Dispute opened — Admin attention needed</Heading>
+      <Layout preview="Dispute opened — needs an Admin">
+        <Heading as="h2" style={emailHeading}>
+          Dispute opened — needs an Admin
+        </Heading>
 
-          <Section>
-            <Text>
-              <strong>Job:</strong> {jobDescription}
-            </Text>
-            <Text>
-              <strong>Job ID:</strong> {jobId}
-            </Text>
-            <Text>
-              <strong>Disputed by:</strong> {disputerDisplayName} ({disputerRole})
-            </Text>
-          </Section>
+        <Section>
+          <Text style={emailText}>
+            <strong>Job:</strong> {jobDescription}
+          </Text>
+          <Text style={emailText}>
+            <strong>Disputed by:</strong> {disputerDisplayName} ({disputerRole})
+          </Text>
+          <Text style={emailText}>
+            <strong>Reason:</strong> {reason}
+          </Text>
+          <Text style={{ ...emailText, fontSize: '13px', color: emailColors.muted }}>
+            Job ID: {jobId}
+          </Text>
+        </Section>
 
-          <Section>
-            <Heading as="h3">Reason</Heading>
-            <Text>{reason}</Text>
-          </Section>
-
-          <Section>
-            <Link href={adminViewUrl}>Open in Admin view →</Link>
-          </Section>
-        </Container>
+        <Section style={{ marginTop: '16px' }}>
+          <Link href={adminViewUrl} style={emailButton}>
+            Review the dispute
+          </Link>
+        </Section>
       </Layout>
     </Html>
   );

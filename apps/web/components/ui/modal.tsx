@@ -41,9 +41,9 @@ export function Modal({
         aria-modal="true"
         aria-label={title}
         data-testid={testId}
-        className="w-full max-w-md rounded-lg border bg-background p-4 shadow-lg"
+        className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-6 shadow-lg dark:border-stone-800 dark:bg-stone-900"
       >
-        <h2 className="mb-3 text-lg font-semibold">{title}</h2>
+        <h2 className="mb-3 text-xl font-semibold">{title}</h2>
         {children}
       </div>
     </div>

@@ -34,7 +34,7 @@ export function DisputeJobModal({ jobId }: { jobId: string }) {
     <div className="space-y-1">
       <Button
         type="button"
-        variant="destructive"
+        variant="neutral"
         onClick={() => setOpen(true)}
         data-testid="dispute-button"
       >
@@ -49,11 +49,11 @@ export function DisputeJobModal({ jobId }: { jobId: string }) {
         testId="dispute-modal"
       >
         <form onSubmit={handleSubmit} className="space-y-3">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm opacity-70">
             An Admin will review. Tell them what went wrong.
           </p>
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">Reason</span>
+          <label className="grid gap-1.5 text-sm font-medium">
+            <span>Reason</span>
             <Textarea
               required
               value={reason}
@@ -63,14 +63,14 @@ export function DisputeJobModal({ jobId }: { jobId: string }) {
             />
           </label>
           {dispute.error ? (
-            <p role="alert" className="text-sm text-red-700">
+            <p role="alert" className="text-sm text-red-700 dark:text-red-300">
               {dispute.error.message}
             </p>
           ) : null}
           <div className="flex gap-2 justify-end">
             <Button
               type="button"
-              variant="outline"
+              variant="neutral"
               onClick={() => setOpen(false)}
               disabled={dispute.isPending}
               data-testid="dispute-cancel"
@@ -79,7 +79,7 @@ export function DisputeJobModal({ jobId }: { jobId: string }) {
             </Button>
             <Button
               type="submit"
-              variant="destructive"
+              variant="neutral"
               disabled={!canSubmit}
               data-testid="dispute-submit"
             >

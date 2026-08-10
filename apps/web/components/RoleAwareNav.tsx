@@ -58,9 +58,13 @@ export function RoleAwareNav({ role }: { role: Role | null }) {
   if (!role) return null;
   const visible = NAV_LINKS.filter((l) => l.roles.includes(role));
   const allHrefs = visible.map((l) => l.href);
+  // One line, wraps on phones — no hamburger (design-system main-nav shape).
   return (
-    <nav aria-label="primary" className="border-b bg-muted/40 px-4 py-2">
-      <ul className="mx-auto flex max-w-5xl gap-4 text-sm">
+    <nav
+      aria-label="primary"
+      className="border-b border-stone-200 px-6 dark:border-stone-800"
+    >
+      <ul className="mx-auto flex max-w-5xl flex-wrap gap-x-5 text-sm">
         {visible.map((l) => {
           const active = isActiveLink(pathname, l.href, allHrefs);
           return (
@@ -72,8 +76,8 @@ export function RoleAwareNav({ role }: { role: Role | null }) {
                 data-active={active ? 'true' : 'false'}
                 className={
                   active
-                    ? 'font-semibold text-foreground underline underline-offset-4'
-                    : 'text-muted-foreground hover:underline'
+                    ? 'inline-block py-2 font-semibold underline decoration-2 underline-offset-4'
+                    : 'inline-block py-2 hover:underline underline-offset-4'
                 }
               >
                 {l.label}

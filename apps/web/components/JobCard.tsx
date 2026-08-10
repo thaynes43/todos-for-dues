@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import type { JobState } from '@app/db/schema';
+import { cardLinkBase } from '@/components/ui/styles';
+import { cn } from '@/lib/utils';
 import { JobStateBadge } from './JobStateBadge';
 
 export interface JobCardProps {
@@ -18,15 +20,15 @@ export function JobCard({
   state,
 }: JobCardProps) {
   return (
-    <li className="rounded-lg border bg-card p-4 shadow-sm">
-      <Link href={`/jobs/${id}`} className="block space-y-2 hover:underline">
+    <li className={cardLinkBase}>
+      <Link href={`/jobs/${id}`} className="block space-y-2 p-6">
         <div className="flex items-start justify-between gap-2">
-          <p className="font-medium leading-tight">{description}</p>
+          <p className="text-xl leading-tight font-semibold">{description}</p>
           <JobStateBadge state={state} />
         </div>
-        <p className="text-sm text-muted-foreground">
-          Dues: <strong className="text-foreground">${duesAmount}</strong> · Recommended:{' '}
-          <strong className="text-foreground">{recommendedPeopleCount}</strong> people
+        <p className="text-sm opacity-70">
+          ${duesAmount} dues · {recommendedPeopleCount}{' '}
+          {recommendedPeopleCount === 1 ? 'person' : 'people'} recommended
         </p>
       </Link>
     </li>

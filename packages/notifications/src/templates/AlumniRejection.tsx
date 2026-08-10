@@ -1,12 +1,6 @@
 import * as React from 'react';
-import {
-  Container,
-  Heading,
-  Html,
-  Section,
-  Text,
-} from '@react-email/components';
-import { Layout } from './_components/Layout';
+import { Heading, Html, Section, Text } from '@react-email/components';
+import { Layout, emailHeading, emailText } from './_components/Layout';
 
 export interface AlumniRejectionProps {
   jobDescription: string;
@@ -20,24 +14,22 @@ export function AlumniRejection({
   return (
     <Html>
       <Layout preview="Your posting was not approved">
-        <Container>
-          <Heading as="h2">Your posting was not approved</Heading>
-          <Text>
-            A Moderator reviewed your posting and decided not to approve it. The reason they gave is
-            below; you are welcome to revise and re-submit.
+        <Heading as="h2" style={emailHeading}>
+          Your posting was not approved
+        </Heading>
+        <Text style={emailText}>
+          A Moderator passed on it — the reason is below. Revise and re-submit
+          any time.
+        </Text>
+
+        <Section>
+          <Text style={emailText}>
+            <strong>Job:</strong> {jobDescription}
           </Text>
-
-          <Section>
-            <Text>
-              <strong>Job:</strong> {jobDescription}
-            </Text>
-          </Section>
-
-          <Section>
-            <Heading as="h3">Reason</Heading>
-            <Text>{reason}</Text>
-          </Section>
-        </Container>
+          <Text style={emailText}>
+            <strong>Reason:</strong> {reason}
+          </Text>
+        </Section>
       </Layout>
     </Html>
   );

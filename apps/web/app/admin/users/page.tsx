@@ -1,14 +1,15 @@
 import { UserListTable } from '@/components/UserListTable';
+import { PageHeader } from '@/components/PageHeader';
+
+export const metadata = { title: 'Users' };
 
 export default function AdminUsersPage() {
   return (
-    <section className="space-y-4" data-testid="admin-users">
-      <header>
-        <h1 className="text-2xl font-semibold">Users</h1>
-        <p className="text-sm text-muted-foreground">
-          Chapter roster. Click a role chip to grant or demote.
-        </p>
-      </header>
+    <section className="space-y-8" data-testid="admin-users">
+      <PageHeader
+        title="Users"
+        description="Everyone in the chapter — tap a role to change it."
+      />
       <UserListTable />
     </section>
   );

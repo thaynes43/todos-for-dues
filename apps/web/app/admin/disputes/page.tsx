@@ -1,5 +1,8 @@
 import { getServerCaller } from '@/lib/trpc-server';
 import { DisputeCardList, type DisputeRow } from '@/components/DisputeCardList';
+import { PageHeader } from '@/components/PageHeader';
+
+export const metadata = { title: 'Disputes' };
 
 export default async function AdminDisputesPage() {
   const caller = await getServerCaller();
@@ -14,14 +17,11 @@ export default async function AdminDisputesPage() {
   }));
 
   return (
-    <section className="space-y-4" data-testid="admin-disputes">
-      <header>
-        <h1 className="text-2xl font-semibold">Disputes</h1>
-        <p className="text-sm text-muted-foreground">
-          Jobs currently in the disputed state. Resolve in-place; the row
-          disappears once the resolution is recorded.
-        </p>
-      </header>
+    <section className="space-y-8" data-testid="admin-disputes">
+      <PageHeader
+        title="Disputes"
+        description="Disputed jobs — resolve them here."
+      />
       <DisputeCardList rows={rows} />
     </section>
   );

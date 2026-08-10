@@ -47,7 +47,7 @@ export async function sendTreasurerEmail(
 
   return sendEmail({
     to: recipient,
-    subject: `${chapterName} — payment-sent for "${subjectSuffix}"`,
+    subject: `${chapterName} — payment sent: "${subjectSuffix}"`,
     template: TreasurerBreakdown({
       jobDescription: job.description,
       jobId: job.id,

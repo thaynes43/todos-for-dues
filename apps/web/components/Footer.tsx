@@ -1,10 +1,12 @@
 export function Footer() {
   return (
-    <footer className="border-t bg-background px-4 py-6 text-sm text-muted-foreground">
-      <div className="mx-auto max-w-5xl">
+    <footer className="border-t border-stone-200 px-6 py-6 text-sm opacity-70 dark:border-stone-800">
+      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2">
         <p>
-          Tipping is encouraged when work goes above and beyond. (Send directly to
-          the Active via Venmo or other channel.)
+          Sigo Alumni — <em>Non Sibi Sed Omnibus</em>
+        </p>
+        <p>
+          Questions? <a href="mailto:admin@sigoalumni.org" className="underline underline-offset-4">admin@sigoalumni.org</a>
         </p>
       </div>
     </footer>

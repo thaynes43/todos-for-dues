@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { StatusNote } from '@/components/StatusNote';
 
 export interface MinAdminErrorBannerProps {
   canPromote: boolean;
@@ -11,10 +12,10 @@ export function MinAdminErrorBanner({
 }: MinAdminErrorBannerProps) {
   const href = `/admin/users?returnTo=${encodeURIComponent(returnTo)}`;
   return (
-    <div
-      role="alert"
-      data-testid="min-admin-error-banner"
-      className="space-y-2 rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900"
+    <StatusNote
+      tone="warning"
+      testId="min-admin-error-banner"
+      className="space-y-2 p-4"
     >
       <p className="font-semibold">
         Cannot demote — this is the chapter&apos;s only Admin.
@@ -29,12 +30,12 @@ export function MinAdminErrorBanner({
           <Link
             href={href}
             data-testid="min-admin-error-banner-link"
-            className="font-medium text-amber-900 underline hover:text-amber-700"
+            className="font-medium underline underline-offset-4"
           >
             Promote another user to Admin first →
           </Link>
         </p>
       ) : null}
-    </div>
+    </StatusNote>
   );
 }

@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ROLES, type Role } from '@app/db/schema';
 import { trpc } from '@/lib/trpc-client';
+import { cn } from '@/lib/utils';
+import { tierPill } from '@/components/ui/styles';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { MinAdminErrorBanner } from './MinAdminErrorBanner';
@@ -21,12 +23,6 @@ interface PendingDemote {
   toRole: Role;
 }
 
-const ROLE_CHIP_CLASSES: Record<Role, string> = {
-  Admin: 'border-red-300 bg-red-50 text-red-900',
-  Moderator: 'border-amber-300 bg-amber-50 text-amber-900',
-  Alumni: 'border-slate-300 bg-slate-50 text-slate-900',
-  Active: 'border-emerald-300 bg-emerald-50 text-emerald-900',
-};
 
 function isInternalPath(value: string | null): value is string {
   if (!value) return false;
@@ -100,7 +96,7 @@ export function UserListTable() {
 
   if (list.isLoading) {
     return (
-      <p className="text-sm text-muted-foreground" data-testid="users-loading">
+      <p className="text-sm opacity-70" data-testid="users-loading">
         Loading users…
       </p>
     );
@@ -109,7 +105,7 @@ export function UserListTable() {
     return (
       <p
         role="alert"
-        className="text-sm text-red-700"
+        className="text-sm text-red-700 dark:text-red-300"
         data-testid="users-error"
       >
         {list.error.message}
@@ -122,21 +118,22 @@ export function UserListTable() {
     <div className="space-y-3" data-testid="user-list-table-root">
       {returnTo ? (
         <p
-          className="rounded border border-sky-300 bg-sky-50 p-3 text-sm text-sky-900"
+          role="status"
+          className="rounded-lg bg-stone-100 px-4 py-3 text-stone-800 dark:bg-stone-800 dark:text-stone-200"
           data-testid="user-list-return-banner"
         >
-          Grant Admin to another user, then we&apos;ll bring you back to{' '}
-          <code>{returnTo}</code>.
+          Grant Admin to another user, then we&apos;ll bring you back.
         </p>
       ) : null}
       {minAdminError ? (
         <MinAdminErrorBanner canPromote={true} returnTo={returnTo ?? undefined} />
       ) : null}
+      <div className="overflow-x-auto">
       <table
-        className="w-full border-collapse text-sm"
+        className="w-full border-collapse"
         data-testid="user-list-table"
       >
-        <thead className="border-b bg-muted/40 text-left">
+        <thead className="border-b border-stone-300 text-left text-sm dark:border-stone-700">
           <tr>
             <th className="px-3 py-2 font-medium">Display name</th>
             <th className="px-3 py-2 font-medium">Email</th>
@@ -147,7 +144,7 @@ export function UserListTable() {
           {rows.map((row) => (
             <tr
               key={row.id}
-              className="border-b align-top last:border-b-0"
+              className="border-b border-stone-200 align-top last:border-b-0 dark:border-stone-800"
               data-testid="user-list-row"
               data-user-id={row.id}
               data-user-role={row.role}
@@ -161,7 +158,7 @@ export function UserListTable() {
                   {row.displayName}
                 </Link>
               </td>
-              <td className="px-3 py-2 text-muted-foreground">{row.email}</td>
+              <td className="px-3 py-2 opacity-70">{row.email}</td>
               <td className="px-3 py-2">
                 <div className="relative inline-block">
                   <button
@@ -170,7 +167,7 @@ export function UserListTable() {
                     aria-haspopup="menu"
                     aria-expanded={openRowId === row.id}
                     data-testid="user-list-role-chip"
-                    className={`inline-flex items-center gap-1 rounded-full border px-3 py-0.5 text-xs font-medium ${ROLE_CHIP_CLASSES[row.role]}`}
+                    className={cn(tierPill, 'gap-1 px-3')}
                   >
                     {row.role}
                     <span aria-hidden="true">▾</span>
@@ -178,7 +175,7 @@ export function UserListTable() {
                   {openRowId === row.id ? (
                     <div
                       role="menu"
-                      className="absolute left-0 z-10 mt-1 min-w-[10rem] rounded-md border bg-popover p-1 shadow-md"
+                      className="absolute left-0 z-10 mt-1 min-w-[10rem] rounded-2xl border border-stone-200 bg-white p-2 shadow-lg dark:border-stone-800 dark:bg-stone-900"
                       data-testid="user-list-role-menu"
                     >
                       {ROLES.filter((r) => r !== row.role).map((target) => (
@@ -188,7 +185,7 @@ export function UserListTable() {
                           role="menuitem"
                           onClick={() => onSelect(row, target)}
                           data-testid={`user-list-role-option-${target}`}
-                          className="block w-full rounded px-2 py-1 text-left text-sm hover:bg-muted"
+                          className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-stone-100 dark:hover:bg-stone-800"
                           disabled={grantRole.isPending}
                         >
                           {target}
@@ -202,6 +199,7 @@ export function UserListTable() {
           ))}
         </tbody>
       </table>
+      </div>
       <Modal
         open={pendingDemote !== null}
         onClose={() => {
@@ -212,20 +210,20 @@ export function UserListTable() {
       >
         {pendingDemote ? (
           <form onSubmit={onConfirmDemote} className="space-y-3">
-            <p className="text-sm">
+            <p>
               Demote <strong>{pendingDemote.user.displayName}</strong> from
-              Admin to {pendingDemote.toRole}? They will lose access to{' '}
-              <code>/admin/*</code> immediately.
+              Admin to {pendingDemote.toRole}? They lose Admin access
+              immediately.
             </p>
             {grantRole.error ? (
-              <p role="alert" className="text-sm text-red-700">
+              <p role="alert" className="text-sm text-red-700 dark:text-red-300">
                 {grantRole.error.message}
               </p>
             ) : null}
             <div className="flex justify-end gap-2">
               <Button
                 type="button"
-                variant="outline"
+                variant="neutral"
                 onClick={() => setPendingDemote(null)}
                 disabled={grantRole.isPending}
                 data-testid="user-list-demote-cancel"
@@ -234,7 +232,7 @@ export function UserListTable() {
               </Button>
               <Button
                 type="submit"
-                variant="destructive"
+                variant="neutral"
                 disabled={grantRole.isPending}
                 data-testid="user-list-demote-confirm-submit"
               >

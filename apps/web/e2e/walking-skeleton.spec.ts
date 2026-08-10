@@ -268,7 +268,7 @@ test.describe('PLAN-008 walking skeleton — full happy-path job loop', () => {
         const mine = all.filter((c) => c.idempotencyKey === idempotencyKey);
         expect(mine[0]!.to).toBe(env.BOOTSTRAP_TREASURER_RECIPIENT_EMAIL);
         expect(mine[0]!.subject).toContain(
-          `payment-sent for "Help me move a couch`,
+          `payment sent: "Help me move a couch`,
         );
         // Per-Active credit ($25.00) renders in the HTML body.
         expect(mine[0]!.html).toContain('$25.00');

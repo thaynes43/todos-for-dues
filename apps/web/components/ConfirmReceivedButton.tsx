@@ -25,7 +25,7 @@ export function ConfirmReceivedButton({ jobId }: { jobId: string }) {
         {confirm.isPending ? 'Confirming…' : 'Confirm received'}
       </Button>
       {confirm.error ? (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-red-700 dark:text-red-300">
           {confirm.error.message}
         </p>
       ) : null}

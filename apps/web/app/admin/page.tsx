@@ -1,4 +1,7 @@
 import { getServerCaller } from '@/lib/trpc-server';
+import { PageHeader } from '@/components/PageHeader';
+
+export const metadata = { title: 'Admin' };
 import { AggregateCountsCards } from '@/components/AggregateCountsCards';
 
 export default async function AdminDashboardPage() {
@@ -6,13 +9,11 @@ export default async function AdminDashboardPage() {
   const counts = await caller.admin.getAggregateCounts();
 
   return (
-    <section className="space-y-4" data-testid="admin-dashboard">
-      <header>
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          Chapter-wide job counts by state. Click a card to filter the jobs list.
-        </p>
-      </header>
+    <section className="space-y-8" data-testid="admin-dashboard">
+      <PageHeader
+        title="Dashboard"
+        description="Job counts by state — pick a card to see the list."
+      />
       <AggregateCountsCards counts={counts} />
     </section>
   );

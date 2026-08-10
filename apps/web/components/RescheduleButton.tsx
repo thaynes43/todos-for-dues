@@ -23,14 +23,14 @@ export function RescheduleButton({ jobId }: { jobId: string }) {
     <div className="space-y-1">
       <Button
         type="button"
-        variant="outline"
+        variant="neutral"
         onClick={() => setOpen(true)}
         data-testid="reschedule-button"
       >
         Reschedule
       </Button>
       {reschedule.error ? (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-red-700 dark:text-red-300">
           {reschedule.error.message}
         </p>
       ) : null}
@@ -40,20 +40,20 @@ export function RescheduleButton({ jobId }: { jobId: string }) {
         title="Reschedule this job?"
         testId="reschedule-modal"
       >
-        <p className="text-sm">
+        <p>
           Existing enrollments stay on the roster — Actives can self-unenroll if
           the new date won&apos;t work for them. (You&apos;ll pick a new date by
           locking again.)
         </p>
         {reschedule.error ? (
-          <p role="alert" className="mt-2 text-sm text-red-700">
+          <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">
             {reschedule.error.message}
           </p>
         ) : null}
         <div className="mt-4 flex gap-2 justify-end">
           <Button
             type="button"
-            variant="outline"
+            variant="neutral"
             disabled={reschedule.isPending}
             onClick={() => setOpen(false)}
             data-testid="reschedule-cancel"

@@ -23,9 +23,9 @@ export function MarkPaymentSentButton({
   return (
     <div className="space-y-1">
       {treasurerRecipient ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm opacity-70">
           Treasurer:{' '}
-          <strong className="text-foreground">{treasurerRecipient}</strong>
+          <strong>{treasurerRecipient}</strong>
         </p>
       ) : null}
       <Button
@@ -37,7 +37,7 @@ export function MarkPaymentSentButton({
         {mark.isPending ? 'Sending…' : 'Mark payment sent'}
       </Button>
       {mark.error ? (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-red-700 dark:text-red-300">
           {mark.error.message}
         </p>
       ) : null}

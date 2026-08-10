@@ -73,7 +73,7 @@ describe('sendAdminDisputeEmail()', () => {
     const payload = mockSend.mock.calls[0]![0];
     expect(payload.to).toBe('admins@chapter.invalid');
     expect(payload.subject).toContain('Sigma Phi Omicron');
-    expect(payload.subject).toContain('DISPUTE');
+    expect(payload.subject).toContain('dispute');
     expect(payload.subject).toContain('Clean the lawn');
   });
 

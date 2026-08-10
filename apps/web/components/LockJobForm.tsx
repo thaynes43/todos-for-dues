@@ -41,8 +41,8 @@ export function LockJobForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-2" data-testid="lock-job-form">
-      <label className="block space-y-1">
-        <span className="block text-sm font-medium">Work date</span>
+      <label className="grid gap-1.5 text-sm font-medium">
+        <span>Work date</span>
         <Input
           type="datetime-local"
           required
@@ -52,14 +52,14 @@ export function LockJobForm({
         />
       </label>
       {enrolleeCount === 0 ? (
-        <p className="text-sm text-amber-700">
+        <p className="text-sm text-amber-700 dark:text-amber-300">
           At least one Active must be enrolled before locking.
         </p>
       ) : null}
       {lock.error ? (
         <p
           role="alert"
-          className="text-sm text-red-700"
+          className="text-sm text-red-700 dark:text-red-300"
           data-testid="lock-job-error"
         >
           {lock.error.message}

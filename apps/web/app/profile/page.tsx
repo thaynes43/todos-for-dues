@@ -1,7 +1,11 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getServerSession, getSessionRole } from '@app/auth';
+import { PageHeader } from '@/components/PageHeader';
+import { tierPill } from '@/components/ui/styles';
 import { ProfileRoleSection } from './ProfileRoleSection';
+
+export const metadata = { title: 'Profile' };
 
 export default async function ProfilePage() {
   const session = await getServerSession(await headers());
@@ -10,42 +14,31 @@ export default async function ProfilePage() {
   const email = session.user.email;
 
   return (
-    <section className="space-y-6" data-testid="profile-page">
-      <header>
-        <h1 className="text-2xl font-semibold">Profile</h1>
-        <p className="text-sm text-muted-foreground">
-          Your account details and self-service role change.
-        </p>
-      </header>
-      <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+    <section className="space-y-8" data-testid="profile-page">
+      <PageHeader title="Profile" description="Your account and role." />
+      <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <dt className="font-medium">Display name</dt>
-          <dd
-            className="text-muted-foreground"
-            data-testid="profile-display-name"
-          >
-            {displayName}
-          </dd>
+          <dt className="text-sm font-medium opacity-60">Display name</dt>
+          <dd data-testid="profile-display-name">{displayName}</dd>
         </div>
         <div>
-          <dt className="font-medium">Email</dt>
-          <dd className="text-muted-foreground" data-testid="profile-email">
-            {email}
-          </dd>
+          <dt className="text-sm font-medium opacity-60">Email</dt>
+          <dd data-testid="profile-email">{email}</dd>
         </div>
         <div>
-          <dt className="font-medium">Current role</dt>
-          <dd className="text-muted-foreground" data-testid="profile-role">
-            {role}
+          <dt className="text-sm font-medium opacity-60">Current role</dt>
+          <dd className="mt-0.5">
+            <span className={tierPill} data-testid="profile-role">
+              {role}
+            </span>
           </dd>
         </div>
       </dl>
-      <section className="space-y-2">
-        <h2 className="text-lg font-semibold">Change your role</h2>
-        <p className="text-xs text-muted-foreground">
-          Self-service is limited to non-privileged roles. Moderators and Admins
-          appear here only as the current role; ask an Admin to grant a
-          privileged role.
+      <section className="space-y-3">
+        <h2 className="text-2xl font-semibold sm:text-3xl">Change your role</h2>
+        <p className="max-w-2xl text-sm opacity-70">
+          Self-service covers Active and Alumni; Moderator and Admin come from
+          an Admin.
         </p>
         <ProfileRoleSection role={role} />
       </section>

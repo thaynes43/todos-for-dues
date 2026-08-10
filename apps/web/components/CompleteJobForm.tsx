@@ -51,9 +51,10 @@ export function CompleteJobForm({
       <ul className="space-y-1">
         {roster.map((r) => (
           <li key={r.activeId}>
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2">
               <input
                 type="checkbox"
+                className="size-4 accent-accent-strong"
                 checked={confirmed[r.activeId] ?? false}
                 onChange={(e) =>
                   setConfirmed((prev) => ({ ...prev, [r.activeId]: e.target.checked }))
@@ -66,7 +67,7 @@ export function CompleteJobForm({
         ))}
       </ul>
       {complete.error ? (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-red-700 dark:text-red-300">
           {complete.error.message}
         </p>
       ) : null}

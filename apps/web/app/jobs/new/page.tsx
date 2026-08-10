@@ -2,6 +2,9 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getServerSession, getSessionRole } from '@app/auth';
 import { PostJobForm } from '@/components/PostJobForm';
+import { PageHeader } from '@/components/PageHeader';
+
+export const metadata = { title: 'Post a job' };
 
 export default async function NewJobPage() {
   const session = await getServerSession(await headers());
@@ -9,11 +12,11 @@ export default async function NewJobPage() {
   const { role } = await getSessionRole(session.user.id);
   if (role === 'Active') {
     return (
-      <section className="space-y-2">
-        <h1 className="text-2xl font-semibold">Forbidden</h1>
-        <p className="text-sm text-muted-foreground">
-          Only Alumni can post jobs.
-        </p>
+      <section className="space-y-4">
+        <PageHeader
+          title="Alumni only"
+          description="Posting jobs is for Alumni — the Jobs page has what you can pick up."
+        />
       </section>
     );
   }
@@ -22,8 +25,11 @@ export default async function NewJobPage() {
   // useSession() round-trip.
   const defaultContactEmail = session.user.email ?? '';
   return (
-    <section className="mx-auto max-w-xl space-y-4">
-      <h1 className="text-2xl font-semibold">Post a job</h1>
+    <section className="mx-auto max-w-3xl space-y-8">
+      <PageHeader
+        title="Post a job"
+        description="Say what needs doing and what it pays toward dues."
+      />
       <PostJobForm defaultContactEmail={defaultContactEmail} />
     </section>
   );

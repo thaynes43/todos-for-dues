@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { EmptyState } from './EmptyState';
 import { ResolveDisputeModal } from './ResolveDisputeModal';
 
 const TRUNCATE_AT = 100;
@@ -37,36 +38,33 @@ export interface DisputeRow {
 export function DisputeCardList({ rows }: { rows: ReadonlyArray<DisputeRow> }) {
   if (rows.length === 0) {
     return (
-      <p
-        className="text-sm text-muted-foreground"
-        data-testid="dispute-card-list-empty"
-      >
-        No jobs are currently disputed.
-      </p>
+      <EmptyState bordered testId="dispute-card-list-empty">
+        No disputes right now — nothing needs you here.
+      </EmptyState>
     );
   }
 
   return (
-    <ul className="space-y-3" data-testid="dispute-card-list">
+    <ul className="space-y-4" data-testid="dispute-card-list">
       {rows.map((row) => (
         <li
           key={row.id}
           data-testid="dispute-card-row"
           data-job-id={row.id}
-          className="rounded-lg border bg-card p-4 shadow-sm"
+          className="rounded-2xl border border-stone-200 bg-white p-6 dark:border-stone-800 dark:bg-stone-900"
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
               <Link
                 href={`/admin/jobs/${row.id}`}
-                className="block font-medium hover:underline"
+                className="block text-xl leading-tight font-semibold hover:underline"
                 data-testid="dispute-card-link"
               >
                 {truncate(row.description)}
               </Link>
-              <p className="text-sm text-muted-foreground">
+              <p className="mt-1 text-sm opacity-70">
                 Disputed by{' '}
-                <strong className="text-foreground">
+                <strong>
                   {row.disputer?.displayName ?? 'unknown'}
                 </strong>
                 {row.disputer?.role ? ` (${row.disputer.role})` : ''}
@@ -78,7 +76,7 @@ export function DisputeCardList({ rows }: { rows: ReadonlyArray<DisputeRow> }) {
                   className="text-sm"
                   data-testid="dispute-card-reason"
                 >
-                  <span className="text-muted-foreground">Reason: </span>
+                  <span className="opacity-70">Reason: </span>
                   {truncate(row.disputeReason)}
                 </p>
               ) : null}

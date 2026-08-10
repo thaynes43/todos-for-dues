@@ -1,52 +1,74 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+@import 'tailwindcss';
 
-@custom-variant dark (&:is(.dark *));
-
+/*
+ * Sigo design-system v1.1 (sigo-alumni: backlog/ux-governance/design-system).
+ * This app implements sigo design-system v1.1:
+ *   - accent greens are brand facts (2013 letterhead), identical in both themes
+ *   - neutrals are stock Tailwind `stone`, muting is opacity (60/70/80), not gray
+ *   - dark mode is `prefers-color-scheme` only — no toggle, no class strategy
+ *   - radius: cards 16px (rounded-2xl), buttons/controls 8px (rounded-lg)
+ *   - elevation is border + surface color, not shadow
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --radius: 0.625rem;
-  --radius-md: calc(var(--radius) - 2px);
+  --accent: #588838; /* outlines, focus ring, hover-brighten on primary buttons */
+  --accent-strong: #4a7530; /* primary button fill; green text on white (AA at 16px) */
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
+@theme inline {
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+}
+
+/* Focus ring — design-system v1.1, copied verbatim. Never restyle per-component. */
+:focus-visible {
+  outline: 2px solid var(--accent); /* #588838 */
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/*
+ * Legacy scaffold vars, remapped to the stone/green palette so surfaces not yet
+ * on design-system utilities (login/signup/forgot-password/invites — being
+ * replaced by the portal-SSO seam) stay coherent until they are rewritten.
+ * New code uses stone/accent utilities directly, not these.
+ */
+:root {
+  --background: var(--color-stone-50);
+  --foreground: var(--color-stone-900);
+  --card: #ffffff;
+  --card-foreground: var(--color-stone-900);
+  --popover: #ffffff;
+  --popover-foreground: var(--color-stone-900);
+  --primary: var(--accent-strong);
+  --primary-foreground: #ffffff;
+  --secondary: var(--color-stone-100);
+  --secondary-foreground: var(--color-stone-900);
+  --muted: var(--color-stone-100);
+  --muted-foreground: var(--color-stone-500);
+  --destructive: var(--color-red-600);
+  --destructive-foreground: #ffffff;
+  --border: var(--color-stone-200);
+  --input: var(--color-stone-300);
+  --ring: var(--accent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: var(--color-stone-950);
+    --foreground: var(--color-stone-100);
+    --card: var(--color-stone-900);
+    --card-foreground: var(--color-stone-100);
+    --popover: var(--color-stone-900);
+    --popover-foreground: var(--color-stone-100);
+    --secondary: var(--color-stone-800);
+    --secondary-foreground: var(--color-stone-100);
+    --muted: var(--color-stone-800);
+    --muted-foreground: var(--color-stone-400);
+    --destructive: var(--color-red-400);
+    --destructive-foreground: var(--color-stone-950);
+    --border: var(--color-stone-800);
+    --input: var(--color-stone-700);
+  }
 }
 
 @theme inline {
@@ -62,17 +84,11 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
 }
 
 body {

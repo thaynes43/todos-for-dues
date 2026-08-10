@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getServerCaller } from '@/lib/trpc-server';
 import { RoleChangeHistoryTable } from '@/components/RoleChangeHistoryTable';
+import { tierPill } from '@/components/ui/styles';
 
 interface PageProps {
   params: Promise<{ userId: string }>;
@@ -23,18 +24,23 @@ export default async function AdminUserDetailPage({ params }: PageProps) {
   }
 
   return (
-    <section className="space-y-6" data-testid="admin-user-detail">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold" data-testid="admin-user-name">
+    <section className="space-y-8" data-testid="admin-user-detail">
+      <header className="space-y-2">
+        <h1
+          className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl"
+          data-testid="admin-user-name"
+        >
           {user.displayName}
         </h1>
-        <p className="text-sm text-muted-foreground">
-          <span data-testid="admin-user-email">{user.email}</span> ·{' '}
-          <span data-testid="admin-user-role">{user.role}</span>
+        <p className="flex flex-wrap items-center gap-2 text-sm opacity-70">
+          <span data-testid="admin-user-email">{user.email}</span>
+          <span className={tierPill} data-testid="admin-user-role">
+            {user.role}
+          </span>
         </p>
       </header>
-      <section className="space-y-2">
-        <h2 className="text-xl font-semibold">Role-change history</h2>
+      <section className="space-y-3">
+        <h2 className="text-2xl font-semibold sm:text-3xl">Role history</h2>
         <RoleChangeHistoryTable userId={user.id} />
       </section>
     </section>

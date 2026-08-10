@@ -19,9 +19,9 @@ export default async function AdminLayout({
   const disputedCount = (await caller.admin.listDisputed()).length;
 
   return (
-    <div className="flex flex-col gap-6 md:flex-row" data-testid="admin-layout">
+    <div className="flex flex-col gap-8 sm:flex-row" data-testid="admin-layout">
       <AdminNav disputedCount={disputedCount} />
-      <section className="flex-1 space-y-4">{children}</section>
+      <section className="min-w-0 flex-1 space-y-4">{children}</section>
     </div>
   );
 }
