@@ -2,7 +2,7 @@
 
 Next.js 16 (App Router) + TypeScript + Tailwind v4 + shadcn/ui. Tailwind picked v4 from the Next.js wizard (Q-PLN-01).
 
-This is the scaffolded MVP shell from PLAN-001 — placeholder home page, Better Auth + tRPC handlers wired but with no procedures or plugins. Business logic lands in PLAN-002 onward.
+The full MVP web app (v0.8.0): job posting/moderation/enrollment/completion flows, admin views with audit log, role management, invite management, SSE real-time updates, and Better Auth (credential + Google Workspace OIDC). <!-- Updated by the 2026-08 modernization audit; this file previously described the PLAN-001 scaffold. -->
 
 ## Quickstart
 
@@ -41,6 +41,10 @@ pnpm --filter web build           # production build
 
 ## Routes
 
-- `/` — placeholder home page.
-- `/api/auth/[...all]` — Better Auth catch-all (empty plugins; full wiring in PLAN-004).
-- `/api/trpc/[trpc]` — tRPC fetch adapter against an empty `appRouter` (procedures land in PLAN-005).
+- `/` — landing (redirects signed-in users into the app).
+- `/login`, `/signup?token=…`, `/forgot-password` — auth pages (credential + SSO; see `docs/adrs/002` + `007`).
+- `/jobs`, `/jobs/[jobId]`, `/jobs/new`, `/my-postings`, `/my-enrollments`, `/moderation-queue`, `/profile` — the job loop.
+- `/admin` + `/admin/{users,invites,disputes,audit-log,settings}` — Admin views.
+- `/api/auth/[...all]` — Better Auth handler (credential + `genericOAuth`).
+- `/api/trpc/[trpc]` — tRPC fetch adapter (`jobs`/`users`/`invites`/`settings`/`admin` routers).
+- `/api/events/chapter` — SSE stream; `/api/webhooks/resend` — delivery webhook; `/api/health` — probe.

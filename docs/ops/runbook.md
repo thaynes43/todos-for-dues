@@ -47,12 +47,17 @@ saved Explore deeplink with `{namespace="frontend",app="todos-for-dues"}`).
 
 ## 2. DB inspection
 
-Open a psql shell inside the cluster against the primary pod:
+Open a psql shell inside the cluster against the CNPG primary (cluster
+`postgres16` in the `database` namespace — find the primary with
+`kubectl -n database get cluster postgres16`):
 
 ```sh
-kubectl exec -n frontend -it cluster16-1 -- \
-  psql -U todos_for_dues -d todos_for_dues
+kubectl exec -n database -it postgres16-1 -c postgres -- \
+  psql -d todos_for_dues
 ```
+
+<!-- Corrected 2026-08 modernization audit: the old command pointed at a
+     nonexistent `frontend/cluster16-1` pod/user. -->
 
 Stuck jobs (something paused in `locked` or `enrollment_open` > 7 days):
 
