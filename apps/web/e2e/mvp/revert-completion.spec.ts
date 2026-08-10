@@ -92,6 +92,5 @@ async function seedSecondActive(
     email: `mvp-active2-${suffix}@chapter.test`,
     displayName: `MVP Active2 ${suffix}`,
     role: 'Active',
-    password: 'correct-horse-battery',
   });
 }

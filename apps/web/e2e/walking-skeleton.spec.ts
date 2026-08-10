@@ -3,12 +3,12 @@ import { test, expect } from '@playwright/test';
 import { Pool } from 'pg';
 import { readRuntimeEnv } from './fixtures/runtime-env';
 import {
-  loginViaForm,
   logoutAndClear,
   newPersona,
-  seedInviteToken,
-  signupViaInvite,
+  registerPortalIdentity,
+  signInAs,
 } from './fixtures/personas';
+import { seedPersona } from './walking-skeleton/support/seed';
 
 /**
  * PLAN-008 canonical walking-skeleton spec — the single chained Playwright
@@ -16,11 +16,12 @@ import {
  * Postgres (testcontainer), real Better Auth, real tRPC, real Next.js,
  * Resend mocked at the SDK seam via RESEND_TEST_MODE (PLAN-008 Trap 7).
  *
- * Personas in play (per PLAN-008 §4 Step 3):
- *   - Admin: pre-seeded by globalSetup (BOOTSTRAP_ADMIN_EMAIL).
- *   - Moderator: pre-seeded by globalSetup.
- *   - Alumni: signs up via invite-token form during the test.
- *   - Active 1 + Active 2: sign up via invite-token forms (Q-PLN-01 — two
+ * Personas in play (per PLAN-008 §4 Step 3, reshaped by ADR-013 — onboarding
+ * is portal SSO now):
+ *   - Moderator: pre-seeded by globalSetup (portal-linked).
+ *   - Alumni: first-time portal sign-in during the test (brother tier →
+ *     Alumni row created by the OAuth callback — the new-member path).
+ *   - Active 1 + Active 2: seeded portal-linked Actives (Q-PLN-01 — two
  *     Actives exercises the dues-split rounding edge case from PRD-005 R-04).
  *
  * Audit log assertion (Trap 4): the spec enumerates the 7 FSM transitions
@@ -56,7 +57,7 @@ async function pollState(
 }
 
 test.describe('PLAN-008 walking skeleton — full happy-path job loop', () => {
-  test('Admin invites → Alumni posts → Mod approves → Actives enroll → Alumni locks → completes → markPaymentSent → Active confirms = closed', async ({
+  test('Alumni joins via portal + posts → Mod approves → Actives enroll → Alumni locks → completes → markPaymentSent → Active confirms = closed', async ({
     page,
   }) => {
     const env = readRuntimeEnv();
@@ -67,52 +68,28 @@ test.describe('PLAN-008 walking skeleton — full happy-path job loop', () => {
     const description = `Help me move a couch — ${randomUUID()}`;
 
     const alumni = newPersona('Alumni', 'Move Couch Alumni');
-    const active1 = newPersona('Active', 'Active One');
-    const active2 = newPersona('Active', 'Active Two');
 
     let jobId: string;
     let active1Id: string;
     let active2Id: string;
-    let alumniInviteToken: string;
-    let active1InviteToken: string;
-    let active2InviteToken: string;
 
     try {
-      // ── 0. Admin signs in (pre-seeded) and "issues" invite tokens. ──
-      await test.step('Admin signs in + issues invites', async () => {
-        await loginViaForm(page, {
-          email: env.BOOTSTRAP_ADMIN_EMAIL,
-          password: env.E2E_SEED_PASSWORD,
+      // ── 1. Alumni joins through the portal (first sign-in creates the
+      //       Alumni row — ADR-013 new-member path) → posts a job. ──
+      await test.step('Alumni signs in via portal + posts a job', async () => {
+        await registerPortalIdentity({
+          email: alumni.email,
+          name: alumni.displayName,
+          tier: 'brother',
         });
+        await signInAs(page, alumni.email);
 
-        // Fetch the pre-seeded admin's id for the invite-token FK.
-        const adminRow = await pool.query<{ id: string }>(
-          `SELECT id FROM users WHERE email = $1`,
-          [env.BOOTSTRAP_ADMIN_EMAIL],
+        // The OAuth callback created the user with the mapped role (ADR-013).
+        const created = await pool.query<{ role: string }>(
+          `SELECT role FROM users WHERE email = $1`,
+          [alumni.email],
         );
-        const adminId = adminRow.rows[0]!.id;
-
-        alumniInviteToken = await seedInviteToken(pool, {
-          preselectedRole: 'Alumni',
-          createdBy: adminId,
-        });
-        active1InviteToken = await seedInviteToken(pool, {
-          preselectedRole: 'Active',
-          createdBy: adminId,
-        });
-        active2InviteToken = await seedInviteToken(pool, {
-          preselectedRole: 'Active',
-          createdBy: adminId,
-        });
-      });
-
-      // ── 1. Alumni signs up via invite → posts a job. ──
-      await test.step('Alumni signs up + posts a job', async () => {
-        await logoutAndClear(page);
-        await signupViaInvite(page, {
-          token: alumniInviteToken,
-          persona: alumni,
-        });
+        expect(created.rows[0]?.role).toBe('Alumni');
 
         await page.goto('/jobs/new');
         await page.getByPlaceholder(/Describe the job/i).fill(description);
@@ -131,10 +108,7 @@ test.describe('PLAN-008 walking skeleton — full happy-path job loop', () => {
       // ── 2. Moderator approves. ──
       await test.step('Moderator approves the job', async () => {
         await logoutAndClear(page);
-        await loginViaForm(page, {
-          email: env.E2E_SEED_MODERATOR_EMAIL,
-          password: env.E2E_SEED_PASSWORD,
-        });
+        await signInAs(page, env.E2E_SEED_MODERATOR_EMAIL);
         await page.goto('/moderation-queue');
         await page
           .locator(`[data-job-id="${jobId}"]`)
@@ -143,18 +117,16 @@ test.describe('PLAN-008 walking skeleton — full happy-path job loop', () => {
         await pollState(pool, jobId, 'enrollment_open');
       });
 
-      // ── 3a. Active 1 signs up + enrolls. ──
-      await test.step('Active 1 signs up + enrolls', async () => {
+      // ── 3a. Active 1 signs in via portal + enrolls. ──
+      const active1 = await seedPersona(pool, {
+        email: 'active-one@chapter.test',
+        displayName: 'Active One',
+        role: 'Active',
+      });
+      await test.step('Active 1 signs in + enrolls', async () => {
         await logoutAndClear(page);
-        await signupViaInvite(page, {
-          token: active1InviteToken,
-          persona: active1,
-        });
-        const row = await pool.query<{ id: string }>(
-          `SELECT id FROM users WHERE email = $1`,
-          [active1.email],
-        );
-        active1Id = row.rows[0]!.id;
+        await signInAs(page, active1.email);
+        active1Id = active1.id;
 
         await page.goto(`/jobs/${jobId}`);
         await page.getByTestId('enroll-button').click();
@@ -169,18 +141,16 @@ test.describe('PLAN-008 walking skeleton — full happy-path job loop', () => {
           .toBeGreaterThanOrEqual(1);
       });
 
-      // ── 3b. Active 2 signs up + enrolls (dues-split sanity per Q-PLN-01). ──
-      await test.step('Active 2 signs up + enrolls', async () => {
+      // ── 3b. Active 2 signs in + enrolls (dues-split sanity per Q-PLN-01). ──
+      const active2 = await seedPersona(pool, {
+        email: 'active-two@chapter.test',
+        displayName: 'Active Two',
+        role: 'Active',
+      });
+      await test.step('Active 2 signs in + enrolls', async () => {
         await logoutAndClear(page);
-        await signupViaInvite(page, {
-          token: active2InviteToken,
-          persona: active2,
-        });
-        const row = await pool.query<{ id: string }>(
-          `SELECT id FROM users WHERE email = $1`,
-          [active2.email],
-        );
-        active2Id = row.rows[0]!.id;
+        await signInAs(page, active2.email);
+        active2Id = active2.id;
 
         await page.goto(`/jobs/${jobId}`);
         await page.getByTestId('enroll-button').click();
@@ -198,7 +168,7 @@ test.describe('PLAN-008 walking skeleton — full happy-path job loop', () => {
       // ── 4. Alumni locks with a future work date. ──
       await test.step('Alumni locks the job', async () => {
         await logoutAndClear(page);
-        await loginViaForm(page, alumni);
+        await signInAs(page, alumni.email);
         await page.goto(`/jobs/${jobId}`);
         await page
           .getByTestId('lock-job-work-date')
@@ -277,7 +247,7 @@ test.describe('PLAN-008 walking skeleton — full happy-path job loop', () => {
       // ── 7. Active 1 confirms received → job closes. ──
       await test.step('Active 1 confirms received → state = closed', async () => {
         await logoutAndClear(page);
-        await loginViaForm(page, active1);
+        await signInAs(page, active1.email);
         await page.goto(`/jobs/${jobId}`);
         await page.getByTestId('confirm-received-button').click();
         await pollState(pool, jobId, 'closed');

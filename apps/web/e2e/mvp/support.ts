@@ -33,8 +33,6 @@ export interface Cast {
   admin: SeededPersona;
 }
 
-const PASSWORD = 'correct-horse-battery';
-
 /**
  * PLAN-010 mvp specs need at least an Alumni + Moderator + Active per scenario.
  * Each spec generates UUID-suffixed identifiers so workers > 1 stays flake-free
@@ -51,25 +49,21 @@ export async function seedCast(
     email: `mvp-admin-${suffix}@chapter.test`,
     displayName: `MVP Admin ${suffix}`,
     role: 'Admin',
-    password: PASSWORD,
   });
   const alumni = await seedPersona(pool, {
     email: `mvp-alumni-${suffix}@chapter.test`,
     displayName: `MVP Alumni ${suffix}`,
     role: 'Alumni',
-    password: PASSWORD,
   });
   const mod = await seedPersona(pool, {
     email: `mvp-mod-${suffix}@chapter.test`,
     displayName: `MVP Mod ${suffix}`,
     role: 'Moderator',
-    password: PASSWORD,
   });
   const active = await seedPersona(pool, {
     email: `mvp-active-${suffix}@chapter.test`,
     displayName: `MVP Active ${suffix}`,
     role: 'Active',
-    password: PASSWORD,
   });
   return { alumni, mod, active, admin };
 }
@@ -84,7 +78,7 @@ export async function reAuth(
   persona: SeededPersona,
 ): Promise<void> {
   await context.clearCookies();
-  await signInAs(page, persona.email, persona.password);
+  await signInAs(page, persona.email);
   // After the post-signin redirect to '/', wait for the network to go idle
   // so Better Auth's Set-Cookie has been fully processed by Playwright's
   // cookie jar AND any layout-level role lookup has completed. Without this,

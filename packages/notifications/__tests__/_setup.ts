@@ -31,7 +31,7 @@ export async function startNotificationsTestDb(): Promise<NotificationsTestDb> {
 
 export async function resetFixtures(pool: Pool): Promise<void> {
   await pool.query(
-    `TRUNCATE users, jobs, job_enrollments, job_state_transitions, user_role_transitions, invite_tokens, chapter_settings, "session", "account", "verification" RESTART IDENTITY CASCADE`,
+    `TRUNCATE users, jobs, job_enrollments, job_state_transitions, user_role_transitions, chapter_settings, "session", "account", "verification" RESTART IDENTITY CASCADE`,
   );
 }
 

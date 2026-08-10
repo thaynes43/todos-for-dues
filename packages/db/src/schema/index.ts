@@ -1,6 +1,5 @@
 export * from './enums';
 export * from './users';
-export * from './invite-tokens';
 export * from './jobs';
 export * from './job-enrollments';
 export * from './job-state-transitions';

@@ -15,32 +15,27 @@ export async function seedFourPersonas(
   pool: Pool,
   suffix: string,
 ): Promise<FourPersonas> {
-  const password = 'correct-horse-battery';
   // Insert Admin first — the min-Admin DB trigger requires at least one Admin
   // to be present before any non-Admin insert commits.
   const admin = await seedPersona(pool, {
     email: `admin-${suffix}@walking.test`,
     displayName: `Admin ${suffix}`,
     role: 'Admin',
-    password,
   });
   const alumni = await seedPersona(pool, {
     email: `alumni-${suffix}@walking.test`,
     displayName: `Alumni ${suffix}`,
     role: 'Alumni',
-    password,
   });
   const mod = await seedPersona(pool, {
     email: `mod-${suffix}@walking.test`,
     displayName: `Mod ${suffix}`,
     role: 'Moderator',
-    password,
   });
   const active = await seedPersona(pool, {
     email: `active-${suffix}@walking.test`,
     displayName: `Active ${suffix}`,
     role: 'Active',
-    password,
   });
   return { alumni, mod, active, admin };
 }
@@ -51,7 +46,7 @@ export async function reAuth(
   persona: SeededPersona,
 ): Promise<void> {
   await context.clearCookies();
-  await signInAs(page, persona.email, persona.password);
+  await signInAs(page, persona.email);
 }
 
 async function pollJobState(

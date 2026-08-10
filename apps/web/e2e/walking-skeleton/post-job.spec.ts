@@ -17,10 +17,9 @@ test.describe('PRD-002 R-01..R-05 — Alumni posts a job', () => {
         email: 'alumni@post-job.test',
         displayName: 'Alumni A',
         role: 'Alumni',
-        password: 'correct-horse-battery',
       });
 
-      await signInAs(page, alumni.email, alumni.password);
+      await signInAs(page, alumni.email);
       await page.goto('/jobs/new');
 
       await page

@@ -20,10 +20,9 @@ test.describe('PRD-010 — Job content enrichment (post-job + detail view)', () 
         email: 'enrich-alumni-ac1@chapter.test',
         displayName: 'Enriched Alumni One',
         role: 'Alumni',
-        password: 'correct-horse-battery',
       });
 
-      await signInAs(page, alumni.email, alumni.password);
+      await signInAs(page, alumni.email);
       await page.goto('/jobs/new');
       await page.waitForLoadState('load');
 
@@ -111,10 +110,9 @@ test.describe('PRD-010 — Job content enrichment (post-job + detail view)', () 
         email: 'enrich-alumni-ac5@chapter.test',
         displayName: 'Enriched Alumni Five',
         role: 'Alumni',
-        password: 'correct-horse-battery',
       });
 
-      await signInAs(page, alumni.email, alumni.password);
+      await signInAs(page, alumni.email);
       await page.goto('/jobs/new');
       await page.waitForLoadState('load');
 
@@ -157,10 +155,9 @@ test.describe('PRD-010 — Job content enrichment (post-job + detail view)', () 
         email: 'enrich-alumni-ac2@chapter.test',
         displayName: 'Enriched Alumni Two',
         role: 'Alumni',
-        password: 'correct-horse-battery',
       });
 
-      await signInAs(page, alumni.email, alumni.password);
+      await signInAs(page, alumni.email);
       await page.goto('/jobs/new');
       await page.waitForLoadState('load');
 
@@ -200,10 +197,9 @@ test.describe('PRD-010 — Job content enrichment (post-job + detail view)', () 
         email: 'enrich-alumni-ac3@chapter.test',
         displayName: 'Enriched Alumni Three',
         role: 'Alumni',
-        password: 'correct-horse-battery',
       });
 
-      await signInAs(page, alumni.email, alumni.password);
+      await signInAs(page, alumni.email);
       await page.goto('/jobs/new');
       await page.waitForLoadState('load');
 

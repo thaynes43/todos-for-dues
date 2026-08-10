@@ -58,22 +58,19 @@ jobs:
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
       - run: pnpm --filter web exec playwright install --with-deps chromium
 
-      # PLAN-013 §3.1 #10 (signInAs glob mismatch) is closed in this PR —
-      # `signInAs` + `invites.spec.ts` external signup now match `/` and
-      # `/jobs` and `/moderation-queue` via regex instead of the trailing-
-      # slash-dependent `'**/'` glob. With that fix, non-chapter-state
-      # suites are safe to share a globalSetup → single testcontainer DB;
-      # walking-skeleton / __e2e__/auth / mvp / admin collapse into one
-      # invocation here. Cross-suite seed safety relies on UUID-suffixed
-      # personas + UUID-self-filter assertions (per PLAN-013 §3.1 #2 /
-      # PR #35 — `invites.spec.ts` filters by the minted invite UUID).
+      # Non-chapter-state suites share a globalSetup → single testcontainer
+      # DB: walking-skeleton / e2e/auth (portal SSO + claim re-sync, ADR-013)
+      # / mvp / admin collapse into one invocation here. Cross-suite seed
+      # safety relies on UUID-suffixed personas + UUID-self-filter assertions
+      # (per PLAN-013 §3.1 #2). The portal-shaped OIDC mock keys identities
+      # by email, so parallel workers never race a shared profile slot.
       # Failure tail → check-run annotation (see ci.yml `pnpm test` note:
       # operator pods can read annotations but not Actions log blobs).
       - name: e2e — main (collapsed walking-skeleton + auth + mvp + admin)
         shell: bash
         run: |
           set -o pipefail
-          if ! pnpm --filter web e2e e2e/walking-skeleton/ e2e/walking-skeleton.spec.ts __e2e__/auth/ e2e/mvp/ e2e/admin/ 2>&1 | tee /tmp/e2e.log; then
+          if ! pnpm --filter web e2e e2e/walking-skeleton/ e2e/walking-skeleton.spec.ts e2e/auth/portal-sso.spec.ts e2e/auth/claim-resync.spec.ts e2e/mvp/ e2e/admin/ 2>&1 | tee /tmp/e2e.log; then
             tail=$(grep -aE "✘|[0-9]+\) \[chromium\]|Error|Timeout|timed out|toomanyrequests|failed|passed" /tmp/e2e.log | tail -60 | head -c 3500)
             tail="${tail//'%'/%25}"; tail="${tail//$'\n'/%0A}"; tail="${tail//$'\r'/%0D}"
             echo "::error title=e2e main failure tail::${tail}"
@@ -110,3 +107,8 @@ jobs:
 
       - name: e2e — roles admin-swap (own invocation)
         run: pnpm --filter web e2e e2e/roles/admin-swap.spec.ts
+
+      # ADR-013 min-Admin claim-sync guard: same chapter-wide count(Admin)=1
+      # dependency as last-admin-blocked → own invocation / fresh DB.
+      - name: e2e — auth min-admin-guard (own invocation)
+        run: pnpm --filter web e2e e2e/auth/min-admin-guard.spec.ts

@@ -29,7 +29,6 @@ describe('migrations', () => {
     expect(rows.map((r) => r.tablename)).toEqual([
       'account',
       'chapter_settings',
-      'invite_tokens',
       'job_content_changes',
       'job_enrollments',
       'job_state_transitions',

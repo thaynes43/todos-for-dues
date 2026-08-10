@@ -71,6 +71,13 @@
       "when": 1778809057000,
       "tag": "0010_job_content_changes",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778809058000,
+      "tag": "0011_drop_invite_tokens",
+      "breakpoints": true
     }
   ]
 }

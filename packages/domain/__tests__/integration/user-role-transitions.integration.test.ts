@@ -153,7 +153,7 @@ describe('min-Admin invariant integration (PRD-008 R-05, AC-04)', () => {
     expect(await getRole(users.admin)).toBe('Alumni');
   });
 
-  it('BOOTSTRAP_ADMIN_EMAIL recovery path: from zero Admins, promote one user → succeeds', async () => {
+  it('zero-Admin recovery path (e.g. portal claim-sync promotion): promote one user → succeeds', async () => {
     // Bypass the trigger to fabricate a zero-Admin starting state. This emulates the
     // moment after a chapter is provisioned but before its first Admin signs in.
     await testDb.pool.query(`ALTER TABLE users DISABLE TRIGGER trg_min_one_admin`);

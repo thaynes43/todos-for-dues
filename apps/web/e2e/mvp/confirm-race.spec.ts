@@ -52,8 +52,8 @@ test.describe('PRD-006 R-04 / AC-04 — confirm-received race', () => {
       const adminPage = await adminCtx.newPage();
 
       try {
-        await signInAs(activePage, cast.active.email, cast.active.password);
-        await signInAs(adminPage, cast.admin.email, cast.admin.password);
+        await signInAs(activePage, cast.active.email);
+        await signInAs(adminPage, cast.admin.email);
         await activePage.goto(`/jobs/${jobId}`);
         await adminPage.goto(`/jobs/${jobId}`);
 

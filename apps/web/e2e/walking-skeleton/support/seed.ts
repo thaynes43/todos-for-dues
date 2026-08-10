@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
-import { hashPassword } from '@better-auth/utils/password';
+import { registerPortalIdentity, tierForRole } from '../../fixtures/personas';
 
 export type Role = 'Active' | 'Alumni' | 'Moderator' | 'Admin';
 
@@ -9,7 +9,6 @@ export interface SeededPersona {
   email: string;
   displayName: string;
   role: Role;
-  password: string;
 }
 
 export function createPool(): Pool {
@@ -37,9 +36,20 @@ function uniqueEmail(email: string): string {
   return `${local}+${randomUUID()}@${domain}`;
 }
 
+/**
+ * Insert a chapter member and register the matching portal identity at the
+ * OIDC mock (ADR-013 — sign-in is portal SSO only; the sigo-portal account
+ * row links on the persona's first `signInAs`). The identity's tier follows
+ * the role: Admin→admin, Moderator→operator, Alumni/Active→brother.
+ *
+ */
 export async function seedPersona(
   pool: Pool,
-  opts: { email: string; displayName: string; role: Role; password: string },
+  opts: {
+    email: string;
+    displayName: string;
+    role: Role;
+  },
 ): Promise<SeededPersona> {
   const email = uniqueEmail(opts.email);
   const { rows } = await pool.query<{ id: string }>(
@@ -47,17 +57,17 @@ export async function seedPersona(
     [email, opts.displayName, opts.role],
   );
   const userId = rows[0]!.id;
-  const passwordHash = await hashPassword(opts.password);
-  await pool.query(
-    `INSERT INTO "account" (user_id, provider_id, account_id, password) VALUES ($1::uuid, 'credential', $1::uuid::text, $2)`,
-    [userId, passwordHash],
-  );
+  await registerPortalIdentity({
+    email,
+    name: opts.displayName,
+    tier: tierForRole(opts.role),
+    sub: userId,
+  });
   return {
     id: userId,
     email,
     displayName: opts.displayName,
     role: opts.role,
-    password: opts.password,
   };
 }
 

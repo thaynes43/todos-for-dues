@@ -2,21 +2,28 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { nextCookies } from 'better-auth/next-js';
 import { genericOAuth } from 'better-auth/plugins/generic-oauth';
-import { eq } from 'drizzle-orm';
 import { db, users, session, account, verification } from '@app/db';
-import { enforceHdRestriction } from './hooks/hd-restriction';
-import { bootstrapAdminOnSignin } from './hooks/bootstrap-admin';
+import {
+  PORTAL_PROVIDER_ID,
+  mapTierToRole,
+  parsePortalTier,
+} from './portal-tiers';
+import {
+  refuseNonMemberUserCreate,
+  syncPortalClaimsOnSessionCreate,
+} from './hooks/claim-sync';
 
-const DEFAULT_OIDC_DISCOVERY_URL =
-  'https://accounts.google.com/.well-known/openid-configuration';
-const OIDC_PROVIDER_ID = 'google-workspace';
-
+// ADR-013: the sigoalumni.org portal is the only identity source. Discovery
+// comes from OIDC_DISCOVERY_URL — currently the portal's Cloud Run origin
+// (https://frontpage-….a.run.app/.well-known/openid-configuration).
+// TODO(cutover): at launch the issuer moves to https://sigoalumni.org —
+// update the env value (Phase 4 ExternalSecret), not this code.
 const oidcClientId = process.env.OIDC_CLIENT_ID;
 const oidcClientSecret = process.env.OIDC_CLIENT_SECRET;
-const oidcHostedDomain = process.env.OIDC_HOSTED_DOMAIN;
+const oidcDiscoveryUrl = process.env.OIDC_DISCOVERY_URL;
 
 export const oidcEnabled = Boolean(
-  oidcClientId && oidcClientSecret && oidcHostedDomain,
+  oidcClientId && oidcClientSecret && oidcDiscoveryUrl,
 );
 
 const oidcPlugins = oidcEnabled
@@ -24,29 +31,26 @@ const oidcPlugins = oidcEnabled
       genericOAuth({
         config: [
           {
-            providerId: OIDC_PROVIDER_ID,
+            providerId: PORTAL_PROVIDER_ID,
             clientId: oidcClientId!,
             clientSecret: oidcClientSecret!,
-            discoveryUrl:
-              process.env.OIDC_DISCOVERY_URL ?? DEFAULT_OIDC_DISCOVERY_URL,
-            scopes: ['openid', 'email', 'profile'],
-            authorizationUrlParams: { hd: oidcHostedDomain! },
+            discoveryUrl: oidcDiscoveryUrl!,
+            // Portal client registration: authorization code + PKCE S256 only.
+            pkce: true,
+            scopes: ['openid', 'profile', 'email', 'offline_access'],
             mapProfileToUser: (profile) => {
-              // HD restriction fires here, before Better Auth creates a user row
-              // (PRD-003 R-04 / AC-02). Throwing aborts the OAuth callback.
-              enforceHdRestriction({
-                providerId: OIDC_PROVIDER_ID,
-                profile: {
-                  email: typeof profile.email === 'string' ? profile.email : null,
-                  hd: typeof profile.hd === 'string' ? profile.hd : null,
-                },
-                expectedHostedDomain: oidcHostedDomain,
-              });
+              // The portal puts sub/email/name/tier/capabilities in the
+              // id_token (ADR 0007 — claims travel in the token), which is
+              // what Better Auth hands us here. Map tier → app role
+              // (ADR-013 §mapping); pending / unknown tiers map to the
+              // 'refused' sentinel, which refuseNonMemberUserCreate rejects
+              // BEFORE any user row is created.
+              const tier = parsePortalTier(profile.tier);
               return {
-                email: profile.email,
-                name: profile.name,
+                email: typeof profile.email === 'string' ? profile.email : undefined,
+                name: typeof profile.name === 'string' ? profile.name : undefined,
                 emailVerified: true,
-                role: 'Alumni',
+                role: tier ? mapTierToRole(tier) : 'refused',
               };
             },
           },
@@ -67,6 +71,15 @@ if (process.env.NODE_ENV === 'production' && !isNextBuildPhase) {
     if (!process.env[name]) {
       throw new Error(`${name} must be set in production`);
     }
+  }
+  if (!oidcEnabled) {
+    // Fail closed, boot anyway (ADR-013): with no portal client config there
+    // is no sign-in path at all — /login says so. Terse operator note:
+    // eslint-disable-next-line no-console
+    console.error(
+      '[auth] portal SSO disabled — set OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, ' +
+        'OIDC_DISCOVERY_URL (sigoalumni.org portal client). Sign-in is unavailable until then.',
+    );
   }
 }
 
@@ -98,46 +111,37 @@ export const auth = betterAuth({
       },
     },
   },
-  emailAndPassword: {
-    enabled: true,
-    autoSignIn: true,
-    minPasswordLength: 8,
-  },
-  account: {
-    accountLinking: {
-      enabled: true,
-      trustedProviders: [OIDC_PROVIDER_ID],
-      // Our credential-signup flow has no email-verification UI (out of MVP
-      // scope), so credential users persist with `email_verified=false`.
-      // Without this override Better Auth would refuse to auto-link a
-      // trusted OIDC sign-in to an existing unverified credential user
-      // (link-account.mjs: `requireLocalEmailVerified ?? true`), even though
-      // the design intent (PRD-003 R-09) is that trustedProviders just-works.
-      requireLocalEmailVerified: false,
-    },
-  },
+  // No emailAndPassword: the portal is the only identity source (ADR-013).
+  // The `account`/`verification` tables stay — Better Auth expects them —
+  // and `account.password` is dormant.
+  //
   // nextCookies MUST be the last plugin — it captures Set-Cookie headers from
   // Better Auth's internal responses and forwards them through Next.js's
-  // cookies() API so Server Action sign-in/up flows actually persist the
-  // session cookie back to the browser (PLAN-006 follow-up).
+  // cookies() API so the session cookie persists back to the browser
+  // (PLAN-006 follow-up).
   plugins: [...oidcPlugins, nextCookies()],
   session: {
     expiresIn: 60 * 60 * 24 * 7,
     updateAge: 60 * 60 * 24,
   },
   databaseHooks: {
+    user: {
+      create: {
+        // Pending / unknown portal tiers never get a user row (ADR-013).
+        before: async (user) => {
+          refuseNonMemberUserCreate(user);
+        },
+      },
+    },
     session: {
       create: {
-        after: async (sessionRow) => {
-          // Bootstrap-admin fires on every sign-in (session create) — idempotent.
-          // Routes through transitionRole from @app/domain (PLAN-003 invariant).
-          const userId = sessionRow.userId as string;
-          const [row] = await db
-            .select({ email: users.email })
-            .from(users)
-            .where(eq(users.id, userId));
-          if (!row) return;
-          await bootstrapAdminOnSignin({ id: userId, email: row.email });
+        // Every sign-in re-runs the tier → role mapping (ADR 0007 C-3) and
+        // refuses pending members. Throwing here aborts the OAuth callback
+        // before a session row exists.
+        before: async (sessionRow) => {
+          await syncPortalClaimsOnSessionCreate({
+            userId: sessionRow.userId as string,
+          });
         },
       },
     },
