@@ -80,7 +80,7 @@ export function RoleChangeDropdown({
           <Button
             key={opt.role}
             type="button"
-            variant={opt.isCurrent ? 'secondary' : 'outline'}
+            variant={opt.isCurrent ? 'secondary' : 'neutral'}
             size="sm"
             disabled={opt.isCurrent || changeRole.isPending}
             onClick={() => handleSelect(opt.role, opt.isCurrent)}
@@ -95,7 +95,7 @@ export function RoleChangeDropdown({
         <p
           role="alert"
           data-testid="role-change-error"
-          className="text-sm text-red-700"
+          className="text-sm text-red-700 dark:text-red-300"
         >
           {inlineError}
         </p>

@@ -71,7 +71,7 @@ export function ResolveDisputeModal({ jobId }: { jobId: string }) {
     >
       <Button
         type="button"
-        variant="default"
+        variant="primary"
         size="sm"
         onClick={() => {
           setOpen('closed');
@@ -83,7 +83,7 @@ export function ResolveDisputeModal({ jobId }: { jobId: string }) {
       </Button>
       <Button
         type="button"
-        variant="outline"
+        variant="neutral"
         size="sm"
         onClick={() => {
           setOpen('cancelled');
@@ -95,7 +95,7 @@ export function ResolveDisputeModal({ jobId }: { jobId: string }) {
       </Button>
       <Button
         type="button"
-        variant="outline"
+        variant="neutral"
         size="sm"
         onClick={() => {
           setOpen('false_alarm');
@@ -115,27 +115,25 @@ export function ResolveDisputeModal({ jobId }: { jobId: string }) {
         testId="resolve-dispute-modal"
       >
         <form onSubmit={handleSubmit} className="space-y-3">
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">
-              Resolution note (recorded in the audit log)
-            </span>
+          <label className="grid gap-1.5 text-sm font-medium">
+            <span>Resolution note</span>
             <Textarea
               required
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Explain the resolution for the audit log."
+              placeholder="What was decided, and why."
               data-testid="resolve-dispute-note"
             />
           </label>
           {activeMutation?.error ? (
-            <p role="alert" className="text-sm text-red-700">
+            <p role="alert" className="text-sm text-red-700 dark:text-red-300">
               {activeMutation.error.message}
             </p>
           ) : null}
           <div className="flex justify-end gap-2">
             <Button
               type="button"
-              variant="outline"
+              variant="neutral"
               onClick={closeAll}
               disabled={activeMutation?.isPending}
               data-testid="resolve-dispute-cancel"

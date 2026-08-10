@@ -94,15 +94,15 @@ export default async function AdminJobAuditPage({ params }: PageProps) {
   });
 
   return (
-    <section className="space-y-6" data-testid="admin-job-detail">
+    <section className="space-y-8" data-testid="admin-job-detail">
       <JobDetailView
         job={job}
         viewer={{ id: session.user.id, role }}
         rosterNames={rosterNames}
         treasurerRecipient={treasurerRecipient}
       />
-      <section className="space-y-2">
-        <h2 className="text-xl font-semibold">Audit log</h2>
+      <section className="space-y-3">
+        <h2 className="text-2xl font-semibold sm:text-3xl">History</h2>
         <AuditLogTable transitions={transitions} />
       </section>
     </section>

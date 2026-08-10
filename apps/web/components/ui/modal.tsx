@@ -41,9 +41,13 @@ export function Modal({
         aria-modal="true"
         aria-label={title}
         data-testid={testId}
-        className="w-full max-w-md rounded-lg border bg-background p-4 shadow-lg"
+        // max-h + overflow: a dialog taller than the viewport (e.g. the
+        // edit-job form at 720px CI height) must scroll internally — the
+        // centered flex overlay otherwise clips both ends and strands the
+        // submit button off-viewport (caught by e2e on GHA).
+        className="max-h-full w-full max-w-md overflow-y-auto rounded-2xl border border-stone-200 bg-white p-6 shadow-lg dark:border-stone-800 dark:bg-stone-900"
       >
-        <h2 className="mb-3 text-lg font-semibold">{title}</h2>
+        <h2 className="mb-3 text-xl font-semibold">{title}</h2>
         {children}
       </div>
     </div>

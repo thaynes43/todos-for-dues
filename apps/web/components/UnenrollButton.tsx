@@ -28,7 +28,7 @@ export function UnenrollButton({
     <div className="space-y-1">
       <Button
         type="button"
-        variant="outline"
+        variant="neutral"
         disabled={disabled}
         onClick={() => unenroll.mutate({ jobId })}
         data-testid="unenroll-button"
@@ -36,7 +36,7 @@ export function UnenrollButton({
         {unenroll.isPending ? 'Unenrolling…' : 'Unenroll'}
       </Button>
       {unenroll.error ? (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-red-700 dark:text-red-300">
           {unenroll.error.message}
         </p>
       ) : null}

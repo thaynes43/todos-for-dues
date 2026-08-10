@@ -71,7 +71,7 @@ describe('sendModeratorQueueEmail()', () => {
     const payload = mockSend.mock.calls[0]![0];
     expect(payload.to).toBe('mods@chapter.invalid');
     expect(payload.subject).toContain('Sigma Phi Omicron');
-    expect(payload.subject).toContain('moderation');
+    expect(payload.subject).toContain('new posting');
     expect(payload.subject).toContain('Clean the lawn');
   });
 

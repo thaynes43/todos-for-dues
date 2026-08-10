@@ -26,6 +26,9 @@ import {
 } from './CompletedJobActiveView';
 import { formatChapterLocal } from '@/lib/formatters';
 import { sanitizeTel } from './PostJobForm';
+import { cn } from '@/lib/utils';
+import { cardBase } from '@/components/ui/styles';
+import { StatusNote } from '@/components/StatusNote';
 
 export interface JobForDetailView {
   id: string;
@@ -113,7 +116,7 @@ export function JobDetailView({
     <article className="space-y-6" data-testid="job-detail-view">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <h1
-          className="text-2xl font-semibold leading-tight"
+          className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl"
           data-testid="job-description"
         >
           {job.description}
@@ -122,7 +125,7 @@ export function JobDetailView({
       </header>
 
       <section
-        className="space-y-1 rounded-md border p-4 text-sm"
+        className={cn(cardBase, 'space-y-1 p-6')}
         data-testid="job-details-card"
       >
         <p>
@@ -157,17 +160,17 @@ export function JobDetailView({
 
       {trimmedNotes.length > 0 ? (
         <section
-          className="space-y-1 rounded-md border p-4 text-sm"
+          className={cn(cardBase, 'space-y-1 p-6')}
           data-testid="job-notes-card"
         >
-          <p className="font-semibold">Additional notes</p>
+          <p className="text-xl font-semibold">Additional notes</p>
           <p data-testid="job-notes-body" className="whitespace-pre-wrap">
             {trimmedNotes}
           </p>
         </section>
       ) : null}
 
-      <section className="space-y-1 text-sm">
+      <section className="space-y-1">
         <p>
           <strong>Dues:</strong> ${job.duesAmount}
         </p>
@@ -340,14 +343,7 @@ export function JobDetailLoader({
   const query = trpc.jobs.getById.useQuery({ jobId });
   if (query.isLoading) return <p data-testid="job-detail-loading">Loading…</p>;
   if (query.error) {
-    return (
-      <div
-        role="alert"
-        className="rounded border border-red-500 bg-red-50 p-3 text-sm text-red-900"
-      >
-        {query.error.message}
-      </div>
-    );
+    return <StatusNote tone="error">{query.error.message}</StatusNote>;
   }
   if (!query.data) return <p>Not found.</p>;
   return (

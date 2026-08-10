@@ -33,7 +33,7 @@ export async function sendAdminDisputeEmail(
 
   return sendEmail({
     to: recipient,
-    subject: `${chapterName} — DISPUTE on "${subjectSuffix}"`,
+    subject: `${chapterName} — dispute: "${subjectSuffix}"`,
     template: AdminDispute({
       jobDescription: job.description,
       jobId: job.id,

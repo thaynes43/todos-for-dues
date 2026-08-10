@@ -2,6 +2,8 @@
 
 import { trpc } from '@/lib/trpc-client';
 import { JobCard } from '@/components/JobCard';
+import { StatusNote } from '@/components/StatusNote';
+import { EmptyState } from '@/components/EmptyState';
 import { stateDisplayName } from '@/lib/formatters';
 import type { JobState, Role } from '@app/db/schema';
 
@@ -45,26 +47,23 @@ export function JobsList({
     }
     if (filtered.error) {
       return (
-        <div role="alert" className="rounded border border-red-500 bg-red-50 p-3 text-sm text-red-900">
-          Failed to load jobs: {filtered.error.message}
-        </div>
+        <StatusNote tone="error">
+          Couldn&apos;t load jobs — try a refresh.
+        </StatusNote>
       );
     }
     const rows = filtered.data ?? [];
     return (
       <section data-testid="jobs-filtered-list" data-state-filter={stateFilter}>
-        <h2 className="mb-3 text-lg font-semibold">
+        <h2 className="mb-4 text-2xl font-semibold sm:text-3xl">
           Filter: {stateFilter ? stateDisplayName(stateFilter) : ''}
         </h2>
         {rows.length === 0 ? (
-          <p
-            className="text-sm text-muted-foreground"
-            data-testid="jobs-filtered-empty"
-          >
+          <EmptyState bordered testId="jobs-filtered-empty">
             No jobs in this state.
-          </p>
+          </EmptyState>
         ) : (
-          <ul className="space-y-3">
+          <ul className="space-y-4">
             {rows.map((j) => (
               <JobCard
                 key={j.id}
@@ -86,9 +85,9 @@ export function JobsList({
   }
   if (list.error) {
     return (
-      <div role="alert" className="rounded border border-red-500 bg-red-50 p-3 text-sm text-red-900">
-        Failed to load jobs: {list.error.message}
-      </div>
+      <StatusNote tone="error">
+        Couldn&apos;t load jobs — try a refresh.
+      </StatusNote>
     );
   }
 
@@ -96,15 +95,17 @@ export function JobsList({
   const posted = myPosted.data ?? [];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <section>
-        <h2 className="mb-3 text-lg font-semibold">Open for enrollment</h2>
+        <h2 className="mb-4 text-2xl font-semibold sm:text-3xl">
+          Open for enrollment
+        </h2>
         {open.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <EmptyState bordered>
             No jobs are open right now — check back soon.
-          </p>
+          </EmptyState>
         ) : (
-          <ul className="space-y-3">
+          <ul className="space-y-4">
             {open.map((j) => (
               <JobCard
                 key={j.id}
@@ -121,15 +122,17 @@ export function JobsList({
 
       {(role === 'Alumni' || role === 'Moderator' || role === 'Admin') && (
         <section>
-          <h2 className="mb-3 text-lg font-semibold">My postings</h2>
+          <h2 className="mb-4 text-2xl font-semibold sm:text-3xl">
+            My postings
+          </h2>
           {myPosted.isLoading ? (
             <p>Loading…</p>
           ) : posted.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              You haven&apos;t posted any jobs yet.
-            </p>
+            <EmptyState>
+              Nothing posted yet — post a job and it shows up here.
+            </EmptyState>
           ) : (
-            <ul className="space-y-3">
+            <ul className="space-y-4">
               {posted.map((j) => (
                 <JobCard
                   key={j.id}

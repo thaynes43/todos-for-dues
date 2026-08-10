@@ -1,13 +1,11 @@
 import * as React from 'react';
+import { Heading, Html, Link, Section, Text } from '@react-email/components';
 import {
-  Container,
-  Heading,
-  Html,
-  Link,
-  Section,
-  Text,
-} from '@react-email/components';
-import { Layout } from './_components/Layout';
+  Layout,
+  emailButton,
+  emailHeading,
+  emailText,
+} from './_components/Layout';
 
 export interface ActiveJobEditedChange {
   field: string;
@@ -33,7 +31,6 @@ function fmt(value: unknown): string {
 }
 
 export function ActiveJobEdited({
-  jobId,
   jobDescription,
   posterDisplayName,
   changes,
@@ -43,38 +40,40 @@ export function ActiveJobEdited({
   const reReviewing = newJobState === 'awaiting_moderation';
   return (
     <Html>
-      <Layout
-        preview={`A job you're enrolled in was edited: ${jobDescription}`}
-      >
-        <Container>
-          <Heading as="h2">A job you&apos;re enrolled in was edited</Heading>
-          <Text>
-            <strong>{posterDisplayName}</strong> updated the job &ldquo;{jobDescription}
-            &rdquo;. The changes are summarized below.
+      <Layout preview={`A job you're enrolled in changed: ${jobDescription}`}>
+        <Heading as="h2" style={emailHeading}>
+          A job you&apos;re enrolled in changed
+        </Heading>
+        <Text style={emailText}>
+          <strong>{posterDisplayName}</strong> updated &ldquo;{jobDescription}
+          &rdquo;.
+        </Text>
+        {reReviewing ? (
+          <Text style={emailText}>
+            The changes were big enough for a Moderator re-review. Your
+            enrollment stays.
           </Text>
-          {reReviewing ? (
-            <Text>
-              Because the changes were material, this job has been sent back for
-              moderator re-review. Your enrollment is preserved.
-            </Text>
-          ) : null}
+        ) : null}
 
-          <Section>
-            <Heading as="h3">What changed</Heading>
-            {changes.map((c) => (
-              <Text key={c.field}>
-                <strong>{c.field}:</strong> {fmt(c.before)} → {fmt(c.after)}
-              </Text>
-            ))}
-          </Section>
-
-          <Section>
-            <Text>
-              <strong>Job ID:</strong> {jobId}
+        <Section>
+          <Heading
+            as="h3"
+            style={{ ...emailHeading, fontSize: '18px', margin: '16px 0 4px' }}
+          >
+            What changed
+          </Heading>
+          {changes.map((c) => (
+            <Text key={c.field} style={emailText}>
+              <strong>{c.field}:</strong> {fmt(c.before)} → {fmt(c.after)}
             </Text>
-            <Link href={jobUrl}>Open the job →</Link>
-          </Section>
-        </Container>
+          ))}
+        </Section>
+
+        <Section style={{ marginTop: '16px' }}>
+          <Link href={jobUrl} style={emailButton}>
+            Open the job
+          </Link>
+        </Section>
       </Layout>
     </Html>
   );

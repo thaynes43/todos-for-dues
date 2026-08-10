@@ -17,7 +17,7 @@ export function AuditLogSearchForm() {
     e.preventDefault();
     const trimmed = jobId.trim();
     if (!UUID_RE.test(trimmed)) {
-      setError('Enter a valid job UUID.');
+      setError('That doesn\u2019t look like a job ID \u2014 paste the whole thing.');
       return;
     }
     setError(null);
@@ -30,8 +30,8 @@ export function AuditLogSearchForm() {
       className="flex flex-col gap-2 sm:flex-row sm:items-end"
       data-testid="audit-log-search-form"
     >
-      <label className="flex-1 space-y-1">
-        <span className="block text-sm font-medium">Job ID</span>
+      <label className="grid flex-1 gap-1.5 text-sm font-medium">
+        <span>Job ID</span>
         <Input
           type="text"
           name="jobId"
@@ -46,7 +46,7 @@ export function AuditLogSearchForm() {
         {error ? (
           <p
             role="alert"
-            className="text-sm text-red-700"
+            className="text-sm text-red-700 dark:text-red-300"
             data-testid="audit-log-search-error"
           >
             {error}

@@ -1,6 +1,9 @@
 import { getServerCaller } from '@/lib/trpc-server';
 import { SettingsForm, type SettingsInitial } from '@/components/SettingsForm';
 import { SETTING_KEYS } from '@app/api/settings-shared';
+import { PageHeader } from '@/components/PageHeader';
+
+export const metadata = { title: 'Settings' };
 
 export default async function AdminSettingsPage() {
   const caller = await getServerCaller();
@@ -14,14 +17,11 @@ export default async function AdminSettingsPage() {
   });
 
   return (
-    <section className="space-y-4" data-testid="admin-settings">
-      <header>
-        <h1 className="text-2xl font-semibold">Settings</h1>
-        <p className="text-sm text-muted-foreground">
-          Per-field, save-on-blur. Invalid input is rejected without overwriting
-          the stored value.
-        </p>
-      </header>
+    <section className="space-y-8" data-testid="admin-settings">
+      <PageHeader
+        title="Settings"
+        description="Chapter emails, timezone, and name — each field saves when you leave it."
+      />
       <SettingsForm initial={initial} />
     </section>
   );

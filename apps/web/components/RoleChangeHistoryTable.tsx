@@ -1,6 +1,7 @@
 'use client';
 
 import { trpc } from '@/lib/trpc-client';
+import { EmptyState } from './EmptyState';
 import { formatChapterLocal } from '@/lib/formatters';
 
 export function RoleChangeHistoryTable({ userId }: { userId: string }) {
@@ -9,7 +10,7 @@ export function RoleChangeHistoryTable({ userId }: { userId: string }) {
   if (history.isLoading) {
     return (
       <p
-        className="text-sm text-muted-foreground"
+        className="text-sm opacity-70"
         data-testid="role-history-loading"
       >
         Loading role history…
@@ -20,7 +21,7 @@ export function RoleChangeHistoryTable({ userId }: { userId: string }) {
     return (
       <p
         role="alert"
-        className="text-sm text-red-700"
+        className="text-sm text-red-700 dark:text-red-300"
         data-testid="role-history-error"
       >
         {history.error.message}
@@ -30,21 +31,19 @@ export function RoleChangeHistoryTable({ userId }: { userId: string }) {
   const rows = history.data ?? [];
   if (rows.length === 0) {
     return (
-      <p
-        className="text-sm text-muted-foreground"
-        data-testid="role-history-empty"
-      >
+      <EmptyState testId="role-history-empty">
         No role changes recorded for this user.
-      </p>
+      </EmptyState>
     );
   }
 
   return (
+    <div className="overflow-x-auto">
     <table
-      className="w-full border-collapse text-sm"
+      className="w-full border-collapse"
       data-testid="role-change-history-table"
     >
-      <thead className="border-b bg-muted/40 text-left">
+      <thead className="border-b border-stone-300 text-left text-sm dark:border-stone-700">
         <tr>
           <th className="px-3 py-2 font-medium">When</th>
           <th className="px-3 py-2 font-medium">Transition</th>
@@ -64,7 +63,7 @@ export function RoleChangeHistoryTable({ userId }: { userId: string }) {
           return (
             <tr
               key={row.id}
-              className="border-b align-top last:border-b-0"
+              className="border-b border-stone-200 align-top last:border-b-0 dark:border-stone-800"
               data-testid="role-history-row"
               data-transition-id={row.id}
               data-to-role={row.toRole}
@@ -92,5 +91,6 @@ export function RoleChangeHistoryTable({ userId }: { userId: string }) {
         })}
       </tbody>
     </table>
+    </div>
   );
 }

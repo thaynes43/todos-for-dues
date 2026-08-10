@@ -35,8 +35,8 @@ export function RejectModal({
       testId="reject-modal"
     >
       <form onSubmit={handleSubmit} className="space-y-3">
-        <label className="block space-y-1">
-          <span className="block text-sm font-medium">
+        <label className="grid gap-1.5 text-sm font-medium">
+          <span>
             Reason (visible to the Alumni who posted)
           </span>
           <Textarea
@@ -48,14 +48,14 @@ export function RejectModal({
           />
         </label>
         {error ? (
-          <p role="alert" className="text-sm text-red-700">
+          <p role="alert" className="text-sm text-red-700 dark:text-red-300">
             {error}
           </p>
         ) : null}
         <div className="flex gap-2 justify-end">
           <Button
             type="button"
-            variant="outline"
+            variant="neutral"
             onClick={onClose}
             disabled={isPending}
             data-testid="reject-cancel"

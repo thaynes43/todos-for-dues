@@ -9,9 +9,14 @@ import { Footer } from '@/components/Footer';
 import { RealtimeProvider } from '@/components/RealtimeProvider';
 import './globals.css';
 
+// TODO(tom): "Sigo Dues" is the working name under Sigo Alumni branding —
+// confirm or rename (modernization plan §P3 flags this as your call).
 export const metadata: Metadata = {
-  title: 'TODOs for Dues',
-  description: 'Per-chapter Greek-life dues-credit job board.',
+  title: {
+    default: 'Sigo Dues',
+    template: '%s · Sigo Dues',
+  },
+  description: 'Chapter jobs that count toward dues.',
 };
 
 export default async function RootLayout({
@@ -30,12 +35,12 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
-      <body className="flex min-h-screen flex-col bg-background text-foreground">
+      <body className="flex min-h-screen flex-col bg-stone-50 text-stone-900 antialiased dark:bg-stone-950 dark:text-stone-100">
         <TRPCProvider>
           <RealtimeProvider signedIn={Boolean(session?.user?.id)} />
           <ChapterHeader displayName={displayName} />
           <RoleAwareNav role={role} />
-          <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
+          <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-12">
             {children}
           </main>
           <Footer />

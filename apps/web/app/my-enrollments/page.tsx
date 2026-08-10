@@ -4,7 +4,12 @@ import { redirect } from 'next/navigation';
 import { getServerSession, getSessionRole } from '@app/auth';
 import { getServerCaller } from '@/lib/trpc-server';
 import { JobStateBadge } from '@/components/JobStateBadge';
+import { PageHeader } from '@/components/PageHeader';
+import { EmptyState } from '@/components/EmptyState';
+import { cardLinkBase } from '@/components/ui/styles';
 import { formatChapterLocal } from '@/lib/formatters';
+
+export const metadata = { title: 'My enrollments' };
 
 export default async function MyEnrollmentsPage() {
   const session = await getServerSession(await headers());
@@ -35,48 +40,41 @@ export default async function MyEnrollmentsPage() {
   });
 
   return (
-    <section className="space-y-4">
-      <h1 className="text-2xl font-semibold">My enrollments</h1>
-      <p className="text-sm text-muted-foreground">
-        Jobs you&apos;ve enrolled in. Locked jobs come first, soonest date
-        first; otherwise ordered by when you signed up.
-      </p>
+    <section className="space-y-8">
+      <PageHeader
+        title="My enrollments"
+        description="Jobs you're signed up for, soonest first."
+      />
       {sorted.length === 0 ? (
-        <p
-          className="text-sm text-muted-foreground"
-          data-testid="my-enrollments-empty"
-        >
-          You haven&apos;t enrolled in any jobs yet.
-        </p>
+        <EmptyState bordered testId="my-enrollments-empty">
+          You haven&apos;t enrolled in any jobs yet — the Jobs page has what&apos;s
+          open.
+        </EmptyState>
       ) : (
-        <ul className="space-y-3" data-testid="my-enrollments-list">
+        <ul className="space-y-4" data-testid="my-enrollments-list">
           {sorted.map((j) => (
             <li
               key={j.id}
-              className="rounded-lg border bg-card p-4 shadow-sm"
+              className={cardLinkBase}
               data-testid="my-enrollments-row"
               data-job-id={j.id}
             >
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <Link
-                    href={`/jobs/${j.id}`}
-                    className="font-medium hover:underline"
-                  >
-                    {j.description}
-                  </Link>
-                  <p className="text-sm text-muted-foreground">
-                    Dues:{' '}
-                    <strong className="text-foreground">${j.duesAmount}</strong>
-                    {j.workDate ? (
-                      <>
-                        {' · '}Work date: {formatChapterLocal(j.workDate)}
-                      </>
-                    ) : null}
-                  </p>
+              <Link href={`/jobs/${j.id}`} className="block p-6">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xl leading-tight font-semibold">
+                      {j.description}
+                    </p>
+                    <p className="mt-1 text-sm opacity-70">
+                      ${j.duesAmount} dues
+                      {j.workDate ? (
+                        <> · work date {formatChapterLocal(j.workDate)}</>
+                      ) : null}
+                    </p>
+                  </div>
+                  <JobStateBadge state={j.state} />
                 </div>
-                <JobStateBadge state={j.state} />
-              </div>
+              </Link>
             </li>
           ))}
         </ul>

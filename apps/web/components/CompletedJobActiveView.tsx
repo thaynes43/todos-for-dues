@@ -1,3 +1,5 @@
+import { StatusNote } from '@/components/StatusNote';
+
 export interface ViewerCredit {
   confirmed: boolean;
   amount: string | null;
@@ -12,30 +14,32 @@ export function CompletedJobActiveView({
 
   if (!viewerCredit.confirmed) {
     return (
-      <section
-        data-testid="completed-job-active-view"
-        className="rounded-lg border bg-muted/40 p-4 text-sm"
+      <StatusNote
+        tone="info"
+        testId="completed-job-active-view"
+        className="p-4"
       >
         <p data-testid="completed-not-confirmed">
           You weren&apos;t confirmed for this job; no dues credit recorded.
         </p>
-      </section>
+      </StatusNote>
     );
   }
 
   const amount = viewerCredit.amount ?? '0.00';
   return (
-    <section
-      data-testid="completed-job-active-view"
-      className="rounded-lg border bg-emerald-50 p-4 text-sm"
+    <StatusNote
+      tone="success"
+      testId="completed-job-active-view"
+      className="p-4"
     >
       <p>
         <strong>Your dues credit:</strong>{' '}
         <span data-testid="completed-credit-amount">${amount}</span>
       </p>
-      <p className="mt-1 text-muted-foreground">
+      <p className="mt-1 opacity-80">
         Look for this credit in the chapter dues books.
       </p>
-    </section>
+    </StatusNote>
   );
 }

@@ -23,14 +23,14 @@ export function RevertCompletionButton({ jobId }: { jobId: string }) {
     <div className="space-y-1">
       <Button
         type="button"
-        variant="outline"
+        variant="neutral"
         onClick={() => setOpen(true)}
         data-testid="revert-completion-button"
       >
         Revert completion
       </Button>
       {revert.error ? (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-red-700 dark:text-red-300">
           {revert.error.message}
         </p>
       ) : null}
@@ -42,19 +42,19 @@ export function RevertCompletionButton({ jobId }: { jobId: string }) {
         title="Revert completion?"
         testId="revert-completion-modal"
       >
-        <p className="text-sm">
+        <p>
           This clears the confirmed-attendees list — you&apos;ll need to
           re-confirm before marking payment-sent.
         </p>
         {revert.error ? (
-          <p role="alert" className="mt-2 text-sm text-red-700">
+          <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">
             {revert.error.message}
           </p>
         ) : null}
         <div className="mt-4 flex gap-2 justify-end">
           <Button
             type="button"
-            variant="outline"
+            variant="neutral"
             disabled={revert.isPending}
             onClick={() => setOpen(false)}
             data-testid="revert-completion-cancel"

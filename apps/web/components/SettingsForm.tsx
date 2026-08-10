@@ -49,7 +49,7 @@ const FIELDS: ReadonlyArray<FieldDef> = [
   {
     key: 'chapter_display_name',
     label: 'Chapter display name',
-    helper: 'Shown in the header and in outbound email subjects.',
+    helper: 'Used in outbound email subjects.',
     type: 'text',
   },
 ];
@@ -201,14 +201,14 @@ export function SettingsForm({
             />
             <p
               id={`setting-help-${field.key}`}
-              className="text-xs text-muted-foreground"
+              className="text-sm opacity-70"
             >
               {field.helper}
             </p>
             {error ? (
               <p
                 role="alert"
-                className="text-sm text-red-700"
+                className="text-sm text-red-700 dark:text-red-300"
                 data-testid={`settings-error-${field.key}`}
               >
                 {error}
@@ -217,7 +217,7 @@ export function SettingsForm({
             {recentlySaved ? (
               <p
                 role="status"
-                className="text-sm text-green-700"
+                className="text-sm text-emerald-700 dark:text-emerald-300"
                 data-testid={`settings-saved-${field.key}`}
               >
                 Saved.

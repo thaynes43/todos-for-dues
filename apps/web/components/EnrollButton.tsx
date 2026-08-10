@@ -33,7 +33,7 @@ export function EnrollButton({
         {enroll.isPending ? 'Enrolling…' : 'Enroll'}
       </Button>
       {enroll.error ? (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-red-700 dark:text-red-300">
           {enroll.error.message}
         </p>
       ) : null}

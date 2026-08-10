@@ -174,7 +174,7 @@ export function EditJobForm({ job }: { job: EditableJobSnapshot }) {
     <div className="space-y-1">
       <Button
         type="button"
-        variant="outline"
+        variant="neutral"
         onClick={() => setOpen(true)}
         data-testid="edit-job-button"
       >
@@ -185,9 +185,9 @@ export function EditJobForm({ job }: { job: EditableJobSnapshot }) {
         <div
           role="status"
           data-testid="edit-job-demote-banner"
-          className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+          className="rounded-lg bg-amber-100 px-4 py-3 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
         >
-          Your edit will be re-reviewed by a moderator before becoming visible to others.
+          Saved — a Moderator reviews the change before others see it.
         </div>
       ) : null}
 
@@ -204,8 +204,8 @@ export function EditJobForm({ job }: { job: EditableJobSnapshot }) {
           className="space-y-4"
           data-testid="edit-job-form"
         >
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">Description</span>
+          <label className="grid gap-1.5 text-sm font-medium">
+            <span>Description</span>
             <Textarea
               required
               value={description}
@@ -214,14 +214,14 @@ export function EditJobForm({ job }: { job: EditableJobSnapshot }) {
               aria-invalid={errors.description ? true : undefined}
             />
             {errors.description ? (
-              <p role="alert" className="text-xs text-red-700">
+              <p role="alert" className="text-sm text-red-700 dark:text-red-300">
                 {errors.description}
               </p>
             ) : null}
           </label>
 
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">Dues amount ($)</span>
+          <label className="grid gap-1.5 text-sm font-medium">
+            <span>Dues amount ($)</span>
             <Input
               type="number"
               inputMode="decimal"
@@ -234,14 +234,14 @@ export function EditJobForm({ job }: { job: EditableJobSnapshot }) {
               aria-invalid={errors.duesAmount ? true : undefined}
             />
             {errors.duesAmount ? (
-              <p role="alert" className="text-xs text-red-700">
+              <p role="alert" className="text-sm text-red-700 dark:text-red-300">
                 {errors.duesAmount}
               </p>
             ) : null}
           </label>
 
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">Recommended people</span>
+          <label className="grid gap-1.5 text-sm font-medium">
+            <span>Recommended people</span>
             <Input
               type="number"
               inputMode="numeric"
@@ -254,27 +254,27 @@ export function EditJobForm({ job }: { job: EditableJobSnapshot }) {
               aria-invalid={errors.count ? true : undefined}
             />
             {errors.count ? (
-              <p role="alert" className="text-xs text-red-700">
+              <p role="alert" className="text-sm text-red-700 dark:text-red-300">
                 {errors.count}
               </p>
             ) : null}
           </label>
 
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">Contact type</span>
+          <label className="grid gap-1.5 text-sm font-medium">
+            <span>Contact type</span>
             <select
               data-testid="edit-contact-kind"
               value={contactKind}
               onChange={(e) => setContactKind(e.target.value as ContactKind)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-stone-300 bg-transparent px-3 py-2 text-base focus-visible:border-accent dark:border-stone-700"
             >
               <option value="email">Email</option>
               <option value="phone">Phone</option>
             </select>
           </label>
 
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">
+          <label className="grid gap-1.5 text-sm font-medium">
+            <span>
               {contactKind === 'email' ? 'Contact email' : 'Contact phone'}
             </span>
             <Input
@@ -286,14 +286,14 @@ export function EditJobForm({ job }: { job: EditableJobSnapshot }) {
               aria-invalid={errors.contactValue ? true : undefined}
             />
             {errors.contactValue ? (
-              <p role="alert" className="text-xs text-red-700">
+              <p role="alert" className="text-sm text-red-700 dark:text-red-300">
                 {errors.contactValue}
               </p>
             ) : null}
           </label>
 
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">Location</span>
+          <label className="grid gap-1.5 text-sm font-medium">
+            <span>Location</span>
             <Input
               type="text"
               value={location}
@@ -302,14 +302,14 @@ export function EditJobForm({ job }: { job: EditableJobSnapshot }) {
               aria-invalid={errors.location ? true : undefined}
             />
             {errors.location ? (
-              <p role="alert" className="text-xs text-red-700">
+              <p role="alert" className="text-sm text-red-700 dark:text-red-300">
                 {errors.location}
               </p>
             ) : null}
           </label>
 
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">Estimated duration (hours)</span>
+          <label className="grid gap-1.5 text-sm font-medium">
+            <span>Estimated duration (hours)</span>
             <Input
               type="number"
               inputMode="decimal"
@@ -322,14 +322,14 @@ export function EditJobForm({ job }: { job: EditableJobSnapshot }) {
               aria-invalid={errors.duration ? true : undefined}
             />
             {errors.duration ? (
-              <p role="alert" className="text-xs text-red-700">
+              <p role="alert" className="text-sm text-red-700 dark:text-red-300">
                 {errors.duration}
               </p>
             ) : null}
           </label>
 
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">Additional notes (optional)</span>
+          <label className="grid gap-1.5 text-sm font-medium">
+            <span>Additional notes <span className="font-normal opacity-60">(optional)</span></span>
             <Textarea
               value={additionalNotes}
               onChange={(e) => setAdditionalNotes(e.target.value)}
@@ -337,14 +337,14 @@ export function EditJobForm({ job }: { job: EditableJobSnapshot }) {
               data-testid="edit-notes"
             />
             {errors.notes ? (
-              <p role="alert" className="text-xs text-red-700">
+              <p role="alert" className="text-sm text-red-700 dark:text-red-300">
                 {errors.notes}
               </p>
             ) : null}
           </label>
 
           {edit.error ? (
-            <p role="alert" data-testid="edit-job-error" className="text-sm text-red-700">
+            <p role="alert" data-testid="edit-job-error" className="text-sm text-red-700 dark:text-red-300">
               {edit.error.message}
             </p>
           ) : null}
@@ -352,7 +352,7 @@ export function EditJobForm({ job }: { job: EditableJobSnapshot }) {
           <div className="flex justify-end gap-2">
             <Button
               type="button"
-              variant="outline"
+              variant="neutral"
               onClick={() => setOpen(false)}
               disabled={edit.isPending}
               data-testid="edit-job-cancel"

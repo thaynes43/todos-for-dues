@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { StatusNote } from '@/components/StatusNote';
 
 export function RejectedJobBanner({
   reason,
@@ -8,14 +9,15 @@ export function RejectedJobBanner({
   canPostNew?: boolean;
 }) {
   return (
-    <section
+    <StatusNote
+      tone="error"
       role="region"
       aria-label="Rejected"
-      data-testid="rejected-job-banner"
-      className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm"
+      testId="rejected-job-banner"
+      className="p-4"
     >
-      <h2 className="text-base font-semibold text-red-900">Posting rejected</h2>
-      <p className="mt-1 text-red-900">
+      <h2 className="font-semibold">Posting rejected</h2>
+      <p className="mt-1">
         <strong>Reason:</strong>{' '}
         <span data-testid="rejected-job-reason">
           {reason ?? '(no reason given)'}
@@ -26,12 +28,12 @@ export function RejectedJobBanner({
           <Link
             href="/jobs/new"
             data-testid="rejected-post-new-cta"
-            className="font-medium text-red-900 underline underline-offset-2 hover:text-red-700"
+            className="font-medium underline underline-offset-4"
           >
             Post a new job →
           </Link>
         </p>
       ) : null}
-    </section>
+    </StatusNote>
   );
 }

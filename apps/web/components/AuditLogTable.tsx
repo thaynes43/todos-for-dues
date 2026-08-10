@@ -1,5 +1,6 @@
 import type { JobState } from '@app/db/schema';
 import { stateDisplayName, formatChapterLocal } from '@/lib/formatters';
+import { EmptyState } from './EmptyState';
 
 export interface AuditTransition {
   id: string;
@@ -42,21 +43,19 @@ export function AuditLogTable({
 }) {
   if (transitions.length === 0) {
     return (
-      <p
-        className="text-sm text-muted-foreground"
-        data-testid="audit-log-table-empty"
-      >
-        No transitions recorded for this job.
-      </p>
+      <EmptyState testId="audit-log-table-empty">
+        Nothing recorded for this job yet.
+      </EmptyState>
     );
   }
 
   return (
+    <div className="overflow-x-auto">
     <table
-      className="w-full border-collapse text-sm"
+      className="w-full border-collapse"
       data-testid="audit-log-table"
     >
-      <thead className="border-b bg-muted/40 text-left">
+      <thead className="border-b border-stone-300 text-left text-sm dark:border-stone-700">
         <tr>
           <th className="px-3 py-2 font-medium">When</th>
           <th className="px-3 py-2 font-medium">Transition</th>
@@ -71,7 +70,7 @@ export function AuditLogTable({
           return (
             <tr
               key={t.id}
-              className="border-b align-top last:border-b-0"
+              className="border-b border-stone-200 align-top last:border-b-0 dark:border-stone-800"
               data-testid="audit-log-row"
               data-transition-id={t.id}
               data-to-state={t.toState}
@@ -95,5 +94,6 @@ export function AuditLogTable({
         })}
       </tbody>
     </table>
+    </div>
   );
 }

@@ -34,7 +34,7 @@ export function CancelJobModal({ jobId }: { jobId: string }) {
     <div className="space-y-1">
       <Button
         type="button"
-        variant="destructive"
+        variant="neutral"
         onClick={() => setOpen(true)}
         data-testid="cancel-job-button"
       >
@@ -49,8 +49,8 @@ export function CancelJobModal({ jobId }: { jobId: string }) {
         testId="cancel-job-modal"
       >
         <form onSubmit={handleSubmit} className="space-y-3">
-          <label className="block space-y-1">
-            <span className="block text-sm font-medium">
+          <label className="grid gap-1.5 text-sm font-medium">
+            <span>
               Reason (visible to enrolled Actives)
             </span>
             <Textarea
@@ -62,14 +62,14 @@ export function CancelJobModal({ jobId }: { jobId: string }) {
             />
           </label>
           {cancel.error ? (
-            <p role="alert" className="text-sm text-red-700">
+            <p role="alert" className="text-sm text-red-700 dark:text-red-300">
               {cancel.error.message}
             </p>
           ) : null}
           <div className="flex gap-2 justify-end">
             <Button
               type="button"
-              variant="outline"
+              variant="neutral"
               onClick={() => setOpen(false)}
               disabled={cancel.isPending}
               data-testid="cancel-job-cancel"
@@ -78,7 +78,7 @@ export function CancelJobModal({ jobId }: { jobId: string }) {
             </Button>
             <Button
               type="submit"
-              variant="destructive"
+              variant="neutral"
               disabled={!canSubmit}
               data-testid="cancel-job-submit"
             >

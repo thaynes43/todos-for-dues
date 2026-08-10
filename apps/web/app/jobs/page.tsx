@@ -2,7 +2,10 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getServerSession, getSessionRole } from '@app/auth';
 import { JOB_STATES, type JobState } from '@app/db/schema';
+import { PageHeader } from '@/components/PageHeader';
 import { JobsList } from './jobs-list';
+
+export const metadata = { title: 'Jobs' };
 
 interface PageProps {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -27,8 +30,8 @@ export default async function JobsPage({ searchParams }: PageProps) {
   const stateFilter = parseStateFilter(params.state);
 
   return (
-    <section className="space-y-4">
-      <h1 className="text-2xl font-semibold">Jobs</h1>
+    <section className="space-y-8">
+      <PageHeader title="Jobs" description="What's open right now." />
       <JobsList role={role} stateFilter={stateFilter} />
     </section>
   );

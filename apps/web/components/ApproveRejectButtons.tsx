@@ -52,7 +52,7 @@ export function ApproveRejectButtons({
       </Button>
       <Button
         type="button"
-        variant="outline"
+        variant="neutral"
         disabled={reject.isPending}
         onClick={() => setRejectOpen(true)}
         data-testid="reject-button"
@@ -60,7 +60,7 @@ export function ApproveRejectButtons({
         Reject
       </Button>
       {approve.error ? (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-red-700 dark:text-red-300">
           {approve.error.message}
         </p>
       ) : null}

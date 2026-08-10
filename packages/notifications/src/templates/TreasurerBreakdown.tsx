@@ -1,7 +1,6 @@
 import * as React from 'react';
 import {
   Column,
-  Container,
   Heading,
   Hr,
   Html,
@@ -9,7 +8,12 @@ import {
   Section,
   Text,
 } from '@react-email/components';
-import { Layout } from './_components/Layout';
+import {
+  Layout,
+  emailColors,
+  emailHeading,
+  emailText,
+} from './_components/Layout';
 
 export interface TreasurerBreakdownProps {
   jobDescription: string;
@@ -28,54 +32,56 @@ export function TreasurerBreakdown({
 }: TreasurerBreakdownProps): React.ReactElement {
   return (
     <Html>
-      <Layout preview={`Payment-sent — credit ${lineItems.length} Active(s)`}>
-        <Container>
-          <Heading as="h2">Payment received notification</Heading>
-          <Text>
-            The Alumni has marked the following job as payment-sent. Please credit each Active&apos;s
-            dues balance in the chapter books.
+      <Layout preview={`Payment sent — credit ${lineItems.length} Active(s)`}>
+        <Heading as="h2" style={emailHeading}>
+          Payment sent — credit the books
+        </Heading>
+        <Text style={emailText}>
+          The posting Alumni sent payment for this job. Credit each Active
+          below.
+        </Text>
+
+        <Section>
+          <Text style={emailText}>
+            <strong>Job:</strong> {jobDescription}
           </Text>
+          <Text style={emailText}>
+            <strong>Total received:</strong> {`$${totalAmount}`}
+          </Text>
+          <Text style={{ ...emailText, fontSize: '13px', color: emailColors.muted }}>
+            Job ID: {jobId} · {timestamp.toISOString()}
+          </Text>
+        </Section>
 
-          <Section>
-            <Text>
-              <strong>Job:</strong> {jobDescription}
-            </Text>
-            <Text>
-              <strong>Job ID:</strong> {jobId}
-            </Text>
-            <Text>
-              <strong>Total received:</strong> {`$${totalAmount}`}
-            </Text>
-            <Text>
-              <strong>Timestamp:</strong> {timestamp.toISOString()}
-            </Text>
-          </Section>
+        <Hr style={{ borderColor: emailColors.border }} />
 
-          <Hr />
-
-          <Heading as="h3">Credit each Active by</Heading>
-          <Section>
-            {lineItems.map((item) => (
-              <Row key={`${item.displayName}-${item.amount}`}>
-                <Column>{item.displayName}</Column>
-                <Column align="right">{`$${item.amount}`}</Column>
-              </Row>
-            ))}
-            <Hr />
-            <Row>
-              <Column>
-                <strong>Total</strong>
-              </Column>
-              <Column align="right">
-                <strong>{`$${totalAmount}`}</strong>
-              </Column>
+        <Heading
+          as="h3"
+          style={{ ...emailHeading, fontSize: '18px', margin: '16px 0 4px' }}
+        >
+          Credit each Active by
+        </Heading>
+        <Section>
+          {lineItems.map((item) => (
+            <Row key={`${item.displayName}-${item.amount}`}>
+              <Column style={emailText}>{item.displayName}</Column>
+              <Column align="right" style={emailText}>{`$${item.amount}`}</Column>
             </Row>
-          </Section>
+          ))}
+          <Hr style={{ borderColor: emailColors.border }} />
+          <Row>
+            <Column style={emailText}>
+              <strong>Total</strong>
+            </Column>
+            <Column align="right" style={emailText}>
+              <strong>{`$${totalAmount}`}</strong>
+            </Column>
+          </Row>
+        </Section>
 
-          <Text>
-            For questions, contact the posting Alumni or your chapter Admin.
-          </Text>
-        </Container>
+        <Text style={emailText}>
+          Questions go to the posting Alumni or a chapter Admin.
+        </Text>
       </Layout>
     </Html>
   );

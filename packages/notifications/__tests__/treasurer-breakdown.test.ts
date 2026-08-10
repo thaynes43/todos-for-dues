@@ -67,7 +67,7 @@ describe('sendTreasurerEmail()', () => {
     const payload = mockSend.mock.calls[0]![0];
     expect(payload.to).toBe('treasurer@chapter.invalid');
     expect(payload.subject).toContain('Sigma Phi Omicron — UMass Lowell');
-    expect(payload.subject).toContain('payment-sent');
+    expect(payload.subject).toContain('payment sent');
     expect(payload.subject).toContain('Clean the chapter house');
     expect(payload.headers).toEqual({
       'Idempotency-Key': `job:${jobId}:payment_sent`,

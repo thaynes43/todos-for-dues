@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { JOB_STATES, type JobState } from '@app/db/schema';
+import { cardLinkBase } from '@/components/ui/styles';
+import { cn } from '@/lib/utils';
 import { stateDisplayName } from '@/lib/formatters';
 
 export function AggregateCountsCards({
@@ -10,7 +12,7 @@ export function AggregateCountsCards({
   return (
     <div
       data-testid="aggregate-counts-cards"
-      className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
+      className="grid grid-cols-2 gap-6 sm:grid-cols-3"
     >
       {JOB_STATES.map((state) => (
         <Link
@@ -18,11 +20,9 @@ export function AggregateCountsCards({
           href={`/jobs?state=${state}`}
           data-testid={`aggregate-count-${state}`}
           data-state={state}
-          className="rounded-lg border bg-card p-4 text-left shadow-sm transition-colors hover:bg-muted"
+          className={cn(cardLinkBase, 'block p-6 text-left')}
         >
-          <div className="text-xs text-muted-foreground">
-            {stateDisplayName(state)}
-          </div>
+          <div className="text-sm opacity-70">{stateDisplayName(state)}</div>
           <div
             className="mt-1 text-3xl font-semibold"
             data-testid={`aggregate-count-value-${state}`}

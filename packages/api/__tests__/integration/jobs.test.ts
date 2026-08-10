@@ -1460,7 +1460,7 @@ describe('jobs router', () => {
       const payload = mockSend.mock.calls[0]![0];
       expect(payload.to).toBe('mods@chapter.invalid');
       expect(payload.subject).toContain('Test Chapter');
-      expect(payload.subject).toContain('moderation');
+      expect(payload.subject).toContain('new posting');
       expect(payload.headers?.['Idempotency-Key']).toMatch(/^job:.+:moderation_queue$/);
     });
 
@@ -1484,7 +1484,7 @@ describe('jobs router', () => {
       const payload = mockSend.mock.calls[0]![0];
       expect(payload.to).toBe('treasurer@chapter.invalid');
       expect(payload.subject).toContain('Test Chapter');
-      expect(payload.subject).toContain('payment-sent');
+      expect(payload.subject).toContain('payment sent');
       expect(payload.headers?.['Idempotency-Key']).toBe(`job:${jobId}:payment_sent`);
     });
 
@@ -1505,7 +1505,7 @@ describe('jobs router', () => {
       const payload = mockSend.mock.calls[0]![0];
       expect(payload.to).toBe('admins@chapter.invalid');
       expect(payload.subject).toContain('Test Chapter');
-      expect(payload.subject).toContain('DISPUTE');
+      expect(payload.subject).toContain('dispute');
       // No idempotency key for dispute — re-disputes are legitimately separate.
       expect(payload.headers).toBeUndefined();
     });
