@@ -319,6 +319,30 @@ works structurally).
 
 ## Phase 4 — deploy + verify (haynes-ops)
 
+> **P4 done (2026-08-10):** deployed via haynes-ops PR #2389 (merged; Flux
+> applied `main@ba85953`). Image `v0.8.1 → v1.0.0`; env per §P4.2 with two
+> deltas: `OIDC_CLIENT_ID` + `OIDC_DISCOVERY_URL` (Cloud Run origin,
+> `TODO(cutover)` to sigoalumni.org) + `APP_VERSION` are plain env in
+> `helmrelease.yaml`, and `OIDC_CLIENT_SECRET` templates from a NEW
+> 1Password field via `{{ index . "SIGO_PORTAL_OIDC_CLIENT_SECRET" }}` —
+> `index`, not `.FIELD`, because ESO v2.8.0 renders templates with
+> `missingkey=error` and a bare reference to the not-yet-written field
+> would wedge the whole secret sync; `index` renders `""` → app boots
+> fail-closed as designed. Egress (§P4.4): `frontend` namespace has no
+> Cilium/NetworkPolicy — nothing to allowlist. Data reset (§P4.5):
+> migration 0011's pre-SSO wipe ran at boot (`Migrations applied.`, clean).
+> Verified live: pod `1/1` on v1.0.0, zero restarts, no other frontend
+> workload disturbed; `/api/health` → `{status: ok, version: v1.0.0, db:
+> true}`; landing shows the Sigo rebrand; `/login` shows the fail-closed
+> operator note (screenshots desktop + 390px taken).
+> **Remaining — blocked on Tom's 1Password write** (add field
+> `SIGO_PORTAL_OIDC_CLIENT_SECRET` to the `todos-for-dues` item; value:
+> `gcloud secrets versions access latest --secret=oidc-dues-client-secret
+> --project=sigo-alumni-prod`): §P4.6 sign-in round trips (brother + admin
+> tier, pending refused; ADR-013 C-08 tier-in-token gate), `e2e:live`
+> smoke, the CNPG primary-kill S-06 check, and the runbook Loki-deeplink
+> TODO. Full steps in the haynes-ops PR #2389 body.
+
 All through GitOps (branch + PR in haynes-ops; Flux applies). Files:
 `kubernetes/main/apps/frontend/todos-for-dues/app/{helmrelease.yaml,externalsecret.yaml,ingressroute.yaml}`.
 
