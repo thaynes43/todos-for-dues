@@ -12,7 +12,12 @@ export const dynamic = 'force-dynamic';
 // `/api/_test/...`: Next.js 16 treats `_`-prefixed folders as private and
 // opts them out of routing entirely, which makes the route unreachable.)
 function testModeEnabled(): boolean {
-  return process.env.RESEND_TEST_MODE === 'true';
+  // AUDIT-2026-08: double-gate — the env flag AND a non-production runtime.
+  // One misconfigured env var must never expose recorded email PII in prod.
+  return (
+    process.env.RESEND_TEST_MODE === 'true' &&
+    process.env.NODE_ENV !== 'production'
+  );
 }
 
 export async function GET(): Promise<Response> {

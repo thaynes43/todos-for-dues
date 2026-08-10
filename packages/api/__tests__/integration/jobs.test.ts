@@ -1062,6 +1062,74 @@ describe('jobs router', () => {
         .jobs.listByState({ state: 'awaiting_moderation' });
       expect(list.map((j) => j.id)).toEqual([myJob]);
     });
+
+    // S-M3 (AUDIT-2026-08) — Alumni restricted to own postings for every
+    // non-public state, not just awaiting_moderation.
+    it('S-M3: Alumni sees only own postings in non-public states', async () => {
+      const mine = await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'closed',
+        perActiveDuesCredit: { [users.active1]: '25.00' },
+      });
+      await insertJob(testDb.pool, {
+        posterId: users.alumni2,
+        state: 'closed',
+        perActiveDuesCredit: { [users.active2]: '99.00' },
+      });
+      const list = await caller(makeCtx({ userId: users.alumni, role: 'Alumni' }))
+        .jobs.listByState({ state: 'closed' });
+      expect(list.map((j) => j.id)).toEqual([mine]);
+    });
+
+    it('S-M3: Alumni sees all enrollment_open jobs (public state)', async () => {
+      await insertJob(testDb.pool, {
+        posterId: users.alumni2,
+        state: 'enrollment_open',
+      });
+      const list = await caller(makeCtx({ userId: users.alumni, role: 'Alumni' }))
+        .jobs.listByState({ state: 'enrollment_open' });
+      expect(list).toHaveLength(1);
+    });
+
+    it('S-M3: projection is narrowed to card fields — no credit map or reasons', async () => {
+      await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'disputed',
+        perActiveDuesCredit: { [users.active1]: '25.00' },
+        disputeReason: 'secret dispute detail',
+      });
+      const list = await caller(makeCtx({ userId: users.admin, role: 'Admin' }))
+        .jobs.listByState({ state: 'disputed' });
+      expect(list).toHaveLength(1);
+      const row = list[0]!;
+      expect(row).not.toHaveProperty('perActiveDuesCredit');
+      expect(row).not.toHaveProperty('disputeReason');
+      expect(row).not.toHaveProperty('rejectionReason');
+      expect(row).not.toHaveProperty('cancellationReason');
+      expect(row).not.toHaveProperty('posterContactValue');
+      expect(Object.keys(row).sort()).toEqual([
+        'createdAt',
+        'description',
+        'duesAmount',
+        'id',
+        'recommendedPeopleCount',
+        'state',
+      ]);
+    });
+
+    it('Moderator retains full-chapter state filtering', async () => {
+      await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'closed',
+      });
+      await insertJob(testDb.pool, {
+        posterId: users.alumni2,
+        state: 'closed',
+      });
+      const list = await caller(makeCtx({ userId: users.moderator, role: 'Moderator' }))
+        .jobs.listByState({ state: 'closed' });
+      expect(list).toHaveLength(2);
+    });
   });
 
   describe('getById — BCC-02 Q-02 / PRD-004 R-05 role-aware roster', () => {
@@ -1184,6 +1252,97 @@ describe('jobs router', () => {
       const result = await caller(makeCtx({ userId: users.alumni, role: 'Alumni' }))
         .jobs.getById({ jobId });
       expect(result.viewerCredit).toBeNull();
+    });
+
+    // S-M2 (AUDIT-2026-08) — scoped projection: credit map, poster contact,
+    // and reasons only for owner / privileged / enrolled viewers.
+    it('S-M2: non-privileged non-enrolled viewer gets no credit map, contact, or reasons', async () => {
+      const jobId = await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'disputed',
+        perActiveDuesCredit: { [users.active2]: '25.00' },
+        disputeReason: 'payment never arrived',
+        cancellationReason: null,
+        rejectionReason: null,
+      });
+      await insertEnrollment(testDb.pool, jobId, users.active2);
+
+      // A different Alumni (not the poster) and a non-enrolled Active both
+      // fall outside the scoped predicate.
+      for (const viewer of [
+        makeCtx({ userId: users.alumni2, role: 'Alumni' as const }),
+        makeCtx({ userId: users.active1, role: 'Active' as const }),
+      ]) {
+        const result = await caller(viewer).jobs.getById({ jobId });
+        expect(result.perActiveDuesCredit).toBeNull();
+        expect(result.posterContactValue).toBeNull();
+        expect(result.disputeReason).toBeNull();
+        expect(result.rejectionReason).toBeNull();
+        expect(result.cancellationReason).toBeNull();
+        // The public shape survives.
+        expect(result.id).toBe(jobId);
+        expect(result.enrolleeCount).toBe(1);
+        expect(result.roster).toBeNull();
+      }
+    });
+
+    it('S-M2: owner, admin, and enrolled Active still see the scoped fields', async () => {
+      const jobId = await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'disputed',
+        perActiveDuesCredit: { [users.active1]: '12.50' },
+        disputeReason: 'short payment',
+      });
+      await insertEnrollment(testDb.pool, jobId, users.active1);
+
+      for (const viewer of [
+        makeCtx({ userId: users.alumni, role: 'Alumni' as const }),
+        makeCtx({ userId: users.admin, role: 'Admin' as const }),
+        makeCtx({ userId: users.active1, role: 'Active' as const }),
+      ]) {
+        const result = await caller(viewer).jobs.getById({ jobId });
+        expect(result.perActiveDuesCredit).toEqual({
+          [users.active1]: '12.50',
+        });
+        expect(result.posterContactValue).not.toBeNull();
+        expect(result.disputeReason).toBe('short payment');
+      }
+    });
+
+    it('S-M2: no raw-row keys beyond the allow-list leak through', async () => {
+      const jobId = await insertJob(testDb.pool, {
+        posterId: users.alumni,
+        state: 'enrollment_open',
+      });
+      const result = await caller(makeCtx({ userId: users.active1, role: 'Active' }))
+        .jobs.getById({ jobId });
+      expect(Object.keys(result).sort()).toEqual(
+        [
+          'id',
+          'postedBy',
+          'description',
+          'duesAmount',
+          'recommendedPeopleCount',
+          'state',
+          'workDate',
+          'posterContactKind',
+          'location',
+          'estimatedDurationHours',
+          'additionalNotes',
+          'createdAt',
+          'updatedAt',
+          'perActiveDuesCredit',
+          'posterContactValue',
+          'rejectionReason',
+          'cancellationReason',
+          'disputeReason',
+          'posterDisplayName',
+          'enrolleeCount',
+          'roster',
+          'closedBy',
+          'viewerCredit',
+        ].sort(),
+      );
     });
   });
 

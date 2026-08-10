@@ -17,7 +17,7 @@ export default async function AdminUserDetailPage({ params }: PageProps) {
     role: string;
   };
   try {
-    user = await caller.users.getById({ userId });
+    user = await caller.users.getByIdAdmin({ userId });
   } catch {
     notFound();
   }
