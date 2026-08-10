@@ -74,7 +74,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          if ! pnpm --filter web e2e -- e2e/walking-skeleton/ e2e/walking-skeleton.spec.ts __e2e__/auth/ e2e/mvp/ e2e/admin/ 2>&1 | tee /tmp/e2e.log; then
+          if ! pnpm --filter web e2e e2e/walking-skeleton/ e2e/walking-skeleton.spec.ts __e2e__/auth/ e2e/mvp/ e2e/admin/ 2>&1 | tee /tmp/e2e.log; then
             tail=$(grep -aE "✘|[0-9]+\) \[chromium\]|Error( |:)|Timeout|timed out|expect\(|failed|passed" /tmp/e2e.log | tail -60 | head -c 3500)
             tail="${tail//'%'/%25}"; tail="${tail//$'\n'/%0A}"; tail="${tail//$'\r'/%0D}"
             echo "::error title=e2e main failure tail::${tail}"
@@ -88,7 +88,7 @@ jobs:
       # invocation.
       - name: e2e — roles (chapter-safe set, single invocation)
         run: |
-          pnpm --filter web e2e -- \
+          pnpm --filter web e2e \
             e2e/roles/admin-grant.spec.ts \
             e2e/roles/admin-demote-admin.spec.ts \
             e2e/roles/admin-users-list.spec.ts \
@@ -107,7 +107,7 @@ jobs:
       # signin path. Per-spec isolation is the only safe option until the
       # min-Admin trigger is made chapter-scoped (out of scope here).
       - name: e2e — roles last-admin-blocked (own invocation)
-        run: pnpm --filter web e2e -- e2e/roles/last-admin-blocked.spec.ts
+        run: pnpm --filter web e2e e2e/roles/last-admin-blocked.spec.ts
 
       - name: e2e — roles admin-swap (own invocation)
-        run: pnpm --filter web e2e -- e2e/roles/admin-swap.spec.ts
+        run: pnpm --filter web e2e e2e/roles/admin-swap.spec.ts

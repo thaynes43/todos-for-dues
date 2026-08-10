@@ -61,7 +61,7 @@ pnpm --filter @app/db migrate    # runs tsx src/scripts/migrate.ts
 
 # Single-package or single-test:
 pnpm --filter @app/domain test
-pnpm --filter @app/db test -- --run __tests__/min-admin-invariant.test.ts
+pnpm --filter @app/db test --run __tests__/min-admin-invariant.test.ts
 pnpm --filter web e2e            # Playwright; auto-starts `pnpm dev` via webServer config
 ```
 
