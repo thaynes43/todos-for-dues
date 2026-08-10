@@ -75,7 +75,6 @@ if (process.env.NODE_ENV === 'production' && !isNextBuildPhase) {
   if (!oidcEnabled) {
     // Fail closed, boot anyway (ADR-013): with no portal client config there
     // is no sign-in path at all — /login says so. Terse operator note:
-    // eslint-disable-next-line no-console
     console.error(
       '[auth] portal SSO disabled — set OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, ' +
         'OIDC_DISCOVERY_URL (sigoalumni.org portal client). Sign-in is unavailable until then.',

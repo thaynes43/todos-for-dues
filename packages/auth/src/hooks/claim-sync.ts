@@ -118,7 +118,6 @@ export async function syncRoleFromPortalTier(
         if (!(err2 instanceof MinAdminInvariantError)) throw err2;
       }
     }
-    // eslint-disable-next-line no-console
     console.error(
       `[auth] claim-sync: portal tier '${tier}' demotes the last Admin (user ${userId}); ` +
         `min-Admin invariant keeps them Admin until another Admin exists (ADR-013).`,
