@@ -27,71 +27,7 @@
 }
 
 /*
- * Legacy scaffold vars, remapped to the stone/green palette so surfaces not yet
- * on design-system utilities (login/signup/forgot-password/invites — being
- * replaced by the portal-SSO seam) stay coherent until they are rewritten.
- * New code uses stone/accent utilities directly, not these.
+ * The legacy shadcn scaffold vars (background/foreground/card/…) are gone —
+ * they only backed the credential-auth surfaces the portal-SSO seam replaced.
+ * Base colors live on the body element's stone utilities in app/layout.tsx.
  */
-:root {
-  --background: var(--color-stone-50);
-  --foreground: var(--color-stone-900);
-  --card: #ffffff;
-  --card-foreground: var(--color-stone-900);
-  --popover: #ffffff;
-  --popover-foreground: var(--color-stone-900);
-  --primary: var(--accent-strong);
-  --primary-foreground: #ffffff;
-  --secondary: var(--color-stone-100);
-  --secondary-foreground: var(--color-stone-900);
-  --muted: var(--color-stone-100);
-  --muted-foreground: var(--color-stone-500);
-  --destructive: var(--color-red-600);
-  --destructive-foreground: #ffffff;
-  --border: var(--color-stone-200);
-  --input: var(--color-stone-300);
-  --ring: var(--accent);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: var(--color-stone-950);
-    --foreground: var(--color-stone-100);
-    --card: var(--color-stone-900);
-    --card-foreground: var(--color-stone-100);
-    --popover: var(--color-stone-900);
-    --popover-foreground: var(--color-stone-100);
-    --secondary: var(--color-stone-800);
-    --secondary-foreground: var(--color-stone-100);
-    --muted: var(--color-stone-800);
-    --muted-foreground: var(--color-stone-400);
-    --destructive: var(--color-red-400);
-    --destructive-foreground: var(--color-stone-950);
-    --border: var(--color-stone-800);
-    --input: var(--color-stone-700);
-  }
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-}

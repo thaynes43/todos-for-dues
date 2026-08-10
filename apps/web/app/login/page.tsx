@@ -1,5 +1,9 @@
 import { LoginForm } from './login-form';
 import { oidcEnabled } from '@app/auth';
+import { PageHeader } from '@/components/PageHeader';
+import { StatusNote } from '@/components/StatusNote';
+
+export const metadata = { title: 'Sign in' };
 
 interface LoginPageProps {
   searchParams: Promise<{ error?: string }>;
@@ -8,35 +12,36 @@ interface LoginPageProps {
 /**
  * ADR-013: sign-in is portal SSO only. Already signed in at sigoalumni.org?
  * This completes silently. Not signed in? The portal's members door opens
- * first, then you land back here.
+ * first, then you land back here. Styled to match that door: centered column,
+ * one-sentence description, one green button.
  */
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
   const error = params.error?.toLowerCase();
   return (
-    <main className="mx-auto max-w-md p-8">
-      <h1 className="mb-2 text-2xl font-semibold">Sign in</h1>
-      <p className="mb-6 text-sm text-neutral-600">
-        Dues runs on your Sigo Alumni account.
-      </p>
+    <section className="mx-auto max-w-md py-8 text-center sm:py-16">
+      <PageHeader
+        className="justify-center text-center"
+        title="Sign in"
+        description="Dues runs on your Sigo Alumni account."
+      />
       {error === 'membership_pending' ? (
-        <div
-          role="alert"
-          data-testid="membership-pending"
-          className="mb-4 rounded border border-yellow-500 bg-yellow-50 p-4 text-sm text-yellow-900"
+        <StatusNote
+          tone="warning"
+          testId="membership-pending"
+          className="mt-6 text-left"
         >
-          Membership pending. Your sigoalumni.org account is in — it just needs
-          a brother to verify it. Check back soon.
-        </div>
+          Your sigoalumni.org account is in — a brother just needs to okay it,
+          so check back soon.
+        </StatusNote>
       ) : error ? (
-        <div
-          role="alert"
-          className="mb-4 rounded border border-red-500 bg-red-50 p-4 text-sm text-red-900"
-        >
-          Sign-in didn&apos;t go through. Try again.
-        </div>
+        <StatusNote tone="error" className="mt-6 text-left">
+          Sign-in hit a snag. Try again, or email admin@sigoalumni.org.
+        </StatusNote>
       ) : null}
-      <LoginForm ssoEnabled={oidcEnabled} />
-    </main>
+      <div className="mt-8">
+        <LoginForm ssoEnabled={oidcEnabled} />
+      </div>
+    </section>
   );
 }

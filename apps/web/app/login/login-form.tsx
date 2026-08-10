@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { StatusNote } from '@/components/StatusNote';
 
 // Mirrors PORTAL_PROVIDER_ID in @app/auth (server-only package — don't pull
 // it into the client bundle). Changing it breaks the registered redirect URI.
@@ -35,21 +37,18 @@ export function LoginForm({ ssoEnabled }: { ssoEnabled: boolean }) {
   if (!ssoEnabled) {
     // Fail closed (ADR-013): no portal client config → no sign-in path.
     return (
-      <div
-        role="alert"
-        data-testid="sso-disabled"
-        className="rounded border border-neutral-300 bg-neutral-50 p-4 text-sm text-neutral-700"
-      >
-        Sign-in isn&apos;t configured on this instance. Operator: set{' '}
-        <code>OIDC_CLIENT_ID</code>, <code>OIDC_CLIENT_SECRET</code> and{' '}
-        <code>OIDC_DISCOVERY_URL</code> for the sigoalumni.org portal client.
-      </div>
+      <StatusNote tone="warning" testId="sso-disabled" className="text-left">
+        Sign-in isn&apos;t set up on this instance — operator: set{' '}
+        <code>OIDC_CLIENT_ID</code>, <code>OIDC_CLIENT_SECRET</code>, and{' '}
+        <code>OIDC_DISCOVERY_URL</code>.
+      </StatusNote>
     );
   }
 
   return (
-    <button
+    <Button
       type="button"
+      size="lg"
       disabled={pending}
       onClick={() => {
         setPending(true);
@@ -58,10 +57,9 @@ export function LoginForm({ ssoEnabled }: { ssoEnabled: boolean }) {
           window.location.href = '/login?error=sso_unavailable';
         });
       }}
-      className="block w-full rounded bg-black px-4 py-2 text-center text-white disabled:opacity-50"
       data-testid="sso-button"
     >
-      {pending ? 'Heading to the portal…' : 'Sign in with sigoalumni.org'}
-    </button>
+      {pending ? 'Opening sigoalumni.org…' : 'Sign in with sigoalumni.org'}
+    </Button>
   );
 }
