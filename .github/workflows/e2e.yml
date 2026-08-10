@@ -67,8 +67,19 @@ jobs:
       # invocation here. Cross-suite seed safety relies on UUID-suffixed
       # personas + UUID-self-filter assertions (per PLAN-013 §3.1 #2 /
       # PR #35 — `invites.spec.ts` filters by the minted invite UUID).
+      # TEMP(agent/modernization-p1): tee + annotate the failure tail — the
+      # dev pod's egress allowlist can't reach the Actions log blobs.
+      # Reverted before merge.
       - name: e2e — main (collapsed walking-skeleton + auth + mvp + admin)
-        run: pnpm --filter web e2e -- e2e/walking-skeleton/ e2e/walking-skeleton.spec.ts __e2e__/auth/ e2e/mvp/ e2e/admin/
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! pnpm --filter web e2e -- e2e/walking-skeleton/ e2e/walking-skeleton.spec.ts __e2e__/auth/ e2e/mvp/ e2e/admin/ 2>&1 | tee /tmp/e2e.log; then
+            tail=$(grep -aE "✘|[0-9]+\) \[chromium\]|Error( |:)|Timeout|timed out|expect\(|failed|passed" /tmp/e2e.log | tail -60 | head -c 3500)
+            tail="${tail//'%'/%25}"; tail="${tail//$'\n'/%0A}"; tail="${tail//$'\r'/%0D}"
+            echo "::error title=e2e main failure tail::${tail}"
+            exit 1
+          fi
 
       # PLAN-013 §3.1 #1: `demoteAllOtherAdmins` is now scope-narrowed to a
       # per-spec ID allowlist, so the 5 chapter-safe roles specs (admin-grant,
