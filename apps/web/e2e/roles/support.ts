@@ -76,14 +76,15 @@ export async function demoteAllOtherAdmins(
 }
 
 /**
- * Look up the globally-seeded Bootstrap Admin row(s) by `BOOTSTRAP_ADMIN_EMAIL`
- * so the per-spec ID allowlist passed to `demoteAllOtherAdmins` can include
- * the chapter-wide Admin persona (otherwise the post-COMMIT chapter admin
- * count remains ≥ 2 even after the demote, and the min-Admin trigger never
- * fires).
+ * Look up the globally-seeded chapter Admin row(s) by `E2E_SEED_ADMIN_EMAIL`
+ * (globalSetup's portal-linked Admin persona — ADR-013 removed
+ * BOOTSTRAP_ADMIN_EMAIL) so the per-spec ID allowlist passed to
+ * `demoteAllOtherAdmins` can include the chapter-wide Admin persona
+ * (otherwise the post-COMMIT chapter admin count remains ≥ 2 even after the
+ * demote, and the min-Admin trigger never fires).
  */
 export async function fetchBootstrapAdminIds(pool: Pool): Promise<string[]> {
-  const bootstrapEmail = process.env.BOOTSTRAP_ADMIN_EMAIL;
+  const bootstrapEmail = process.env.E2E_SEED_ADMIN_EMAIL;
   if (!bootstrapEmail) return [];
   const { rows } = await pool.query<{ id: string }>(
     `SELECT id FROM users WHERE email = $1`,

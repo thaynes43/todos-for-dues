@@ -1,9 +1,22 @@
 export { auth, oidcEnabled, type Auth } from './config';
-export { enforceHdRestriction } from './hooks/hd-restriction';
 export { getSessionRole } from './hooks/session-extension';
-export { bootstrapAdminOnSignin } from './hooks/bootstrap-admin';
-export { verifyInviteToken, findActiveInviteToken } from './invite-tokens/verify';
-export { HdRestrictionError, InviteTokenError } from './errors';
+export {
+  decodeJwtClaims,
+  readPortalTier,
+  refuseNonMemberUserCreate,
+  syncPortalClaimsOnSessionCreate,
+  syncRoleFromPortalTier,
+  type ClaimSyncOutcome,
+} from './hooks/claim-sync';
+export {
+  PORTAL_PROVIDER_ID,
+  PORTAL_TIERS,
+  isAppRole,
+  mapTierToRole,
+  parsePortalTier,
+  tierAllowsRole,
+  type PortalTier,
+} from './portal-tiers';
 
 import { auth } from './config';
 

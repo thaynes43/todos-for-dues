@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
-import { hashPassword } from '@better-auth/utils/password';
+import {
+  registerPortalIdentity,
+  tierForRole,
+  unsignedPortalIdToken,
+} from '../../fixtures/personas';
 
 export type Role = 'Active' | 'Alumni' | 'Moderator' | 'Admin';
 
@@ -9,7 +13,6 @@ export interface SeededPersona {
   email: string;
   displayName: string;
   role: Role;
-  password: string;
 }
 
 export function createPool(): Pool {
@@ -37,27 +40,50 @@ function uniqueEmail(email: string): string {
   return `${local}+${randomUUID()}@${domain}`;
 }
 
+/**
+ * Insert a chapter member, PRE-LINKED to the portal (ADR-013 — sign-in is
+ * portal SSO only): the user row, its `sigo-portal` account row (seeded
+ * unsigned id_token; overwritten with a fresh signed one on each sign-in),
+ * and the matching identity at the OIDC mock. Pre-linking mirrors prod
+ * (post-wipe every user is portal-created — the linking path doesn't exist)
+ * and avoids Better Auth's link race when parallel workers sign a shared
+ * persona in for the first time simultaneously. The identity's tier follows
+ * the role: Admin→admin, Moderator→operator, Alumni/Active→brother.
+ */
 export async function seedPersona(
   pool: Pool,
-  opts: { email: string; displayName: string; role: Role; password: string },
+  opts: {
+    email: string;
+    displayName: string;
+    role: Role;
+  },
 ): Promise<SeededPersona> {
   const email = uniqueEmail(opts.email);
+  const tier = tierForRole(opts.role);
   const { rows } = await pool.query<{ id: string }>(
     `INSERT INTO users (email, display_name, role, email_verified) VALUES ($1, $2, $3, true) RETURNING id`,
     [email, opts.displayName, opts.role],
   );
   const userId = rows[0]!.id;
-  const passwordHash = await hashPassword(opts.password);
   await pool.query(
-    `INSERT INTO "account" (user_id, provider_id, account_id, password) VALUES ($1::uuid, 'credential', $1::uuid::text, $2)`,
-    [userId, passwordHash],
+    `INSERT INTO "account" (user_id, provider_id, account_id, id_token)
+     VALUES ($1::uuid, 'sigo-portal', $1::uuid::text, $2)`,
+    [
+      userId,
+      unsignedPortalIdToken({ sub: userId, email, name: opts.displayName, tier }),
+    ],
   );
+  await registerPortalIdentity({
+    email,
+    name: opts.displayName,
+    tier,
+    sub: userId,
+  });
   return {
     id: userId,
     email,
     displayName: opts.displayName,
     role: opts.role,
-    password: opts.password,
   };
 }
 

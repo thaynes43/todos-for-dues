@@ -33,8 +33,6 @@ export interface Cast {
   admin: SeededPersona;
 }
 
-const PASSWORD = 'correct-horse-battery';
-
 /**
  * PLAN-010 mvp specs need at least an Alumni + Moderator + Active per scenario.
  * Each spec generates UUID-suffixed identifiers so workers > 1 stays flake-free
@@ -51,25 +49,21 @@ export async function seedCast(
     email: `mvp-admin-${suffix}@chapter.test`,
     displayName: `MVP Admin ${suffix}`,
     role: 'Admin',
-    password: PASSWORD,
   });
   const alumni = await seedPersona(pool, {
     email: `mvp-alumni-${suffix}@chapter.test`,
     displayName: `MVP Alumni ${suffix}`,
     role: 'Alumni',
-    password: PASSWORD,
   });
   const mod = await seedPersona(pool, {
     email: `mvp-mod-${suffix}@chapter.test`,
     displayName: `MVP Mod ${suffix}`,
     role: 'Moderator',
-    password: PASSWORD,
   });
   const active = await seedPersona(pool, {
     email: `mvp-active-${suffix}@chapter.test`,
     displayName: `MVP Active ${suffix}`,
     role: 'Active',
-    password: PASSWORD,
   });
   return { alumni, mod, active, admin };
 }
@@ -84,7 +78,7 @@ export async function reAuth(
   persona: SeededPersona,
 ): Promise<void> {
   await context.clearCookies();
-  await signInAs(page, persona.email, persona.password);
+  await signInAs(page, persona.email);
   // After the post-signin redirect to '/', wait for the network to go idle
   // so Better Auth's Set-Cookie has been fully processed by Playwright's
   // cookie jar AND any layout-level role lookup has completed. Without this,
@@ -136,28 +130,30 @@ export async function postJob(
   // Next.js may still be compiling /jobs/new when goto resolves. Wait for the
   // network to go idle so the page is fully hydrated before driving the form.
   await page.waitForLoadState('load');
-  // Wait for the form to mount + hydrate. The submit button is initially
-  // disabled until React state has caught up to the form's inputs, so a
-  // stable "submit is enabled" tells us hydration finished AND validation
-  // accepted the inputs.
+  // The form is server-rendered and VISIBLE before React hydrates. Values
+  // filled pre-hydration get wiped when the controlled inputs mount ('' state
+  // defaults), leaving validation false and submit disabled forever — so
+  // fill-and-check in a poll loop: if hydration ate the values, fill again.
   const submit = page.getByRole('button', { name: /Post job/i });
   await expect(submit).toBeVisible();
-  const descBox = page.getByPlaceholder(/Describe the job/i);
-  await descBox.click();
-  await descBox.fill(description);
-  const duesBox = page.locator('input[name="duesAmount"]');
-  await duesBox.click();
-  await duesBox.fill(duesAmount);
-  const countBox = page.locator('input[name="recommendedPeopleCount"]');
-  await countBox.click();
-  await countBox.fill(recommended);
-  const locationBox = page.getByTestId('post-job-location');
-  await locationBox.click();
-  await locationBox.fill(location);
-  const durationBox = page.getByTestId('post-job-duration');
-  await durationBox.click();
-  await durationBox.fill(durationHours);
-  await expect(submit).toBeEnabled({ timeout: 30_000 });
+  const fillFields = async (): Promise<void> => {
+    await page.getByPlaceholder(/Describe the job/i).fill(description);
+    await page.locator('input[name="duesAmount"]').fill(duesAmount);
+    await page.locator('input[name="recommendedPeopleCount"]').fill(recommended);
+    await page.getByTestId('post-job-location').fill(location);
+    await page.getByTestId('post-job-duration').fill(durationHours);
+  };
+  await fillFields();
+  await expect
+    .poll(
+      async () => {
+        if (await submit.isEnabled().catch(() => false)) return true;
+        await fillFields();
+        return submit.isEnabled().catch(() => false);
+      },
+      { timeout: 30_000, intervals: [500, 1000, 2000] },
+    )
+    .toBe(true);
   await submit.click();
   await page.waitForURL(/\/jobs\/[0-9a-f-]+$/, { timeout: 15_000 });
   return page.url().split('/').pop()!;
@@ -221,14 +217,23 @@ export async function lockAsAlumni(
   await reAuth(page, context, alumni);
   await page.goto(`/jobs/${jobId}`);
   // Wait for hydration: the lock-job submit stays disabled until validation
-  // accepts the work-date. On cold GHA runners the form hydration can lag
-  // past the default click timeout.
+  // accepts the work-date. Same pre-hydration fill-wipe hazard as postJob —
+  // re-fill in a poll loop until the submit enables.
   await page.waitForLoadState('load');
-  await page
-    .getByTestId('lock-job-work-date')
-    .fill(futureLocalDatetimeMinutes(60 * 24 * 3));
+  const workDate = futureLocalDatetimeMinutes(60 * 24 * 3);
+  const dateBox = page.getByTestId('lock-job-work-date');
+  await dateBox.fill(workDate);
   const submit = page.getByTestId('lock-job-submit');
-  await expect(submit).toBeEnabled({ timeout: 30_000 });
+  await expect
+    .poll(
+      async () => {
+        if (await submit.isEnabled().catch(() => false)) return true;
+        await dateBox.fill(workDate);
+        return submit.isEnabled().catch(() => false);
+      },
+      { timeout: 30_000, intervals: [500, 1000, 2000] },
+    )
+    .toBe(true);
   await submit.click();
   await pollJobState(pool, jobId, 'locked');
 }

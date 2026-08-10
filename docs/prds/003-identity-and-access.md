@@ -13,6 +13,14 @@ related:
   supersedes: null
 ---
 
+> **Status pointer (2026-08-10):** the identity model below is superseded in
+> implementation by **ADR-013** — the sigoalumni.org portal is the only
+> identity source (portal OIDC client; no Google Workspace SSO, no
+> invite-token signup, no credential accounts). R-NN/AC-NN IDs are retained
+> unrenumbered for traceability; requirements about invite tokens
+> (R-11..R-14), HD restriction (R-04), and credential accounts no longer
+> have a live implementation. See `docs/adrs/013-portal-oidc-client.md`.
+
 ## 1. Objective
 
 > **Problem:** TODOs for Dues serves two user populations with fundamentally different identity provenances. Alumni at the launch chapter already have managed identities in Google Workspace (`@sigoalumni.org`); those accounts are tightly controlled and carry implicit membership authorization. Actives, and Alumni without Workspace accounts, have no such pre-existing credential — they need invite-gated app-managed accounts. A single, uniform signup flow cannot serve both without being either too open (no invite requirement) or unnecessarily burdensome (forcing Workspace members through a separate invite loop).

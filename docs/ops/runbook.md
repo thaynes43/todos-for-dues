@@ -134,22 +134,31 @@ WHERE user_id = (SELECT id FROM users WHERE email = 'user@example.com');
 ```
 
 All Better Auth tables (`users`, `session`, `account`, `verification`)
-are owned by `packages/db/src/schema/`. Passwords live in `account`
-(Better Auth credential plugin), NOT `users.password_hash` (dropped
-in migration `0006`).
+are owned by `packages/db/src/schema/`. There are NO credential
+accounts since ADR-013 (portal SSO only) — `account.password` is
+dormant; the only live provider rows have `provider_id = 'sigo-portal'`.
 
 Common symptoms and likely causes:
 
 - **Sign-in loop / 302 to /login after OAuth callback** — cookie
   domain mismatch. Check `BETTER_AUTH_URL` matches the public host
   (must be HTTPS in prod) and the cookie's `Domain=` covers the host.
-- **"User not found" after SSO** — the HD-restriction hook in
-  `packages/auth/src/oidc.ts` aborted in `mapProfileToUser` (non-HD
-  email); confirm `OIDC_HOSTED_DOMAIN` matches the IdP's `hd` claim.
+- **`/login?error=membership_pending` after portal sign-in** — working
+  as designed: the user's portal tier is `pending` (or missing/unknown
+  — fail closed). Verify the member at sigoalumni.org, then have them
+  sign in again. Code: `packages/auth/src/hooks/claim-sync.ts`.
+- **Sign-in button replaced by an operator note** — one of
+  `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_DISCOVERY_URL` is
+  unset; auth is disabled (fail closed) but the app boots. Fix the
+  ExternalSecret.
+- **Wrong role after a portal tier change** — roles re-sync at
+  sign-in, not mid-session; have the user sign out/in. If the log
+  shows `claim-sync … min-Admin invariant keeps them Admin`, the
+  demotion is deferred until another Admin exists.
 - **Session expires immediately** — check server clock skew against
   the DB (`SELECT NOW();`); Better Auth uses DB time for `expires_at`.
 
-<!-- Last verified: 2026-05-17 -->
+<!-- Last verified: 2026-08-10 -->
 
 ---
 
@@ -162,13 +171,19 @@ The exact path Better Auth's `genericOAuth` plugin uses (per PLAN-009
 https://todos-for-dues.haynesops.com/api/auth/oauth2/callback/{providerId}
 ```
 
-Where `{providerId}` is the provider id registered in
-`packages/auth/src/oidc.ts` (currently `google-workspace`).
+Where `{providerId}` is `sigo-portal` (`PORTAL_PROVIDER_ID` in
+`packages/auth/src/portal-tiers.ts`), so the registered value is:
 
-This MUST be configured exactly in Google Cloud Console:
-**APIs & Services → Credentials → OAuth 2.0 Client IDs → (your Web
-client) → Authorized redirect URIs**. Add the full URL above. Trailing
-slash, scheme, host, and path must match character-for-character.
+```
+https://todos-for-dues.haynesops.com/api/auth/oauth2/callback/sigo-portal
+```
+
+This MUST match the client registration at the sigoalumni.org portal
+(members-portal workstream owns the registration; client id
+`todos-for-dues`). Trailing slash, scheme, host, and path must match
+character-for-character. The discovery/issuer URL is env-driven
+(`OIDC_DISCOVERY_URL`) — the portal's Cloud Run origin until the
+domain cutover, then https://sigoalumni.org.
 
 Anti-pattern (caused the 2026-05-17 sign-in loop): registering
 `/api/auth/callback/oauth/{providerId}` (the older Better Auth path).
@@ -176,7 +191,7 @@ That value lets the server-side token exchange complete but the
 browser is then redirected to `/login` because the cookie set on the
 wrong callback path is not visible to the session middleware.
 
-<!-- Last verified: 2026-05-17 -->
+<!-- Last verified: 2026-08-10 -->
 
 ---
 
@@ -215,34 +230,30 @@ cert-manager will re-issue within ~60s.
 
 ## 7. `BOOTSTRAP_*` env var missing
 
-Symptom: a fresh chapter's first sign-in completes, the user row is
-created, but they remain `Alumni` (not promoted to `Admin`). The
-`bootstrapAdminOnSignin` databaseHook in `packages/auth` is gated on
-`BOOTSTRAP_ADMIN_EMAIL` matching the sign-in email exactly.
+`BOOTSTRAP_ADMIN_EMAIL` no longer exists (ADR-013): the first Admin is
+whoever signs in with portal tier `admin` — the claim-sync hook maps
+tiers to roles on every sign-in via `transitionRole`, so no env-seeded
+promotion is needed. If a fresh chapter's first sign-in lands as
+`Alumni` when Admin was expected, fix the member's tier at the
+sigoalumni.org portal and have them sign in again.
 
-Inspect the running secret:
+The `BOOTSTRAP_*` vars that DO still matter are the migration-time
+chapter-settings seeds (migration 0004 GUCs):
+`BOOTSTRAP_ADMIN_RECIPIENT_EMAIL`, `BOOTSTRAP_TREASURER_RECIPIENT_EMAIL`,
+`BOOTSTRAP_MODERATORS_RECIPIENT_EMAIL`, `BOOTSTRAP_CHAPTER_TIMEZONE`,
+`BOOTSTRAP_CHAPTER_DISPLAY_NAME`. Missing values fall back to the
+migration's defaults; fix afterwards via Admin → Settings (the values
+live in `chapter_settings`, not env).
+
+Inspect / edit the rendered secret via the upstream ExternalSecret:
 
 ```sh
 kubectl get secret todos-for-dues-secret -n frontend -o yaml
-```
-
-`BOOTSTRAP_ADMIN_EMAIL` is rendered from External Secrets; edit the
-upstream ExternalSecret rather than the rendered secret directly:
-
-```sh
 kubectl edit externalsecret -n frontend todos-for-dues-secret
-```
-
-After editing, restart the deployment so the env var refreshes:
-
-```sh
 kubectl rollout restart -n frontend deploy/todos-for-dues
 ```
 
-The hook is idempotent and routes through `transitionRole`, so the
-audit trail is honored — re-signing in is enough; no manual SQL needed.
-
-<!-- Last verified: 2026-05-17 -->
+<!-- Last verified: 2026-08-10 -->
 
 ---
 

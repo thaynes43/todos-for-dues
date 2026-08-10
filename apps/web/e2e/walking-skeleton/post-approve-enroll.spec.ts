@@ -19,25 +19,22 @@ test.describe('walking-skeleton — post → approve → enroll', () => {
         email: 'alumni@pae.test',
         displayName: 'Alumni',
         role: 'Alumni',
-        password: 'correct-horse-battery',
       });
       const mod = await seedPersona(pool, {
         email: 'mod@pae.test',
         displayName: 'Mod',
         role: 'Moderator',
-        password: 'correct-horse-battery',
       });
       const active = await seedPersona(pool, {
         email: 'active@pae.test',
         displayName: 'Active',
         role: 'Active',
-        password: 'correct-horse-battery',
       });
 
       const description = `pae-${Date.now()}`;
 
       // Alumni posts
-      await signInAs(page, alumni.email, alumni.password);
+      await signInAs(page, alumni.email);
       await page.goto('/jobs/new');
       await page.getByPlaceholder(/Describe the job/i).fill(description);
       await page.locator('input[name="duesAmount"]').fill('30');
@@ -51,7 +48,7 @@ test.describe('walking-skeleton — post → approve → enroll', () => {
 
       // Mod approves
       await context.clearCookies();
-      await signInAs(page, mod.email, mod.password);
+      await signInAs(page, mod.email);
       await page.goto('/moderation-queue');
       await expect(
         page.locator(`[data-job-id="${jobId}"]`),
@@ -72,7 +69,7 @@ test.describe('walking-skeleton — post → approve → enroll', () => {
 
       // Active enrolls
       await context.clearCookies();
-      await signInAs(page, active.email, active.password);
+      await signInAs(page, active.email);
       await page.goto(`/jobs/${jobId}`);
       await expect(page.getByTestId('job-state-badge')).toHaveText(
         /enrollment-open/,

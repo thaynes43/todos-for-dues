@@ -1,7 +1,7 @@
 ---
 id: ADR-007
 title: Use Better Auth OIDC client with hosted-domain restriction for Google Workspace SSO
-status: Proposed
+status: Superseded by ADR-013
 date: 2026-05-14
 deciders: [Tom Haynes]
 consulted: []
@@ -12,7 +12,7 @@ related:
   flows: []                   # docs/flows/walking-skeleton.md pending
   designs: []                 # docs/design/auth.md pending — SSO callback, account-linking logic
   supersedes: null
-  superseded_by: null
+  superseded_by: ADR-013
 ---
 
 ## Context and problem statement

@@ -12,23 +12,23 @@ const ENV_FILE = join(TMP_DIR, 'env.json');
 
 export interface RuntimeEnv {
   DATABASE_URL: string;
+  /** Discovery URL of the portal-shaped OIDC mock (ADR-013). */
   OIDC_DISCOVERY_URL: string;
+  /** Base URL of the mock — specs register identities against `/_test/identity`. */
   OIDC_BASE_URL: string;
   OIDC_CLIENT_ID: string;
   OIDC_CLIENT_SECRET: string;
-  OIDC_HOSTED_DOMAIN: string;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
-  BOOTSTRAP_ADMIN_EMAIL: string;
   BOOTSTRAP_TREASURER_RECIPIENT_EMAIL: string;
   BOOTSTRAP_MODERATORS_RECIPIENT_EMAIL: string;
   BOOTSTRAP_ADMIN_RECIPIENT_EMAIL: string;
   BOOTSTRAP_CHAPTER_DISPLAY_NAME: string;
   BOOTSTRAP_CHAPTER_TIMEZONE: string;
   RESEND_TEST_MODE: 'true';
-  /** Pre-seeded credential password for Admin + Moderator personas. */
-  E2E_SEED_PASSWORD: string;
-  /** Pre-seeded Moderator email. */
+  /** Pre-seeded chapter Admin (portal identity: tier `admin`). */
+  E2E_SEED_ADMIN_EMAIL: string;
+  /** Pre-seeded standing Moderator (portal identity: tier `operator`). */
   E2E_SEED_MODERATOR_EMAIL: string;
 }
 
