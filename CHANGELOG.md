@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.0.0](https://github.com/thaynes43/todos-for-dues/compare/v0.8.1...v1.0.0) (2026-08-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* **auth:** local credential auth and invite onboarding are removed; sign-in requires the sigoalumni.org portal (OIDC_CLIENT_ID / OIDC_CLIENT_SECRET / OIDC_DISCOVERY_URL). OIDC_HOSTED_DOMAIN and BOOTSTRAP_ADMIN_EMAIL are dropped. Migration 0011 wipes existing users.
+
+### Features
+
+* **auth:** portal SSO replaces local auth (ADR 0007 / ADR-013) ([#52](https://github.com/thaynes43/todos-for-dues/issues/52)) ([8d85ee0](https://github.com/thaynes43/todos-for-dues/commit/8d85ee0c0bf91add88a55bc7a7854e9e65074904))
+* **ui:** Sigo rebrand — design-system v1.1 ([#53](https://github.com/thaynes43/todos-for-dues/issues/53)) ([00e7aac](https://github.com/thaynes43/todos-for-dues/commit/00e7aac2b2dbe19b86efec286babd4d62e4c21ac))
+
+
+### Bug Fixes
+
+* **security:** Phase 1 modernization — audit hotfixes + security dependency wave ([#50](https://github.com/thaynes43/todos-for-dues/issues/50)) ([48a0cf5](https://github.com/thaynes43/todos-for-dues/commit/48a0cf54814a921ffc24abd03fd8065d31a87910))
+
 ## [0.8.1](https://github.com/thaynes43/todos-for-dues/compare/v0.8.0...v0.8.1) (2026-08-10)
 
 
