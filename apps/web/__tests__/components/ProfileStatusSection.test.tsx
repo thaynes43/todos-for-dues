@@ -179,6 +179,25 @@ describe('<ProfileStatusSection> — fallback + hidden paths', () => {
     expect(setMutate).not.toHaveBeenCalled();
   });
 
+  it('fallback control tracks the server-fresh role, not the stale query cache', () => {
+    // BUG caught by e2e (PR #58 run 4caba7f): after a local users.changeRole
+    // flip, router.refresh() updates the server-provided `role` prop but
+    // nothing refetches memberStatus.get — `data.role` stays at the pre-flip
+    // value. The fallback control must render from the prop, or it keeps the
+    // old side "(current)"/disabled and wedges back-and-forth until reload.
+    queryState.data = { kind: 'unavailable', status: null, role: 'Active' };
+    const { rerender } = render(<ProfileStatusSection role={'Active' as Role} />);
+    expect(screen.getByTestId('role-change-option-Active')).toBeDisabled();
+
+    // Simulate the post-flip refresh: prop is fresh (Alumni), cache is stale.
+    rerender(<ProfileStatusSection role={'Alumni' as Role} />);
+    expect(screen.getByTestId('role-change-option-Alumni')).toBeDisabled();
+    expect(screen.getByTestId('role-change-option-Alumni')).toHaveTextContent(
+      /Alumni \(current\)/,
+    );
+    expect(screen.getByTestId('role-change-option-Active')).toBeEnabled();
+  });
+
   it('a tRPC-level query error also falls back (never blocks the member)', () => {
     queryState.error = new Error('boom');
     render(<ProfileStatusSection role={'Active' as Role} />);

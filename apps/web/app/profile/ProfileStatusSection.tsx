@@ -83,9 +83,16 @@ export function ProfileStatusSection({ role }: { role: Role }) {
   if (!data) return null; // unreachable: !error && !isPending ⇒ data
 
   if (data.kind === 'unavailable') {
+    // Use the SERVER-provided role, not `data.role`: the local
+    // `users.changeRole` fallback refreshes server components on success
+    // (router.refresh()), which updates this prop — but nothing refetches
+    // the memberStatus.get cache, so `data.role` goes stale after a flip
+    // and the control would keep marking the pre-flip side "(current)"
+    // (wedging back-and-forth until a full reload). Caught by
+    // e2e/roles/member-status-flip-cycles.spec.ts (PR #58 run 4caba7f).
     return (
       <div data-testid="profile-status-section" data-portal="off">
-        <RoleChangeDropdown currentRole={data.role} />
+        <RoleChangeDropdown currentRole={role} />
       </div>
     );
   }
