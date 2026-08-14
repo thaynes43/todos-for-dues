@@ -17,6 +17,22 @@ export {
   tierAllowsRole,
   type PortalTier,
 } from './portal-tiers';
+export {
+  MEMBER_STATUSES,
+  fetchMemberStatusFromPortal,
+  getMemberStatus,
+  memberStatusEndpoint,
+  memberStatusFromClaims,
+  parseMemberStatus,
+  pushMemberStatusToPortal,
+  readMemberStatusClaim,
+  readPortalAccessToken,
+  setMemberStatus,
+  type MemberStatus,
+  type MemberStatusView,
+  type MemberStatusWriteResult,
+  type PortalFetchDeps,
+} from './member-status';
 
 import { auth } from './config';
 
