@@ -194,9 +194,26 @@ test.describe('MVP-FIX-B #7 — LockJobForm surfaces server validation error', (
       now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
       const localValue = now.toISOString().slice(0, 16);
 
-      await page.getByTestId('lock-job-work-date').fill(localValue);
+      // LockJobForm's work-date is a CONTROLLED input (useState('')): a fill
+      // that lands pre-hydration is wiped when React mounts, canSubmit stays
+      // false, and the submit never enables (the exact trap documented on the
+      // postJob helper — this spec predated the pattern and flaked on GHA:
+      // PR #58 runs 31828264411 / 31830347256, 30s toBeEnabled timeout on
+      // first attempt AND retry). Fill-and-check in a poll loop: if hydration
+      // ate the value, fill again.
+      const workDate = page.getByTestId('lock-job-work-date');
       const submit = page.getByTestId('lock-job-submit');
-      await expect(submit).toBeEnabled({ timeout: 30_000 });
+      await workDate.fill(localValue);
+      await expect
+        .poll(
+          async () => {
+            if (await submit.isEnabled().catch(() => false)) return true;
+            await workDate.fill(localValue);
+            return submit.isEnabled().catch(() => false);
+          },
+          { timeout: 30_000, intervals: [500, 1000, 2000] },
+        )
+        .toBe(true);
       await submit.click();
 
       const alert = page.getByTestId('lock-job-error');
