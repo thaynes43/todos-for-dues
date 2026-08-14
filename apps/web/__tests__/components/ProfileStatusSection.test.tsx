@@ -24,6 +24,9 @@ const setMutationOpts = vi.hoisted(() => ({
   onSuccess: undefined as ((data: unknown) => void) | undefined,
 }));
 
+/** Mutable mutation state so specs can pin the in-flight (isPending) UI. */
+const setMutationState = vi.hoisted(() => ({ isPending: false }));
+
 vi.mock('@/lib/trpc-client', () => ({
   trpc: {
     useUtils: () => ({
@@ -42,7 +45,7 @@ vi.mock('@/lib/trpc-client', () => ({
           setMutationOpts.onSuccess = opts.onSuccess;
           return {
             mutate: (input: unknown) => setMutate(input),
-            isPending: false,
+            isPending: setMutationState.isPending,
             error: null,
           };
         },
@@ -70,6 +73,7 @@ beforeEach(() => {
   queryState.error = null;
   queryState.isPending = false;
   setMutationOpts.onSuccess = undefined;
+  setMutationState.isPending = false;
 });
 
 describe('<ProfileStatusSection> — portal-backed path', () => {
@@ -99,6 +103,51 @@ describe('<ProfileStatusSection> — portal-backed path', () => {
     render(<ProfileStatusSection role={'Alumni' as Role} />);
     expect(screen.getByTestId('role-change-option-Alumni')).toBeDisabled();
     expect(screen.getByTestId('role-change-option-Active')).toBeEnabled();
+  });
+
+  it('an in-flight save disables both sides and drops extra clicks (double-click guard)', () => {
+    queryState.data = { kind: 'ok', status: 'active', role: 'Active' };
+    setMutationState.isPending = true;
+    render(<ProfileStatusSection role={'Active' as Role} />);
+
+    // While the PUT is in flight neither side is clickable…
+    expect(screen.getByTestId('role-change-option-Active')).toBeDisabled();
+    expect(screen.getByTestId('role-change-option-Alumni')).toBeDisabled();
+
+    // …and even a click that slips through (e.g. dispatched programmatically)
+    // is dropped by the handler guard — no second mutation.
+    fireEvent.click(screen.getByTestId('role-change-option-Alumni'));
+    expect(setMutate).not.toHaveBeenCalled();
+  });
+
+  it('back-and-forth flips keep the current marker on the freshly-saved side', () => {
+    queryState.data = { kind: 'ok', status: 'active', role: 'Active' };
+    const { rerender } = render(<ProfileStatusSection role={'Active' as Role} />);
+
+    // Flip 1: Active → Alumni.
+    fireEvent.click(screen.getByTestId('role-change-option-Alumni'));
+    expect(setMutate).toHaveBeenNthCalledWith(1, { status: 'alumni' });
+    act(() => {
+      queryState.data = { kind: 'ok', status: 'alumni', role: 'Alumni' };
+      setMutationOpts.onSuccess?.(queryState.data);
+    });
+    rerender(<ProfileStatusSection role={'Active' as Role} />);
+    expect(screen.getByTestId('role-change-option-Alumni')).toBeDisabled();
+    expect(screen.getByTestId('role-change-option-Active')).toBeEnabled();
+
+    // Flip 2: Alumni → back to Active.
+    fireEvent.click(screen.getByTestId('role-change-option-Active'));
+    expect(setMutate).toHaveBeenNthCalledWith(2, { status: 'active' });
+    act(() => {
+      queryState.data = { kind: 'ok', status: 'active', role: 'Active' };
+      setMutationOpts.onSuccess?.(queryState.data);
+    });
+    rerender(<ProfileStatusSection role={'Active' as Role} />);
+    expect(screen.getByTestId('role-change-option-Active')).toBeDisabled();
+    expect(screen.getByTestId('role-change-option-Alumni')).toBeEnabled();
+
+    // Two flips → exactly two mutations, no doubles.
+    expect(setMutate).toHaveBeenCalledTimes(2);
   });
 
   it('shows the one-word confirmation and refreshes the cache on save', () => {
