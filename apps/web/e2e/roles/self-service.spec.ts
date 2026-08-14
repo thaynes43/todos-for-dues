@@ -28,10 +28,15 @@ test.describe('PRD-008 AC-01 — self-service Active → Alumni', () => {
       await expect(page.getByTestId('role-change-option-Moderator')).toHaveCount(0);
       await expect(page.getByTestId('role-change-option-Admin')).toHaveCount(0);
 
-      // Member-status control (sigo-alumni item 07) stays hidden until the
-      // portal ships GET/PUT /api/member/status — the mock portal (like the
-      // live one today) 404s the route, so the section must not render.
-      await expect(page.getByTestId('profile-status-section')).toHaveCount(0);
+      // Member-status control (sigo-alumni item 07 / ADR-014): the e2e mock
+      // portal serves GET/PUT /api/member/status with an auto-created
+      // (undeclared) registry row, so this control is the PORTAL-BACKED path
+      // here — same test ids, same semantics as the pre-portal local one.
+      // The feature-off fallback is covered by e2e/roles/member-status.spec.ts.
+      await expect(page.getByTestId('profile-status-section')).toHaveAttribute(
+        'data-portal',
+        'on',
+      );
 
       // Select Alumni.
       await alumniBtn.click();
