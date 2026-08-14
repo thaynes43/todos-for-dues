@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/thaynes43/todos-for-dues/compare/v1.1.0...v1.1.1) (2026-08-14)
+
+
+### Bug Fixes
+
+* **profile:** fallback Active/Alumni toggle wedged after one flip ([#58](https://github.com/thaynes43/todos-for-dues/issues/58)) ([155400e](https://github.com/thaynes43/todos-for-dues/commit/155400e3912679d8a6c561ef98759f11c9f365ad))
+
 ## [1.1.0](https://github.com/thaynes43/todos-for-dues/compare/v1.0.0...v1.1.0) (2026-08-14)
 
 
