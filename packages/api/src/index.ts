@@ -1,4 +1,5 @@
 export { appRouter, type AppRouter } from './routers';
+export { type MemberStatusState } from './routers/member-status';
 export { createTRPCContext, type TRPCContext } from './trpc';
 export {
   SETTING_VALIDATORS,

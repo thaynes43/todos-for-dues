@@ -1,251 +1,280 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import http from 'node:http';
-import type { AddressInfo } from 'node:net';
-import { TRPCError } from '@trpc/server';
-import {
-  caller,
-  makeCtx,
-  resetAndSeedUsers,
-  startTestDb,
-  unauthedCtx,
-  type SeedUsers,
-  type TestDb,
-} from './_setup';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { startPortalApiMock, type PortalApiMock } from './_portal-mock';
 
 /**
- * Boundary mock of the portal's member-status API (sigo-alumni item 07):
- * a real HTTP server standing in for sigoalumni.org, reached through the
- * OIDC_DISCOVERY_URL origin exactly like production. The tRPC router +
- * @app/auth client run unmodified against it.
+ * memberStatus router (ADR-014) against the REAL stack: PG16 testcontainer,
+ * the real Better Auth `getAccessToken` path (including refresh-on-expiry
+ * against the portal mock's token endpoint), the real portal-client
+ * classification, and the real `transitionRole` audit writes.
+ *
+ * Env ordering: `@app/auth` reads OIDC_* at module load, so `_setup` (which
+ * transitively imports it) is loaded DYNAMICALLY after the portal mock is up
+ * and the env points at it — top-level imports would freeze an empty config
+ * and the genericOAuth provider (which backs getAccessToken) would never
+ * register.
  */
 
-type PortalMode = 'ok' | 'missing-route' | 'not-implemented';
+type Setup = typeof import('./_setup');
+type TestDb = Awaited<ReturnType<Setup['startTestDb']>>;
+type SeedUsers = Awaited<ReturnType<Setup['resetAndSeedUsers']>>;
 
-interface MockPortal {
-  origin: string;
-  mode: PortalMode;
-  /** access token → registry status. Tokens absent here have NO registry row. */
-  registry: Map<string, 'active' | 'alumni' | null>;
-  requests: Array<{ method: string; auth: string | undefined }>;
-  close: () => Promise<void>;
-}
-
-function startMockPortal(): Promise<MockPortal> {
-  const state: Omit<MockPortal, 'origin' | 'close'> = {
-    mode: 'ok',
-    registry: new Map(),
-    requests: [],
-  };
-  const server = http.createServer((req, res) => {
-    const auth = req.headers['authorization'];
-    state.requests.push({ method: req.method ?? '', auth });
-    if (state.mode === 'missing-route' || req.url !== '/api/member/status') {
-      // What the live portal serves today: the route does not exist.
-      res.writeHead(404, { 'content-type': 'text/html' });
-      res.end('<!doctype html><h1>Not found</h1>');
-      return;
-    }
-    if (state.mode === 'not-implemented') {
-      res.writeHead(501).end();
-      return;
-    }
-    const token = auth?.replace(/^Bearer /, '');
-    if (!token || !state.registry.has(token)) {
-      // Contract: no linked registry row → 404.
-      res.writeHead(404, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: 'no registry row' }));
-      return;
-    }
-    if (req.method === 'GET') {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ status: state.registry.get(token) ?? null }));
-      return;
-    }
-    if (req.method === 'PUT') {
-      let body = '';
-      req.on('data', (chunk) => (body += chunk));
-      req.on('end', () => {
-        const parsed = JSON.parse(body) as { status?: unknown };
-        if (parsed.status !== 'active' && parsed.status !== 'alumni') {
-          res.writeHead(400).end();
-          return;
-        }
-        state.registry.set(token, parsed.status);
-        res.writeHead(200, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ status: parsed.status }));
-      });
-      return;
-    }
-    res.writeHead(405).end();
-  });
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => {
-      const { port } = server.address() as AddressInfo;
-      resolve(
-        Object.assign(state, {
-          origin: `http://127.0.0.1:${port}`,
-          close: () => new Promise<void>((r) => server.close(() => r())),
-        }),
-      );
-    });
-  });
-}
-
+let portal: PortalApiMock;
+let setup: Setup;
 let testDb: TestDb;
-let users: SeedUsers;
-let portal: MockPortal;
-
-const ALUMNI_TOKEN = 'tok-alumni';
+let seeded: SeedUsers;
 
 beforeAll(async () => {
-  testDb = await startTestDb();
-  portal = await startMockPortal();
+  portal = await startPortalApiMock();
+  process.env.OIDC_CLIENT_ID = 'todos-for-dues';
+  process.env.OIDC_CLIENT_SECRET = 'test-portal-client-secret';
+  process.env.OIDC_DISCOVERY_URL = portal.discoveryUrl;
+  setup = await import('./_setup');
+  testDb = await setup.startTestDb();
 }, 180_000);
 
 afterAll(async () => {
-  await portal?.close();
   await testDb?.stop();
+  await portal?.stop();
 });
 
 beforeEach(async () => {
-  users = await resetAndSeedUsers(testDb.pool);
-  portal.mode = 'ok';
+  seeded = await setup.resetAndSeedUsers(testDb.pool);
+  portal.tokens.clear();
+  portal.refreshTokens.clear();
   portal.registry.clear();
-  portal.requests.length = 0;
-  vi.stubEnv('OIDC_DISCOVERY_URL', `${portal.origin}/.well-known/openid-configuration`);
-  vi.spyOn(console, 'debug').mockImplementation(() => {});
-  vi.spyOn(console, 'error').mockImplementation(() => {});
-  // The alumni seed user has a portal account with a stored access token.
-  await testDb.pool.query(
-    `INSERT INTO "account" (user_id, provider_id, account_id, access_token)
-     VALUES ($1::uuid, 'sigo-portal', $1::uuid::text, $2)`,
-    [users.alumni, ALUMNI_TOKEN],
+  portal.mode = 'on';
+  portal.refreshCount = 0;
+});
+
+/** Link a sigo-portal account row with stored OAuth tokens (what a real
+ * sign-in leaves behind), and register the matching bearer at the mock. */
+async function linkPortalAccount(
+  userId: string,
+  opts: { expired?: boolean; refreshToken?: boolean } = {},
+): Promise<{ accessToken: string; refreshToken: string | null }> {
+  const accessToken = `at-${userId}`;
+  const refreshToken = (opts.refreshToken ?? true) ? `rt-${userId}` : null;
+  const expiresAt = new Date(
+    Date.now() + (opts.expired ? -60_000 : 60 * 60_000),
   );
-});
+  await testDb.pool.query(
+    `INSERT INTO "account" (user_id, provider_id, account_id, access_token, refresh_token, access_token_expires_at)
+     VALUES ($1::uuid, 'sigo-portal', $1::uuid::text, $2, $3, $4)`,
+    [userId, accessToken, refreshToken, expiresAt],
+  );
+  if (!opts.expired) portal.tokens.set(accessToken, userId);
+  if (refreshToken) portal.refreshTokens.set(refreshToken, userId);
+  return { accessToken, refreshToken };
+}
 
-afterEach(() => {
-  vi.unstubAllEnvs();
-  vi.restoreAllMocks();
-});
+async function getAuditRows(userId: string) {
+  const { rows } = await testDb.pool.query<{
+    from_role: string;
+    to_role: string;
+    initiator_id: string | null;
+    initiator_kind: string;
+    note: string | null;
+  }>(
+    `SELECT from_role, to_role, initiator_id, initiator_kind, note
+       FROM user_role_transitions WHERE user_id = $1 ORDER BY created_at, ctid`,
+    [userId],
+  );
+  return rows;
+}
 
-describe('memberStatus.get', () => {
-  it('undeclared registry row → available with status null', async () => {
-    portal.registry.set(ALUMNI_TOKEN, null);
-    const view = await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).memberStatus.get();
-    expect(view).toEqual({ available: true, status: null });
-    expect(portal.requests.at(-1)?.auth).toBe(`Bearer ${ALUMNI_TOKEN}`);
+describe('memberStatus.get — fresh portal read + role projection', () => {
+  it('returns the declared status and syncs a diverged Active/Alumni role (system-audited)', async () => {
+    await linkPortalAccount(seeded.alumni);
+    portal.registry.set(seeded.alumni, 'active');
+
+    const result = await setup
+      .caller(setup.makeCtx({ userId: seeded.alumni, role: 'Alumni' }))
+      .memberStatus.get();
+    expect(result).toEqual({ kind: 'ok', status: 'active', role: 'Active' });
+
+    expect(await setup.getUserRole(testDb.pool, seeded.alumni)).toBe('Active');
+    const audit = await getAuditRows(seeded.alumni);
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({
+      from_role: 'Alumni',
+      to_role: 'Active',
+      initiator_kind: 'system',
+      initiator_id: null,
+    });
+    expect(audit[0]!.note).toContain('ADR-014');
   });
 
-  it('declared registry row → available with the registry value', async () => {
-    portal.registry.set(ALUMNI_TOKEN, 'active');
-    const view = await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).memberStatus.get();
-    expect(view).toEqual({ available: true, status: 'active' });
+  it('matching status is a read-only no-op (no audit noise)', async () => {
+    await linkPortalAccount(seeded.active1);
+    portal.registry.set(seeded.active1, 'active');
+    const result = await setup
+      .caller(setup.makeCtx({ userId: seeded.active1, role: 'Active' }))
+      .memberStatus.get();
+    expect(result).toEqual({ kind: 'ok', status: 'active', role: 'Active' });
+    expect(await getAuditRows(seeded.active1)).toHaveLength(0);
   });
 
-  it('no registry row (portal 404) → unavailable, control hidden', async () => {
-    const view = await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).memberStatus.get();
-    expect(view).toEqual({ available: false });
+  it('undeclared (null row) leaves the role alone', async () => {
+    await linkPortalAccount(seeded.active1);
+    portal.registry.set(seeded.active1, null);
+    const result = await setup
+      .caller(setup.makeCtx({ userId: seeded.active1, role: 'Active' }))
+      .memberStatus.get();
+    expect(result).toEqual({ kind: 'undeclared', status: null, role: 'Active' });
+    expect(await getAuditRows(seeded.active1)).toHaveLength(0);
   });
 
-  it("route not built (today's live portal) → unavailable, feature inert", async () => {
-    portal.mode = 'missing-route';
-    const view = await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).memberStatus.get();
-    expect(view).toEqual({ available: false });
+  it('no linked registry row → no-registry-row (route exists, JSON 404)', async () => {
+    await linkPortalAccount(seeded.alumni);
+    // no registry entry for this user
+    const result = await setup
+      .caller(setup.makeCtx({ userId: seeded.alumni, role: 'Alumni' }))
+      .memberStatus.get();
+    expect(result).toEqual({
+      kind: 'no-registry-row',
+      status: null,
+      role: 'Alumni',
+    });
   });
 
-  it('501 → unavailable', async () => {
-    portal.mode = 'not-implemented';
-    const view = await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).memberStatus.get();
-    expect(view).toEqual({ available: false });
+  it('portal without the endpoint (route-404 / 501) → unavailable, nothing moves', async () => {
+    await linkPortalAccount(seeded.alumni);
+    portal.registry.set(seeded.alumni, 'active');
+
+    for (const mode of ['absent', 'not-implemented'] as const) {
+      portal.mode = mode;
+      const result = await setup
+        .caller(setup.makeCtx({ userId: seeded.alumni, role: 'Alumni' }))
+        .memberStatus.get();
+      expect(result).toEqual({ kind: 'unavailable', status: null, role: 'Alumni' });
+    }
+    expect(await getAuditRows(seeded.alumni)).toHaveLength(0);
   });
 
-  it('user with no stored portal token → unavailable without hitting the portal', async () => {
-    const view = await caller(
-      makeCtx({ userId: users.active1, role: 'Active' }),
-    ).memberStatus.get();
-    expect(view).toEqual({ available: false });
-    expect(portal.requests).toHaveLength(0);
+  it('no linked portal account at all → unavailable', async () => {
+    const result = await setup
+      .caller(setup.makeCtx({ userId: seeded.alumni, role: 'Alumni' }))
+      .memberStatus.get();
+    expect(result).toEqual({ kind: 'unavailable', status: null, role: 'Alumni' });
   });
 
-  it('portal unreachable → unavailable, not a thrown error', async () => {
-    vi.stubEnv(
-      'OIDC_DISCOVERY_URL',
-      // Closed port: connection refused.
-      'http://127.0.0.1:9/.well-known/openid-configuration',
+  it('NEVER re-roles privileged users — status is a roster fact for them', async () => {
+    await linkPortalAccount(seeded.admin);
+    portal.registry.set(seeded.admin, 'active');
+    const result = await setup
+      .caller(setup.makeCtx({ userId: seeded.admin, role: 'Admin' }))
+      .memberStatus.get();
+    expect(result).toEqual({ kind: 'ok', status: 'active', role: 'Admin' });
+    expect(await setup.getUserRole(testDb.pool, seeded.admin)).toBe('Admin');
+    expect(await getAuditRows(seeded.admin)).toHaveLength(0);
+  });
+
+  it('refreshes an expired access token via the stored refresh token, then reads', async () => {
+    await linkPortalAccount(seeded.alumni, { expired: true });
+    portal.registry.set(seeded.alumni, 'alumni');
+
+    const result = await setup
+      .caller(setup.makeCtx({ userId: seeded.alumni, role: 'Alumni' }))
+      .memberStatus.get();
+    expect(result).toEqual({ kind: 'ok', status: 'alumni', role: 'Alumni' });
+    expect(portal.refreshCount).toBe(1);
+
+    // Better Auth persisted the refreshed token on the account row.
+    const { rows } = await testDb.pool.query<{ access_token: string }>(
+      `SELECT access_token FROM "account" WHERE user_id = $1 AND provider_id = 'sigo-portal'`,
+      [seeded.alumni],
     );
-    const view = await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).memberStatus.get();
-    expect(view).toEqual({ available: false });
+    expect(rows[0]!.access_token).toContain('at-refreshed-');
   });
 
-  it('unauthenticated → UNAUTHORIZED', async () => {
-    await expect(caller(unauthedCtx()).memberStatus.get()).rejects.toMatchObject({
-      code: 'UNAUTHORIZED',
-    });
-  });
-});
-
-describe('memberStatus.set', () => {
-  it('writes through to the registry, then re-reads current truth', async () => {
-    portal.registry.set(ALUMNI_TOKEN, 'active');
-    const view = await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).memberStatus.set({
-      status: 'alumni',
-    });
-    expect(view).toEqual({ available: true, status: 'alumni' });
-    expect(portal.registry.get(ALUMNI_TOKEN)).toBe('alumni');
-    // PUT followed by a re-GET (contract: after PUT, re-read).
-    expect(portal.requests.map((r) => r.method)).toEqual(['PUT', 'GET']);
-  });
-
-  it('no registry row → NOT_FOUND (client hides the control)', async () => {
+  it('rejects without a session — UNAUTHORIZED', async () => {
     await expect(
-      caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).memberStatus.set({
-        status: 'active',
-      }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
-  });
-
-  it('portal 501 → SERVICE_UNAVAILABLE', async () => {
-    portal.mode = 'not-implemented';
-    await expect(
-      caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).memberStatus.set({
-        status: 'active',
-      }),
-    ).rejects.toMatchObject({ code: 'SERVICE_UNAVAILABLE' });
-  });
-
-  it('rejects out-of-contract statuses at the input boundary', async () => {
-    await expect(
-      caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).memberStatus.set(
-        // @ts-expect-error — contract allows only active | alumni
-        { status: 'emeritus' },
-      ),
-    ).rejects.toBeInstanceOf(TRPCError);
-    expect(portal.requests).toHaveLength(0);
-  });
-
-  it('unauthenticated → UNAUTHORIZED', async () => {
-    await expect(
-      caller(unauthedCtx()).memberStatus.set({ status: 'active' }),
+      setup.caller(setup.unauthedCtx()).memberStatus.get(),
     ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
   });
 });
 
-describe('no durable status storage (item 07 invariant)', () => {
-  it('a successful write leaves no status column or row behind in the app DB', async () => {
-    portal.registry.set(ALUMNI_TOKEN, null);
-    await caller(makeCtx({ userId: users.alumni, role: 'Alumni' })).memberStatus.set({
-      status: 'alumni',
+describe('memberStatus.set — PUT + re-GET + role sync', () => {
+  it('writes the registry, re-reads, and syncs the role with the user as initiator', async () => {
+    await linkPortalAccount(seeded.active1);
+    portal.registry.set(seeded.active1, 'active');
+
+    const result = await setup
+      .caller(setup.makeCtx({ userId: seeded.active1, role: 'Active' }))
+      .memberStatus.set({ status: 'alumni' });
+    expect(result).toEqual({ kind: 'ok', status: 'alumni', role: 'Alumni' });
+
+    // The registry (the ONLY durable store) holds the new value.
+    expect(portal.registry.get(seeded.active1)).toBe('alumni');
+    expect(await setup.getUserRole(testDb.pool, seeded.active1)).toBe('Alumni');
+    const audit = await getAuditRows(seeded.active1);
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({
+      from_role: 'Active',
+      to_role: 'Alumni',
+      initiator_kind: 'user',
+      initiator_id: seeded.active1,
     });
-    // No column named like status on users, and no table for it.
-    const { rows: cols } = await testDb.pool.query<{ column_name: string }>(
-      `SELECT column_name FROM information_schema.columns
-       WHERE table_schema = 'public' AND column_name ILIKE '%status%'`,
+  });
+
+  it('declaring from undeclared works (null row → active)', async () => {
+    await linkPortalAccount(seeded.alumni);
+    portal.registry.set(seeded.alumni, null);
+    const result = await setup
+      .caller(setup.makeCtx({ userId: seeded.alumni, role: 'Alumni' }))
+      .memberStatus.set({ status: 'active' });
+    expect(result).toEqual({ kind: 'ok', status: 'active', role: 'Active' });
+  });
+
+  it('no linked registry row → no-registry-row; nothing written anywhere', async () => {
+    await linkPortalAccount(seeded.alumni);
+    const result = await setup
+      .caller(setup.makeCtx({ userId: seeded.alumni, role: 'Alumni' }))
+      .memberStatus.set({ status: 'active' });
+    expect(result).toEqual({
+      kind: 'no-registry-row',
+      status: null,
+      role: 'Alumni',
+    });
+    expect(portal.registry.has(seeded.alumni)).toBe(false);
+    expect(await getAuditRows(seeded.alumni)).toHaveLength(0);
+  });
+
+  it('portal unavailable → unavailable; role untouched', async () => {
+    await linkPortalAccount(seeded.active1);
+    portal.registry.set(seeded.active1, 'active');
+    portal.mode = 'absent';
+    const result = await setup
+      .caller(setup.makeCtx({ userId: seeded.active1, role: 'Active' }))
+      .memberStatus.set({ status: 'alumni' });
+    expect(result).toEqual({ kind: 'unavailable', status: null, role: 'Active' });
+  });
+
+  it('privileged users can set the roster fact without their role moving', async () => {
+    await linkPortalAccount(seeded.moderator);
+    portal.registry.set(seeded.moderator, null);
+    const result = await setup
+      .caller(setup.makeCtx({ userId: seeded.moderator, role: 'Moderator' }))
+      .memberStatus.set({ status: 'alumni' });
+    expect(result).toEqual({ kind: 'ok', status: 'alumni', role: 'Moderator' });
+    expect(portal.registry.get(seeded.moderator)).toBe('alumni');
+    expect(await getAuditRows(seeded.moderator)).toHaveLength(0);
+  });
+
+  it('rejects values outside the contract enum — BAD_REQUEST from Zod', async () => {
+    await linkPortalAccount(seeded.active1);
+    const c = setup.caller(
+      setup.makeCtx({ userId: seeded.active1, role: 'Active' }),
     );
-    expect(cols).toEqual([]);
-    const { rows: tables } = await testDb.pool.query<{ table_name: string }>(
-      `SELECT table_name FROM information_schema.tables
-       WHERE table_schema = 'public' AND table_name ILIKE '%status%'`,
-    );
-    expect(tables).toEqual([]);
+    await expect(
+      // @ts-expect-error — schema enumerates only 'active' | 'alumni'.
+      c.memberStatus.set({ status: 'emeritus' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
+  it('rejects without a session — UNAUTHORIZED', async () => {
+    await expect(
+      setup.caller(setup.unauthedCtx()).memberStatus.set({ status: 'active' }),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
   });
 });

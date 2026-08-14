@@ -1,100 +1,161 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import type { Role } from '@app/db/schema';
 import { trpc } from '@/lib/trpc-client';
 import { Button } from '@/components/ui/button';
-
-type MemberStatus = 'active' | 'alumni';
-
-const STATUS_OPTIONS: ReadonlyArray<{ value: MemberStatus; label: string }> = [
-  { value: 'active', label: 'Active' },
-  { value: 'alumni', label: 'Alumni' },
-];
+import { RoleChangeDropdown } from '@/components/RoleChangeDropdown';
 
 /**
- * Self-set member status (sigo-alumni item 07). The portal registry is the
- * only store: current truth is fetched on every page load, and a change is
- * written through, then re-read. The whole section renders nothing until the
- * fetch confirms the feature is live for this user — today (portal API not
- * built) it is always hidden. `initialStatus` is the sign-in claim snapshot,
- * used only to preselect while the first fetch is in flight.
+ * Active/Alumni control for non-privileged members (ADR-014). The portal
+ * registry is the source of truth: on load we read the fresh status via
+ * `memberStatus.get`; picking a side PUTs it back via `memberStatus.set`
+ * (which re-reads and syncs the app role).
+ *
+ * Portal states:
+ * - available (`ok`/`undeclared`) → portal-backed buttons below;
+ * - `unavailable` (endpoint not shipped / unreachable) → the pre-existing
+ *   local-only control (`users.changeRole`), exactly as before;
+ * - `no-registry-row` → the control is hidden (nothing to declare against).
+ *
+ * The button markup mirrors `RoleChangeDropdown` (same test ids, same
+ * variants) so the two paths look and behave identically to the member.
  */
-export function ProfileStatusSection({ initialStatus }: { initialStatus: MemberStatus | null }) {
-  const [saved, setSaved] = useState(false);
-  const utils = trpc.useUtils();
 
-  const statusQuery = trpc.memberStatus.get.useQuery(undefined, {
-    refetchOnMount: 'always',
-    staleTime: 0,
+const CHOICES = [
+  { status: 'active', role: 'Active' },
+  { status: 'alumni', role: 'Alumni' },
+] as const;
+
+type ChoiceStatus = (typeof CHOICES)[number]['status'];
+
+function roleForStatus(status: ChoiceStatus): Role {
+  return status === 'active' ? 'Active' : 'Alumni';
+}
+
+export function ProfileStatusSection({ role }: { role: Role }) {
+  const router = useRouter();
+  const utils = trpc.useUtils();
+  const [saved, setSaved] = useState(false);
+
+  const state = trpc.memberStatus.get.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+    retry: false,
   });
 
   const setStatus = trpc.memberStatus.set.useMutation({
-    onSuccess: (view) => {
-      utils.memberStatus.get.setData(undefined, view);
-      setSaved(true);
-    },
-    onError: () => {
-      setSaved(false);
-      // A NOT_FOUND / SERVICE_UNAVAILABLE here means the feature went away
-      // for this user — refetch so the section hides itself.
-      void utils.memberStatus.get.invalidate();
+    onSuccess: (fresh) => {
+      utils.memberStatus.get.setData(undefined, fresh);
+      setSaved(fresh.kind === 'ok');
+      router.refresh();
     },
   });
 
-  const view = statusQuery.data;
+  // Our own API erroring is not a portal signal — never block the member;
+  // show the local control just like the portal-off path.
+  if (state.error) {
+    return (
+      <div data-testid="profile-status-section" data-portal="error">
+        <RoleChangeDropdown currentRole={role} />
+      </div>
+    );
+  }
 
-  // Hidden until the read confirms availability. While the first fetch is in
-  // flight, the claim snapshot (when present) keeps the control from popping
-  // in late for users who already have a status.
-  if (view ? !view.available : initialStatus === null) return null;
+  if (state.isPending) {
+    return (
+      <div
+        data-testid="profile-status-section"
+        data-portal="loading"
+        aria-busy="true"
+        className="flex flex-wrap items-center gap-2"
+      >
+        {CHOICES.map((c) => (
+          <Button key={c.role} type="button" variant="neutral" size="sm" disabled>
+            {c.role}
+          </Button>
+        ))}
+      </div>
+    );
+  }
 
-  const current = view?.available ? view.status : initialStatus;
-  const busy = setStatus.isPending || statusQuery.isFetching;
+  const data = state.data;
+  if (!data) return null; // unreachable: !error && !isPending ⇒ data
 
-  const inlineError =
-    setStatus.error && setStatus.error.data?.code !== 'NOT_FOUND' ? 'Try again.' : null;
+  if (data.kind === 'unavailable') {
+    return (
+      <div data-testid="profile-status-section" data-portal="off">
+        <RoleChangeDropdown currentRole={data.role} />
+      </div>
+    );
+  }
+
+  if (data.kind === 'no-registry-row') {
+    // Nothing to declare against — hide the control entirely.
+    return (
+      <div data-testid="profile-status-section" data-portal="no-registry-row" />
+    );
+  }
+
+  const currentRole =
+    data.kind === 'ok' && data.status ? roleForStatus(data.status) : data.role;
+
+  const handleSelect = (choice: ChoiceStatus, isCurrent: boolean) => {
+    if (isCurrent || setStatus.isPending) return;
+    setSaved(false);
+    setStatus.mutate({ status: choice });
+  };
 
   return (
-    <section className="space-y-3" data-testid="profile-status-section">
-      <h2 className="text-2xl font-semibold sm:text-3xl">Status</h2>
-      <p className="max-w-2xl text-sm opacity-70">Are you an active brother or an alumnus?</p>
-      <div role="group" aria-label="Status" className="flex flex-wrap items-center gap-2">
-        {STATUS_OPTIONS.map((opt) => {
-          const isCurrent = opt.value === current;
+    <div
+      className="space-y-2"
+      data-testid="profile-status-section"
+      data-portal="on"
+    >
+      <div
+        role="group"
+        aria-label="Active or Alumni?"
+        data-testid="role-change-dropdown"
+        data-current-role={currentRole}
+        data-portal-backed="true"
+        className="flex flex-wrap items-center gap-2"
+      >
+        {CHOICES.map((c) => {
+          const isCurrent = c.role === currentRole;
           return (
             <Button
-              key={opt.value}
+              key={c.role}
               type="button"
               variant={isCurrent ? 'secondary' : 'neutral'}
               size="sm"
-              aria-pressed={isCurrent}
-              disabled={isCurrent || busy || !view}
-              onClick={() => {
-                setSaved(false);
-                setStatus.mutate({ status: opt.value });
-              }}
-              data-testid={`member-status-option-${opt.value}`}
+              disabled={isCurrent || setStatus.isPending}
+              onClick={() => handleSelect(c.status, isCurrent)}
+              data-testid={`role-change-option-${c.role}`}
               data-is-current={isCurrent ? 'true' : 'false'}
             >
-              {opt.label}
+              {isCurrent ? `${c.role} (current)` : c.role}
             </Button>
           );
         })}
       </div>
       {saved ? (
-        <p role="status" data-testid="member-status-saved" className="text-sm opacity-70">
-          Saved.
+        <p
+          role="status"
+          data-testid="member-status-saved"
+          className="text-sm text-accent-strong"
+        >
+          Saved
         </p>
       ) : null}
-      {inlineError ? (
+      {setStatus.error ? (
         <p
           role="alert"
           data-testid="member-status-error"
           className="text-sm text-red-700 dark:text-red-300"
         >
-          {inlineError}
+          That didn&apos;t save — try again.
         </p>
       ) : null}
-    </section>
+    </div>
   );
 }

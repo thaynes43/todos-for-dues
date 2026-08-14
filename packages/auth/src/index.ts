@@ -2,12 +2,19 @@ export { auth, oidcEnabled, type Auth } from './config';
 export { getSessionRole } from './hooks/session-extension';
 export {
   decodeJwtClaims,
+  readPortalClaims,
   readPortalTier,
   refuseNonMemberUserCreate,
   syncPortalClaimsOnSessionCreate,
   syncRoleFromPortalTier,
   type ClaimSyncOutcome,
+  type PortalClaims,
 } from './hooks/claim-sync';
+export {
+  syncRoleFromMemberStatus,
+  type StatusSyncInitiator,
+  type StatusSyncOutcome,
+} from './hooks/status-sync';
 export {
   PORTAL_PROVIDER_ID,
   PORTAL_TIERS,
@@ -19,20 +26,21 @@ export {
 } from './portal-tiers';
 export {
   MEMBER_STATUSES,
-  fetchMemberStatusFromPortal,
-  getMemberStatus,
-  memberStatusEndpoint,
-  memberStatusFromClaims,
+  memberStatusUrl,
   parseMemberStatus,
-  pushMemberStatusToPortal,
-  readMemberStatusClaim,
-  readPortalAccessToken,
-  setMemberStatus,
+  resolvePortalApiBaseUrl,
+  roleToStatus,
+  statusToRole,
   type MemberStatus,
-  type MemberStatusView,
+} from './portal-status';
+export {
+  fetchMemberStatus,
+  getMemberStatus,
+  putMemberStatus,
+  sendMemberStatus,
+  type MemberStatusReadResult,
   type MemberStatusWriteResult,
-  type PortalFetchDeps,
-} from './member-status';
+} from './portal-client';
 
 import { auth } from './config';
 

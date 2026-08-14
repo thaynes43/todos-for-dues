@@ -1,32 +1,108 @@
 import { z } from 'zod';
+import { eq } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
-import { MEMBER_STATUSES, getMemberStatus, setMemberStatus } from '@app/auth';
-import { authedProcedure, router } from '../trpc';
+import { users, type Role } from '@app/db/schema';
+import {
+  MEMBER_STATUSES,
+  getMemberStatus,
+  putMemberStatus,
+  syncRoleFromMemberStatus,
+  type MemberStatus,
+} from '@app/auth';
+import {
+  authedProcedure,
+  mapDomainErrors,
+  router,
+  type TRPCContext,
+} from '../trpc';
 
 /**
- * Member status (sigo-alumni backlog item 07) — the portal registry is the
- * single source of truth; this router is a thin, cache-free proxy over the
- * portal's `/api/member/status`. `get` runs on every profile page load;
- * `set` writes and then re-reads so the client view is current truth, never
- * a local echo. The portal API is not built yet — `get` reports
- * `available: false` until it ships, and the UI stays hidden.
+ * ADR-014 — member status (`active`|`alumni`) via the portal registry
+ * (sigo-alumni backlog item 07). The registry is the ONLY durable store:
+ * `get` reads fresh from the portal on every call, `set` PUTs then re-GETs.
+ * Nothing is cached app-side.
+ *
+ * Role projection: a fetched status is projected onto the app's
+ * Active/Alumni role partition through `transitionRole`
+ * (`syncRoleFromMemberStatus`) so display and access never diverge.
+ * Privileged users (Moderator/Admin) are NEVER re-roled here — for them
+ * status is a displayable/settable roster fact only; their role follows
+ * portal tier (ADR-013).
+ *
+ * `kind: 'unavailable'` = the portal hasn't shipped the endpoint yet (or is
+ * unreachable) — the UI falls back to local-only `users.changeRole`.
  */
-export const memberStatusRouter = router({
-  get: authedProcedure.query(({ ctx }) => getMemberStatus(ctx.userId)),
 
+export interface MemberStatusState {
+  kind: 'ok' | 'undeclared' | 'no-registry-row' | 'unavailable';
+  /** Declared portal status; null unless kind === 'ok'. */
+  status: MemberStatus | null;
+  /** The user's app role AFTER any projection ran. */
+  role: Role;
+}
+
+async function freshRole(
+  db: TRPCContext['db'],
+  userId: string,
+): Promise<Role> {
+  const [row] = await db
+    .select({ role: users.role })
+    .from(users)
+    .where(eq(users.id, userId));
+  if (!row) throw new TRPCError({ code: 'NOT_FOUND' });
+  return row.role as Role;
+}
+
+export const memberStatusRouter = router({
+  /**
+   * Fresh read from the portal registry (re-read on page load — never
+   * persisted). A declared status that conflicts with the user's current
+   * Active/Alumni role is synced through `transitionRole` (system
+   * initiator) before returning.
+   */
+  get: authedProcedure.query(async ({ ctx }): Promise<MemberStatusState> => {
+    const read = await getMemberStatus(ctx.userId);
+    if (read.kind === 'ok') {
+      await mapDomainErrors(() =>
+        syncRoleFromMemberStatus(ctx.userId, read.status),
+      );
+    }
+    return {
+      kind: read.kind,
+      status: read.kind === 'ok' ? read.status : null,
+      role: await freshRole(ctx.db, ctx.userId),
+    };
+  }),
+
+  /**
+   * PUT to the portal registry, then re-GET (contract: after PUT, re-read
+   * and update the session view) and sync the role. User-initiated, so the
+   * audit row carries the user as initiator.
+   */
   set: authedProcedure
     .input(z.object({ status: z.enum(MEMBER_STATUSES) }))
-    .mutation(async ({ ctx, input }) => {
-      const result = await setMemberStatus(ctx.userId, input.status);
-      if (!result.ok) {
-        if (result.reason === 'no-registry-row') {
-          // Contract: PUT 404/409 = no linked registry row (Pending users
-          // have no status). The client hides the control on this.
-          throw new TRPCError({ code: 'NOT_FOUND' });
-        }
-        throw new TRPCError({ code: 'SERVICE_UNAVAILABLE' });
+    .mutation(async ({ ctx, input }): Promise<MemberStatusState> => {
+      const write = await putMemberStatus(ctx.userId, input.status);
+      if (write.kind !== 'ok') {
+        return {
+          kind: write.kind,
+          status: null,
+          role: await freshRole(ctx.db, ctx.userId),
+        };
       }
-      // Contract: after PUT, re-GET and update the session view.
-      return getMemberStatus(ctx.userId);
+      const read = await getMemberStatus(ctx.userId);
+      if (read.kind === 'ok') {
+        await mapDomainErrors(() =>
+          syncRoleFromMemberStatus(ctx.userId, read.status, {
+            id: ctx.userId,
+            kind: 'user',
+          }),
+        );
+      }
+      return {
+        kind: read.kind,
+        status: read.kind === 'ok' ? read.status : null,
+        role: await freshRole(ctx.db, ctx.userId),
+      };
     }),
 });
