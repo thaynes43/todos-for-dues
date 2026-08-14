@@ -1,11 +1,5 @@
 import { test, expect } from '@playwright/test';
-import {
-  createPool,
-  installPageerrorListener,
-  newSuffix,
-  reAuth,
-  seedCast,
-} from './support';
+import { createPool, installPageerrorListener, newSuffix, reAuth, seedCast } from './support';
 
 test.describe('PRD-008 AC-01 — self-service Active → Alumni', () => {
   test('Active toggles to Alumni from /profile; role chip updates everywhere; audit row written', async ({
@@ -31,10 +25,13 @@ test.describe('PRD-008 AC-01 — self-service Active → Alumni', () => {
       await expect(currentBtn).toBeDisabled();
       await expect(currentBtn).toHaveText(/Active \(current\)/);
       await expect(alumniBtn).toBeVisible();
-      await expect(
-        page.getByTestId('role-change-option-Moderator'),
-      ).toHaveCount(0);
+      await expect(page.getByTestId('role-change-option-Moderator')).toHaveCount(0);
       await expect(page.getByTestId('role-change-option-Admin')).toHaveCount(0);
+
+      // Member-status control (sigo-alumni item 07) stays hidden until the
+      // portal ships GET/PUT /api/member/status — the mock portal (like the
+      // live one today) 404s the route, so the section must not render.
+      await expect(page.getByTestId('profile-status-section')).toHaveCount(0);
 
       // Select Alumni.
       await alumniBtn.click();
@@ -75,17 +72,16 @@ test.describe('PRD-008 AC-01 — self-service Active → Alumni', () => {
       });
 
       // Router refresh updates the chip in the nav + profile role label.
-      await expect.poll(async () =>
-        (await page.getByTestId('profile-role').textContent())?.trim(),
-        { timeout: 10_000 },
-      ).toBe('Alumni');
+      await expect
+        .poll(async () => (await page.getByTestId('profile-role').textContent())?.trim(), {
+          timeout: 10_000,
+        })
+        .toBe('Alumni');
 
       // Dropdown now shows Active + Alumni (current).
       await expect(page.getByTestId('role-change-option-Active')).toBeEnabled();
       await expect(page.getByTestId('role-change-option-Alumni')).toBeDisabled();
-      await expect(page.getByTestId('role-change-option-Alumni')).toHaveText(
-        /Alumni \(current\)/,
-      );
+      await expect(page.getByTestId('role-change-option-Alumni')).toHaveText(/Alumni \(current\)/);
 
       // Admin can view the audit row in the per-user detail.
       await reAuth(page, context, cast.admin);
