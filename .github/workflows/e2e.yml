@@ -70,7 +70,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          if ! pnpm --filter web e2e e2e/walking-skeleton/ e2e/walking-skeleton.spec.ts e2e/auth/portal-sso.spec.ts e2e/auth/claim-resync.spec.ts e2e/auth/member-status-signin.spec.ts e2e/auth/member-status-roundtrip.spec.ts e2e/mvp/ e2e/admin/ 2>&1 | tee /tmp/e2e.log; then
+          if ! pnpm --filter web e2e e2e/walking-skeleton/ e2e/walking-skeleton.spec.ts e2e/auth/portal-sso.spec.ts e2e/auth/claim-resync.spec.ts e2e/auth/member-status-signin.spec.ts e2e/mvp/ e2e/admin/ 2>&1 | tee /tmp/e2e.log; then
             tail=$(grep -aE "✘|[0-9]+\) \[chromium\]|Error|Timeout|timed out|toomanyrequests|failed|passed" /tmp/e2e.log | tail -60 | head -c 3500)
             tail="${tail//'%'/%25}"; tail="${tail//$'\n'/%0A}"; tail="${tail//$'\r'/%0D}"
             echo "::error title=e2e main failure tail::${tail}"
@@ -123,3 +123,13 @@ jobs:
       # dependency as last-admin-blocked → own invocation / fresh DB.
       - name: e2e — auth min-admin-guard (own invocation)
         run: pnpm --filter web e2e e2e/auth/min-admin-guard.spec.ts
+
+      # ADR-014 validation round-trips: ~10 full OAuth sign-ins + repeated
+      # /profile loads across two tests — too sign-in-heavy for the collapsed
+      # main invocation's load envelope (adding it there starved the shared
+      # dev server on GHA and flaked unrelated specs' 30s waits — PR #58 run
+      # 31828264411). Own invocation = fresh testcontainer + dev server, same
+      # isolation pattern as last-admin-blocked / admin-swap above. No
+      # chapter-state dependency: it seeds only UUID-suffixed personas.
+      - name: e2e — auth member-status-roundtrip (own invocation)
+        run: pnpm --filter web e2e e2e/auth/member-status-roundtrip.spec.ts
