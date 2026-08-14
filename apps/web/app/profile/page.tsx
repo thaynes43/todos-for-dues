@@ -1,6 +1,6 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { getServerSession, getSessionRole, readMemberStatusClaim } from '@app/auth';
+import { getServerSession, getSessionRole } from '@app/auth';
 import { PageHeader } from '@/components/PageHeader';
 import { tierPill } from '@/components/ui/styles';
 import { ProfileRoleSection } from './ProfileRoleSection';
@@ -13,9 +13,6 @@ export default async function ProfilePage() {
   if (!session?.user?.id) redirect('/login');
   const { role, displayName } = await getSessionRole(session.user.id);
   const email = session.user.email;
-  // Sign-in snapshot only (item 07): preselects the status control while the
-  // client fetches current truth from the portal registry.
-  const memberStatusClaim = await readMemberStatusClaim(session.user.id);
 
   return (
     <section className="space-y-8" data-testid="profile-page">
@@ -38,14 +35,30 @@ export default async function ProfilePage() {
           </dd>
         </div>
       </dl>
-      <section className="space-y-3">
-        <h2 className="text-2xl font-semibold sm:text-3xl">Change your role</h2>
-        <p className="max-w-2xl text-sm opacity-70">
-          Self-service covers Active and Alumni; Moderator and Admin come from an Admin.
-        </p>
-        <ProfileRoleSection role={role} />
-      </section>
-      <ProfileStatusSection initialStatus={memberStatusClaim} />
+      {role === 'Moderator' || role === 'Admin' ? (
+        // Privileged members keep the pre-ADR-014 step-down affordances
+        // unchanged — their role follows portal tier, not member status.
+        <section className="space-y-3">
+          <h2 className="text-2xl font-semibold sm:text-3xl">
+            Change your role
+          </h2>
+          <p className="max-w-2xl text-sm opacity-70">
+            Self-service covers Active and Alumni; Moderator and Admin come
+            from an Admin.
+          </p>
+          <ProfileRoleSection role={role} />
+        </section>
+      ) : (
+        <section className="space-y-3">
+          <h2 className="text-2xl font-semibold sm:text-3xl">
+            Active or Alumni?
+          </h2>
+          <p className="max-w-2xl text-sm opacity-70">
+            Actives do the jobs; Alumni post them.
+          </p>
+          <ProfileStatusSection role={role} />
+        </section>
+      )}
     </section>
   );
 }

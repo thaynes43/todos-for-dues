@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Page } from '@playwright/test';
 import { readRuntimeEnv } from './runtime-env';
-import type { PortalIdentity } from './oidc-mock-server';
+import type { MemberStatusRow, PortalIdentity } from './oidc-mock-server';
 
 export type Role = 'Active' | 'Alumni' | 'Moderator' | 'Admin';
 export type PortalTier = 'pending' | 'brother' | 'operator' | 'admin';
@@ -89,6 +89,44 @@ export async function registerPortalIdentity(
       `portal mock identity registration failed (${res.status}): ${await res.text()}`,
     );
   }
+}
+
+/**
+ * Set a member-status registry row at the portal mock (ADR-014). Rows are
+ * auto-created (undeclared) when an identity registers; use this for the
+ * contract's edge shapes: `{ status }` declares, `{ hasRow: false }` removes
+ * the row (404 JSON), `{ mode: 'absent' }` makes THIS member's
+ * /api/member/status calls look route-less (feature-off / fallback path).
+ */
+export async function setPortalMemberStatus(
+  row: { email: string } & Partial<MemberStatusRow>,
+): Promise<void> {
+  const res = await fetch(`${portalMockBaseUrl()}/_test/member-status`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(row),
+  });
+  if (!res.ok) {
+    throw new Error(
+      `portal mock member-status set failed (${res.status}): ${await res.text()}`,
+    );
+  }
+}
+
+/** Read a member-status registry row from the portal mock (spec assertions —
+ * the registry is the only durable store, so this IS the stored truth). */
+export async function getPortalMemberStatus(
+  email: string,
+): Promise<MemberStatusRow> {
+  const res = await fetch(
+    `${portalMockBaseUrl()}/_test/member-status?email=${encodeURIComponent(email)}`,
+  );
+  if (!res.ok) {
+    throw new Error(
+      `portal mock member-status get failed (${res.status}): ${await res.text()}`,
+    );
+  }
+  return (await res.json()) as MemberStatusRow;
 }
 
 /** Fill the mock's members door (static HTML — no hydration race). Identity

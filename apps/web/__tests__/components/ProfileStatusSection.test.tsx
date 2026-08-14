@@ -1,51 +1,60 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
+import type { Role } from '@app/db/schema';
 
-type MemberStatus = 'active' | 'alumni';
-type View = { available: true; status: MemberStatus | null } | { available: false };
+/**
+ * ADR-014 — <ProfileStatusSection> renders one of three paths from the
+ * `memberStatus.get` state:
+ *   - portal available → portal-backed Active/Alumni buttons (memberStatus.set)
+ *   - portal unavailable → the pre-existing local RoleChangeDropdown fallback
+ *   - no registry row → no control at all
+ */
 
-const mutate = vi.fn();
-const invalidate = vi.fn();
-const setData = vi.fn();
+const setMutate = vi.fn();
+const changeRoleMutate = vi.fn();
+const setDataSpy = vi.fn();
 
 const queryState = vi.hoisted(() => ({
   data: undefined as unknown,
-  isFetching: false,
-}));
-const mutationState = vi.hoisted(() => ({
-  isPending: false,
   error: null as unknown,
+  isPending: false,
 }));
-const mutationOpts = vi.hoisted(() => ({
-  onSuccess: undefined as ((view: unknown) => void) | undefined,
-  onError: undefined as ((err: unknown) => void) | undefined,
+
+const setMutationOpts = vi.hoisted(() => ({
+  onSuccess: undefined as ((data: unknown) => void) | undefined,
 }));
 
 vi.mock('@/lib/trpc-client', () => ({
   trpc: {
     useUtils: () => ({
-      memberStatus: { get: { invalidate, setData } },
+      memberStatus: {
+        get: {
+          setData: (_input: unknown, data: unknown) => setDataSpy(data),
+        },
+      },
     }),
     memberStatus: {
       get: {
-        useQuery: () => ({
-          data: queryState.data,
-          isFetching: queryState.isFetching,
-        }),
+        useQuery: () => ({ ...queryState }),
       },
       set: {
-        useMutation: (opts: {
-          onSuccess?: (view: unknown) => void;
-          onError?: (err: unknown) => void;
-        }) => {
-          mutationOpts.onSuccess = opts.onSuccess;
-          mutationOpts.onError = opts.onError;
+        useMutation: (opts: { onSuccess?: (data: unknown) => void }) => {
+          setMutationOpts.onSuccess = opts.onSuccess;
           return {
-            mutate: (input: unknown) => mutate(input),
-            isPending: mutationState.isPending,
-            error: mutationState.error,
+            mutate: (input: unknown) => setMutate(input),
+            isPending: false,
+            error: null,
           };
         },
+      },
+    },
+    users: {
+      changeRole: {
+        useMutation: () => ({
+          mutate: (input: unknown) => changeRoleMutate(input),
+          isPending: false,
+          error: null,
+        }),
       },
     },
   },
@@ -54,100 +63,101 @@ vi.mock('@/lib/trpc-client', () => ({
 import { ProfileStatusSection } from '@/app/profile/ProfileStatusSection';
 
 beforeEach(() => {
-  mutate.mockClear();
-  invalidate.mockClear();
-  setData.mockClear();
+  setMutate.mockClear();
+  changeRoleMutate.mockClear();
+  setDataSpy.mockClear();
   queryState.data = undefined;
-  queryState.isFetching = false;
-  mutationState.isPending = false;
-  mutationState.error = null;
-  mutationOpts.onSuccess = undefined;
-  mutationOpts.onError = undefined;
+  queryState.error = null;
+  queryState.isPending = false;
+  setMutationOpts.onSuccess = undefined;
 });
 
-describe('<ProfileStatusSection> — visibility (feature detection)', () => {
-  it('hidden while loading with no claim snapshot (today: portal API not built)', () => {
-    const { container } = render(<ProfileStatusSection initialStatus={null} />);
-    expect(container).toBeEmptyDOMElement();
+describe('<ProfileStatusSection> — portal-backed path', () => {
+  it('declared status drives the current marker; picking the other side PUTs it', () => {
+    queryState.data = { kind: 'ok', status: 'active', role: 'Active' };
+    render(<ProfileStatusSection role={'Active' as Role} />);
+
+    expect(screen.getByTestId('profile-status-section')).toHaveAttribute(
+      'data-portal',
+      'on',
+    );
+    expect(screen.getByTestId('role-change-dropdown')).toHaveAttribute(
+      'data-portal-backed',
+      'true',
+    );
+    const current = screen.getByTestId('role-change-option-Active');
+    expect(current).toBeDisabled();
+    expect(current).toHaveTextContent(/Active \(current\)/);
+
+    fireEvent.click(screen.getByTestId('role-change-option-Alumni'));
+    expect(setMutate).toHaveBeenCalledWith({ status: 'alumni' });
+    expect(changeRoleMutate).not.toHaveBeenCalled();
   });
 
-  it('hidden when the read says unavailable, even with a claim snapshot', () => {
-    queryState.data = { available: false } satisfies View;
-    const { container } = render(<ProfileStatusSection initialStatus="active" />);
-    expect(container).toBeEmptyDOMElement();
+  it('undeclared status pins the current marker to the app role', () => {
+    queryState.data = { kind: 'undeclared', status: null, role: 'Alumni' };
+    render(<ProfileStatusSection role={'Alumni' as Role} />);
+    expect(screen.getByTestId('role-change-option-Alumni')).toBeDisabled();
+    expect(screen.getByTestId('role-change-option-Active')).toBeEnabled();
   });
 
-  it('claim snapshot preselects while the first read is in flight', () => {
-    queryState.data = undefined;
-    render(<ProfileStatusSection initialStatus="alumni" />);
-    const alumni = screen.getByTestId('member-status-option-alumni');
-    expect(alumni).toHaveAttribute('data-is-current', 'true');
-    // Not interactive until the read confirms availability.
-    expect(screen.getByTestId('member-status-option-active')).toBeDisabled();
-  });
-
-  it('visible when the read confirms availability', () => {
-    queryState.data = { available: true, status: 'active' } satisfies View;
-    render(<ProfileStatusSection initialStatus={null} />);
-    expect(screen.getByTestId('profile-status-section')).toBeInTheDocument();
-    expect(screen.getByText('Status')).toBeInTheDocument();
-  });
-});
-
-describe('<ProfileStatusSection> — control state', () => {
-  it('current status is marked and disabled; the other is clickable', () => {
-    queryState.data = { available: true, status: 'active' } satisfies View;
-    render(<ProfileStatusSection initialStatus={null} />);
-    const active = screen.getByTestId('member-status-option-active');
-    const alumni = screen.getByTestId('member-status-option-alumni');
-    expect(active).toBeDisabled();
-    expect(active).toHaveAttribute('data-is-current', 'true');
-    expect(alumni).toBeEnabled();
-    expect(alumni).toHaveAttribute('data-is-current', 'false');
-  });
-
-  it('undeclared (status null): both options are clickable, none current', () => {
-    queryState.data = { available: true, status: null } satisfies View;
-    render(<ProfileStatusSection initialStatus={null} />);
-    expect(screen.getByTestId('member-status-option-active')).toBeEnabled();
-    expect(screen.getByTestId('member-status-option-alumni')).toBeEnabled();
-  });
-
-  it('clicking an option submits the contract value', () => {
-    queryState.data = { available: true, status: 'active' } satisfies View;
-    render(<ProfileStatusSection initialStatus={null} />);
-    fireEvent.click(screen.getByTestId('member-status-option-alumni'));
-    expect(mutate).toHaveBeenCalledWith({ status: 'alumni' });
-  });
-});
-
-describe('<ProfileStatusSection> — after save', () => {
-  it('success: updates the cached view from the re-read and confirms "Saved."', () => {
-    queryState.data = { available: true, status: 'active' } satisfies View;
-    render(<ProfileStatusSection initialStatus={null} />);
-    const fresh: View = { available: true, status: 'alumni' };
+  it('shows the one-word confirmation and refreshes the cache on save', () => {
+    queryState.data = { kind: 'ok', status: 'active', role: 'Active' };
+    render(<ProfileStatusSection role={'Active' as Role} />);
+    const fresh = { kind: 'ok', status: 'alumni', role: 'Alumni' };
     act(() => {
-      mutationOpts.onSuccess?.(fresh);
+      setMutationOpts.onSuccess?.(fresh);
     });
-    expect(setData).toHaveBeenCalledWith(undefined, fresh);
-    expect(screen.getByTestId('member-status-saved')).toHaveTextContent('Saved.');
+    expect(setDataSpy).toHaveBeenCalledWith(fresh);
+    expect(screen.getByTestId('member-status-saved')).toHaveTextContent('Saved');
+  });
+});
+
+describe('<ProfileStatusSection> — fallback + hidden paths', () => {
+  it('portal unavailable falls back to the local users.changeRole control', () => {
+    queryState.data = { kind: 'unavailable', status: null, role: 'Active' };
+    render(<ProfileStatusSection role={'Active' as Role} />);
+
+    expect(screen.getByTestId('profile-status-section')).toHaveAttribute(
+      'data-portal',
+      'off',
+    );
+    const dropdown = screen.getByTestId('role-change-dropdown');
+    expect(dropdown).not.toHaveAttribute('data-portal-backed');
+
+    fireEvent.click(screen.getByTestId('role-change-option-Alumni'));
+    expect(changeRoleMutate).toHaveBeenCalledWith({ toRole: 'Alumni' });
+    expect(setMutate).not.toHaveBeenCalled();
   });
 
-  it('failure: refetches availability so a vanished feature hides itself', () => {
-    queryState.data = { available: true, status: 'active' } satisfies View;
-    render(<ProfileStatusSection initialStatus={null} />);
-    act(() => {
-      mutationOpts.onError?.({ data: { code: 'NOT_FOUND' } });
-    });
-    expect(invalidate).toHaveBeenCalled();
-    // No error copy for the hide-the-control case.
-    expect(screen.queryByTestId('member-status-error')).not.toBeInTheDocument();
+  it('a tRPC-level query error also falls back (never blocks the member)', () => {
+    queryState.error = new Error('boom');
+    render(<ProfileStatusSection role={'Active' as Role} />);
+    expect(screen.getByTestId('profile-status-section')).toHaveAttribute(
+      'data-portal',
+      'error',
+    );
+    expect(screen.getByTestId('role-change-dropdown')).toBeInTheDocument();
   });
 
-  it('transient failure shows terse retry copy', () => {
-    queryState.data = { available: true, status: 'active' } satisfies View;
-    mutationState.error = { data: { code: 'SERVICE_UNAVAILABLE' } };
-    render(<ProfileStatusSection initialStatus={null} />);
-    expect(screen.getByTestId('member-status-error')).toHaveTextContent('Try again.');
+  it('no registry row hides the control entirely', () => {
+    queryState.data = { kind: 'no-registry-row', status: null, role: 'Active' };
+    render(<ProfileStatusSection role={'Active' as Role} />);
+    expect(screen.getByTestId('profile-status-section')).toHaveAttribute(
+      'data-portal',
+      'no-registry-row',
+    );
+    expect(screen.queryByTestId('role-change-option-Active')).toBeNull();
+    expect(screen.queryByTestId('role-change-option-Alumni')).toBeNull();
+  });
+
+  it('renders a quiet disabled placeholder while loading', () => {
+    queryState.isPending = true;
+    render(<ProfileStatusSection role={'Active' as Role} />);
+    expect(screen.getByTestId('profile-status-section')).toHaveAttribute(
+      'data-portal',
+      'loading',
+    );
+    expect(screen.queryByTestId('role-change-option-Active')).toBeNull();
   });
 });

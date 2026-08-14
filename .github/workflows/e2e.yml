@@ -70,7 +70,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          if ! pnpm --filter web e2e e2e/walking-skeleton/ e2e/walking-skeleton.spec.ts e2e/auth/portal-sso.spec.ts e2e/auth/claim-resync.spec.ts e2e/mvp/ e2e/admin/ 2>&1 | tee /tmp/e2e.log; then
+          if ! pnpm --filter web e2e e2e/walking-skeleton/ e2e/walking-skeleton.spec.ts e2e/auth/portal-sso.spec.ts e2e/auth/claim-resync.spec.ts e2e/auth/member-status-signin.spec.ts e2e/mvp/ e2e/admin/ 2>&1 | tee /tmp/e2e.log; then
             tail=$(grep -aE "✘|[0-9]+\) \[chromium\]|Error|Timeout|timed out|toomanyrequests|failed|passed" /tmp/e2e.log | tail -60 | head -c 3500)
             tail="${tail//'%'/%25}"; tail="${tail//$'\n'/%0A}"; tail="${tail//$'\r'/%0D}"
             echo "::error title=e2e main failure tail::${tail}"
@@ -87,10 +87,10 @@ jobs:
           fi
 
       # PLAN-013 §3.1 #1: `demoteAllOtherAdmins` is now scope-narrowed to a
-      # per-spec ID allowlist, so the 5 chapter-safe roles specs (admin-grant,
-      # admin-demote-admin, admin-users-list, role-history, self-service) no
-      # longer race each other's seeded admins. Collapse them into one
-      # invocation.
+      # per-spec ID allowlist, so the 6 chapter-safe roles specs (admin-grant,
+      # admin-demote-admin, admin-users-list, role-history, self-service,
+      # member-status) no longer race each other's seeded admins. Collapse
+      # them into one invocation.
       - name: e2e — roles (chapter-safe set, single invocation)
         run: |
           pnpm --filter web e2e \
@@ -98,7 +98,8 @@ jobs:
             e2e/roles/admin-demote-admin.spec.ts \
             e2e/roles/admin-users-list.spec.ts \
             e2e/roles/role-history.spec.ts \
-            e2e/roles/self-service.spec.ts
+            e2e/roles/self-service.spec.ts \
+            e2e/roles/member-status.spec.ts
 
       # `last-admin-blocked` + `admin-swap` each need their OWN Playwright
       # invocation (fresh testcontainer DB). Both depend on chapter-wide

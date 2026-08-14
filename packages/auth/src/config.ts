@@ -8,6 +8,7 @@ import {
   mapTierToRole,
   parsePortalTier,
 } from './portal-tiers';
+import { parseMemberStatus, statusToRole } from './portal-status';
 import {
   refuseNonMemberUserCreate,
   syncPortalClaimsOnSessionCreate,
@@ -39,18 +40,28 @@ const oidcPlugins = oidcEnabled
             pkce: true,
             scopes: ['openid', 'profile', 'email', 'offline_access'],
             mapProfileToUser: (profile) => {
-              // The portal puts sub/email/name/tier/capabilities in the
-              // id_token (ADR 0007 — claims travel in the token), which is
-              // what Better Auth hands us here. Map tier → app role
-              // (ADR-013 §mapping); pending / unknown tiers map to the
-              // 'refused' sentinel, which refuseNonMemberUserCreate rejects
-              // BEFORE any user row is created.
+              // The portal puts sub/email/name/tier/capabilities (and, once
+              // backlog item 07 ships, `status`) in the id_token (ADR 0007 —
+              // claims travel in the token), which is what Better Auth hands
+              // us here. Map tier → app role (ADR-013 §mapping); pending /
+              // unknown tiers map to the 'refused' sentinel, which
+              // refuseNonMemberUserCreate rejects BEFORE any user row is
+              // created. For `brother`, a DECLARED `status` claim picks the
+              // Active/Alumni side of the partition at first sign-in
+              // (ADR-014); absent/null keeps the pre-status default (Alumni).
               const tier = parsePortalTier(profile.tier);
+              const status = parseMemberStatus(profile.status);
+              const role =
+                tier === 'brother' && status
+                  ? statusToRole(status)
+                  : tier
+                    ? mapTierToRole(tier)
+                    : 'refused';
               return {
                 email: typeof profile.email === 'string' ? profile.email : undefined,
                 name: typeof profile.name === 'string' ? profile.name : undefined,
                 emailVerified: true,
-                role: tier ? mapTierToRole(tier) : 'refused',
+                role,
               };
             },
           },
