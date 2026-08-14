@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.0](https://github.com/thaynes43/todos-for-dues/compare/v1.0.0...v1.1.0) (2026-08-14)
+
+
+### Features
+
+* **profile:** member status designation via portal registry (sigo-alumni backlog 07) ([#57](https://github.com/thaynes43/todos-for-dues/issues/57)) ([fa9b148](https://github.com/thaynes43/todos-for-dues/commit/fa9b1484c51d3c1da4a0dfad2cd7eb73e2a055d2))
+* **profile:** self-set member status (Active/Alumni) via the portal registry ([#56](https://github.com/thaynes43/todos-for-dues/issues/56)) ([9044b1c](https://github.com/thaynes43/todos-for-dues/commit/9044b1c4ab984cbc5c38798f1d94ecf8b907629b))
+
+
+### Documentation
+
+* **plan:** record P4 done — v1.0.0 deployed via haynes-ops [#2389](https://github.com/thaynes43/todos-for-dues/issues/2389) ([#54](https://github.com/thaynes43/todos-for-dues/issues/54)) ([7b2390b](https://github.com/thaynes43/todos-for-dues/commit/7b2390bde242c5caf5ea55508ba209aeea1de672))
+
 ## [1.0.0](https://github.com/thaynes43/todos-for-dues/compare/v0.8.1...v1.0.0) (2026-08-10)
 
 
