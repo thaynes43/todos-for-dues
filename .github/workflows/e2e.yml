@@ -123,17 +123,38 @@ jobs:
       - name: e2e — auth min-admin-guard (own invocation)
         run: .github/scripts/e2e-annotated.sh "min-admin-guard" e2e/auth/min-admin-guard.spec.ts
 
-      # ADR-014 member-status validation specs (PR #58): the heaviest
-      # sign-in/navigation profile in the suite (~15 OAuth sign-ins, repeated
-      # /profile + job-page loads). Adding them to EITHER established
-      # invocation blew its load envelope on GHA — run 31828264411 (added to
-      # main: unrelated mvp/admin specs flaked on 30s waits) and run
-      # 31829302501 (added to roles: that step went red) — so they get their
-      # own invocation: fresh testcontainer + dev server, same isolation
-      # pattern as last-admin-blocked / admin-swap above. No chapter-state
-      # dependency: both specs seed only UUID-suffixed personas and never
-      # demote admins.
-      - name: e2e — member-status validation (own invocation)
+  # ADR-014 member-status validation specs (PR #58): the heaviest
+  # sign-in/navigation profile in the suite (~15 OAuth sign-ins, repeated
+  # /profile + job-page loads). Adding them to EITHER established invocation
+  # blew its load envelope on GHA — run 31828264411 (added to main: unrelated
+  # mvp/admin specs flaked on 30s waits) and run 31829302501 (added to roles:
+  # that step went red) — so they run as their OWN JOB on a separate runner,
+  # keeping the `playwright` job's workload byte-identical to main's. Fresh
+  # testcontainer + dev server; no chapter-state dependency: both specs seed
+  # only UUID-suffixed personas and never demote admins.
+  member-status-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Get Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('./apps/web/node_modules/@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - run: pnpm --filter web exec playwright install --with-deps chromium
+      - name: e2e — member-status validation (own runner)
         run: |
           .github/scripts/e2e-annotated.sh "member-status validation" \
             e2e/roles/member-status-flip-cycles.spec.ts \
