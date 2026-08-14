@@ -87,20 +87,19 @@ jobs:
           fi
 
       # PLAN-013 §3.1 #1: `demoteAllOtherAdmins` is now scope-narrowed to a
-      # per-spec ID allowlist, so the 7 chapter-safe roles specs (admin-grant,
+      # per-spec ID allowlist, so the 6 chapter-safe roles specs (admin-grant,
       # admin-demote-admin, admin-users-list, role-history, self-service,
-      # member-status, member-status-flip-cycles) no longer race each other's
-      # seeded admins. Collapse them into one invocation.
+      # member-status) no longer race each other's seeded admins. Collapse
+      # them into one invocation.
       - name: e2e — roles (chapter-safe set, single invocation)
         run: |
-          pnpm --filter web e2e \
+          .github/scripts/e2e-annotated.sh "roles chapter-safe" \
             e2e/roles/admin-grant.spec.ts \
             e2e/roles/admin-demote-admin.spec.ts \
             e2e/roles/admin-users-list.spec.ts \
             e2e/roles/role-history.spec.ts \
             e2e/roles/self-service.spec.ts \
-            e2e/roles/member-status.spec.ts \
-            e2e/roles/member-status-flip-cycles.spec.ts
+            e2e/roles/member-status.spec.ts
 
       # `last-admin-blocked` + `admin-swap` each need their OWN Playwright
       # invocation (fresh testcontainer DB). Both depend on chapter-wide
@@ -114,22 +113,28 @@ jobs:
       # signin path. Per-spec isolation is the only safe option until the
       # min-Admin trigger is made chapter-scoped (out of scope here).
       - name: e2e — roles last-admin-blocked (own invocation)
-        run: pnpm --filter web e2e e2e/roles/last-admin-blocked.spec.ts
+        run: .github/scripts/e2e-annotated.sh "last-admin-blocked" e2e/roles/last-admin-blocked.spec.ts
 
       - name: e2e — roles admin-swap (own invocation)
-        run: pnpm --filter web e2e e2e/roles/admin-swap.spec.ts
+        run: .github/scripts/e2e-annotated.sh "admin-swap" e2e/roles/admin-swap.spec.ts
 
       # ADR-013 min-Admin claim-sync guard: same chapter-wide count(Admin)=1
       # dependency as last-admin-blocked → own invocation / fresh DB.
       - name: e2e — auth min-admin-guard (own invocation)
-        run: pnpm --filter web e2e e2e/auth/min-admin-guard.spec.ts
+        run: .github/scripts/e2e-annotated.sh "min-admin-guard" e2e/auth/min-admin-guard.spec.ts
 
-      # ADR-014 validation round-trips: ~10 full OAuth sign-ins + repeated
-      # /profile loads across two tests — too sign-in-heavy for the collapsed
-      # main invocation's load envelope (adding it there starved the shared
-      # dev server on GHA and flaked unrelated specs' 30s waits — PR #58 run
-      # 31828264411). Own invocation = fresh testcontainer + dev server, same
-      # isolation pattern as last-admin-blocked / admin-swap above. No
-      # chapter-state dependency: it seeds only UUID-suffixed personas.
-      - name: e2e — auth member-status-roundtrip (own invocation)
-        run: pnpm --filter web e2e e2e/auth/member-status-roundtrip.spec.ts
+      # ADR-014 member-status validation specs (PR #58): the heaviest
+      # sign-in/navigation profile in the suite (~15 OAuth sign-ins, repeated
+      # /profile + job-page loads). Adding them to EITHER established
+      # invocation blew its load envelope on GHA — run 31828264411 (added to
+      # main: unrelated mvp/admin specs flaked on 30s waits) and run
+      # 31829302501 (added to roles: that step went red) — so they get their
+      # own invocation: fresh testcontainer + dev server, same isolation
+      # pattern as last-admin-blocked / admin-swap above. No chapter-state
+      # dependency: both specs seed only UUID-suffixed personas and never
+      # demote admins.
+      - name: e2e — member-status validation (own invocation)
+        run: |
+          .github/scripts/e2e-annotated.sh "member-status validation" \
+            e2e/roles/member-status-flip-cycles.spec.ts \
+            e2e/auth/member-status-roundtrip.spec.ts

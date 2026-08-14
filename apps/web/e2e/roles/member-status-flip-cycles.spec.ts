@@ -78,7 +78,7 @@ async function flipTo(page: Page, role: 'Active' | 'Alumni'): Promise<void> {
 }
 
 test.describe('ADR-014 validation — member status back-and-forth', () => {
-  test('three full Active ⇄ Alumni cycles stay coherent and move the access surface', async ({
+  test('three full Active ⇄ Alumni cycles stay coherent (registry, role, audit chain)', async ({
     page,
     context,
   }) => {
@@ -99,9 +99,11 @@ test.describe('ADR-014 validation — member status back-and-forth', () => {
         'on',
       );
 
-      // Legs 1–4: two full cycles. After every leg the registry (the only
+      // Six legs = three full cycles. After every leg the registry (the only
       // durable store) and the projected app role must agree.
       const legs: Array<{ role: 'Active' | 'Alumni'; status: 'active' | 'alumni' }> = [
+        { role: 'Alumni', status: 'alumni' },
+        { role: 'Active', status: 'active' },
         { role: 'Alumni', status: 'alumni' },
         { role: 'Active', status: 'active' },
         { role: 'Alumni', status: 'alumni' },
@@ -116,8 +118,49 @@ test.describe('ADR-014 validation — member status back-and-forth', () => {
         });
       }
 
-      // Leg 5 → Alumni, then prove the SERVER-SIDE access gates (not just
-      // nav pills) follow: Alumni can open the post-job form and my-postings,
+      // Audit chain: exactly 6 legs, strictly alternating, every row
+      // user-initiated through the ADR-014 path — no duplicates, no
+      // system-sync echo rows fighting the user's flips.
+      const audit = await fetchAuditRows(pool, persona.id);
+      expect(audit).toHaveLength(6);
+      legs.forEach((leg, i) => {
+        expect(audit[i]).toMatchObject({
+          from_role: leg.role === 'Alumni' ? 'Active' : 'Alumni',
+          to_role: leg.role,
+          initiator_id: persona.id,
+          initiator_kind: 'user',
+        });
+        expect(audit[i]!.note).toContain('ADR-014');
+      });
+    } finally {
+      await pool.end();
+    }
+    expect(errors).toEqual([]);
+  });
+
+  test('a flip moves the server-side access gates in both directions', async ({
+    page,
+    context,
+  }) => {
+    const errors = installPageerrorListener(page);
+    const pool = createPool();
+    try {
+      const suffix = newSuffix();
+      const persona = await seedPersona(pool, {
+        email: `flip-gates-${suffix}@chapter.test`,
+        displayName: `Flip Gates ${suffix}`,
+        role: 'Active',
+      });
+
+      await reAuth(page, context, persona);
+      await page.goto('/profile');
+      await expect(page.getByTestId('profile-status-section')).toHaveAttribute(
+        'data-portal',
+        'on',
+      );
+
+      // Flip → Alumni, then prove the SERVER-SIDE access gates (not just nav
+      // pills) follow: Alumni can open the post-job form and my-postings,
       // and is bounced off /my-enrollments.
       await flipTo(page, 'Alumni');
       await pollDbRole(pool, persona.id, 'Alumni');
@@ -130,7 +173,7 @@ test.describe('ADR-014 validation — member status back-and-forth', () => {
       await page.goto('/my-enrollments');
       await expect(page).not.toHaveURL(/my-enrollments/); // server redirect('/')
 
-      // Leg 6 → back to Active: gates flip the other way.
+      // Flip back → Active: gates invert.
       await page.goto('/profile');
       await flipTo(page, 'Active');
       await pollDbRole(pool, persona.id, 'Active');
@@ -144,21 +187,9 @@ test.describe('ADR-014 validation — member status back-and-forth', () => {
         page.getByRole('heading', { name: 'My enrollments' }),
       ).toBeVisible();
 
-      // Audit chain: exactly 6 legs, strictly alternating, every row
-      // user-initiated through the ADR-014 path — no duplicates, no
-      // system-sync echo rows fighting the user's flips.
       const audit = await fetchAuditRows(pool, persona.id);
-      expect(audit).toHaveLength(6);
-      const expectedChain = ['Alumni', 'Active', 'Alumni', 'Active', 'Alumni', 'Active'];
-      expectedChain.forEach((toRole, i) => {
-        expect(audit[i]).toMatchObject({
-          from_role: toRole === 'Alumni' ? 'Active' : 'Alumni',
-          to_role: toRole,
-          initiator_id: persona.id,
-          initiator_kind: 'user',
-        });
-        expect(audit[i]!.note).toContain('ADR-014');
-      });
+      expect(audit).toHaveLength(2);
+      expect(audit.map((r) => r.to_role)).toEqual(['Alumni', 'Active']);
     } finally {
       await pool.end();
     }
