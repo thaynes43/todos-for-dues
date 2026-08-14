@@ -186,13 +186,19 @@ test.describe('ADR-014 validation — member status back-and-forth', () => {
         'on',
       );
 
-      // Two clicks in quick succession. The second lands either while the
-      // save is in flight (button disabled → swallowed) or after it settled
-      // (button is now "(current)" and disabled → swallowed). `force: true`
-      // skips Playwright's enabled-check so the click is genuinely attempted
-      // both times, like a fast human double-click.
+      // Two clicks in quick succession. After the first click the control
+      // disables every option (in-flight guard) and keeps the target disabled
+      // once it becomes "(current)" — so wait for the disabled state, then
+      // genuinely attempt a second click with `force: true` (skips
+      // Playwright's enabled-check, like a fast human double-click). Native
+      // disabled buttons swallow the event either way. The same-tick race
+      // (second click before React re-renders) can't be pinned
+      // deterministically here — its server-side half is covered by the
+      // idempotent-set case in member-status-cycles.test.ts and the handler
+      // guard by the ProfileStatusSection unit suite.
       const alumniBtn = page.getByTestId('role-change-option-Alumni');
       await alumniBtn.click();
+      await expect(alumniBtn).toBeDisabled(); // in-flight or already current
       await alumniBtn.click({ force: true }).catch(() => {});
 
       await pollDbRole(pool, persona.id, 'Alumni');
