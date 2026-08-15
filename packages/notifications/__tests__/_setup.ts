@@ -50,9 +50,9 @@ export async function seedUsers(pool: Pool): Promise<SeededUsers> {
     const ids: Record<string, string> = {};
     for (const u of [
       { email: 'admin@test.invalid', name: 'Admin Anne', role: 'Admin' },
-      { email: 'alumni@test.invalid', name: 'Alumni Adam', role: 'Alumni' },
-      { email: 'active1@test.invalid', name: 'Alice Active', role: 'Active' },
-      { email: 'active2@test.invalid', name: 'Bob Active', role: 'Active' },
+      { email: 'alumni@test.invalid', name: 'Alumni Adam', role: 'Member' },
+      { email: 'active1@test.invalid', name: 'Alice Active', role: 'Member' },
+      { email: 'active2@test.invalid', name: 'Bob Active', role: 'Member' },
     ]) {
       const { rows } = await client.query<{ id: string }>(
         `INSERT INTO users (email, display_name, role) VALUES ($1, $2, $3) RETURNING id`,

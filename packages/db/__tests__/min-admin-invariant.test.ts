@@ -49,7 +49,7 @@ async function resetUsers(pool: Pool, opts: { adminEmail?: string } = {}): Promi
 async function insertActive(client: PoolClient | Pool, email: string): Promise<string> {
   const { rows } = await client.query<{ id: string }>(
     `INSERT INTO users (email, display_name, role)
-     VALUES ($1, 'Active User', 'Active') RETURNING id`,
+     VALUES ($1, 'Member User', 'Member') RETURNING id`,
     [email],
   );
   return rows[0]!.id;
@@ -76,7 +76,7 @@ describe('min-Admin invariant trigger', () => {
 
   it('rejects demoting the only Admin (single statement)', async () => {
     await expectFailureCode(
-      pool.query(`UPDATE users SET role = 'Active' WHERE role = 'Admin'`),
+      pool.query(`UPDATE users SET role = 'Member' WHERE role = 'Admin'`),
       '23514',
     );
     const { rows } = await pool.query<{ count: string }>(
@@ -95,7 +95,7 @@ describe('min-Admin invariant trigger', () => {
       `INSERT INTO users (email, display_name, role) VALUES ('admin2@test.invalid', 'Admin Two', 'Admin')`,
     );
     await pool.query(
-      `UPDATE users SET role = 'Active' WHERE email = 'admin2@test.invalid'`,
+      `UPDATE users SET role = 'Member' WHERE email = 'admin2@test.invalid'`,
     );
     const { rows } = await pool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM users WHERE role = 'Admin'`,
@@ -111,14 +111,14 @@ describe('min-Admin invariant trigger', () => {
       // The trigger is DEFERRABLE INITIALLY DEFERRED — it fires at COMMIT, not per-row.
       // After both updates, admin_count is still 1 (B replaced A), so COMMIT succeeds.
       await client.query(`UPDATE users SET role = 'Admin' WHERE id = $1`, [bId]);
-      await client.query(`UPDATE users SET role = 'Alumni' WHERE email = 'admin@test.invalid'`);
+      await client.query(`UPDATE users SET role = 'Member' WHERE email = 'admin@test.invalid'`);
     });
 
     const { rows } = await pool.query<{ email: string; role: string }>(
       `SELECT email, role FROM users ORDER BY email`,
     );
     expect(rows).toEqual([
-      { email: 'admin@test.invalid', role: 'Alumni' },
+      { email: 'admin@test.invalid', role: 'Member' },
       { email: 'b@test.invalid', role: 'Admin' },
     ]);
   });
@@ -128,7 +128,7 @@ describe('min-Admin invariant trigger', () => {
     await insertActive(pool, 'c@test.invalid');
     await expectFailureCode(
       withTx(pool, async (client) => {
-        await client.query(`UPDATE users SET role = 'Alumni' WHERE role = 'Admin'`);
+        await client.query(`UPDATE users SET role = 'Member' WHERE role = 'Admin'`);
         // No promotion — net Admin count after COMMIT is 0.
       }),
       '23514',
