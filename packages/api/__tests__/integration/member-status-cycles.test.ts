@@ -2,20 +2,18 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { startPortalApiMock, type PortalApiMock } from './_portal-mock';
 
 /**
- * VALIDATION (ADR-014) — repeated back-and-forth cycles through the
- * memberStatus router. The shipped member-status.test.ts proves single
- * transitions; the user requirement is "switch back and forth repeatedly",
- * so this file pins the loop behavior against the REAL stack (PG16
- * testcontainer, real getAccessToken, real transitionRole):
+ * VALIDATION (ADR-015) — repeated back-and-forth cycles through the
+ * memberStatus router. The user requirement is "switch back and forth
+ * repeatedly", so this file pins the loop behavior against the REAL stack
+ * (PG16 testcontainer, real getAccessToken):
  *
- *  - N alternating `set` flips keep registry, role, and the audit chain in
- *    lockstep (no skipped/duplicated/mis-ordered transitions);
- *  - re-`set`ting the already-declared side is idempotent (the server-side
- *    guard behind the UI's double-click protection);
- *  - `get` after `set` never writes an echo row (the two sync paths don't
- *    fight);
- *  - repeated PORTAL-side registry edits land on successive `get`s, one
- *    system-audited row each, and an unchanged re-`get` stays silent.
+ *  - N alternating `set` flips keep the REGISTRY (the only durable store) in
+ *    lockstep while the app ROLE stays byte-identical and ZERO
+ *    user_role_transitions rows are ever written — status is orthogonal;
+ *  - re-`set`ting the already-declared side is idempotent;
+ *  - `get` after `set` never writes a role row (the read path is inert);
+ *  - repeated PORTAL-side registry edits land on successive `get`s with the
+ *    role untouched throughout.
  *
  * Env ordering: `@app/auth` reads OIDC_* at module load, so `_setup` is
  * imported dynamically after the portal mock is up (same pattern as
@@ -65,127 +63,84 @@ async function linkPortalAccount(userId: string): Promise<void> {
   portal.refreshTokens.set(`rt-${userId}`, userId);
 }
 
-async function getAuditRows(userId: string) {
-  const { rows } = await testDb.pool.query<{
-    from_role: string;
-    to_role: string;
-    initiator_id: string | null;
-    initiator_kind: string;
-    note: string | null;
-  }>(
-    `SELECT from_role, to_role, initiator_id, initiator_kind, note
-       FROM user_role_transitions WHERE user_id = $1 ORDER BY created_at, ctid`,
+async function roleAuditCount(userId: string): Promise<number> {
+  const { rows } = await testDb.pool.query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM user_role_transitions WHERE user_id = $1`,
     [userId],
   );
-  return rows;
+  return Number(rows[0]!.n);
 }
 
-describe('memberStatus — repeated back-and-forth cycles', () => {
-  it('six alternating set flips keep registry, role, and audit chain in lockstep', async () => {
+describe('memberStatus — repeated back-and-forth cycles keep role orthogonal', () => {
+  it('six alternating set flips move the registry only; role constant, zero role rows', async () => {
     await linkPortalAccount(seeded.active1);
     portal.registry.set(seeded.active1, 'active');
     const c = setup.caller(
-      setup.makeCtx({ userId: seeded.active1, role: 'Active' }),
+      setup.makeCtx({ userId: seeded.active1, role: 'Member' }),
     );
 
     const legs = ['alumni', 'active', 'alumni', 'active', 'alumni', 'active'] as const;
     for (const status of legs) {
-      const role = status === 'active' ? 'Active' : 'Alumni';
       const result = await c.memberStatus.set({ status });
-      expect(result).toEqual({ kind: 'ok', status, role });
+      expect(result).toEqual({ kind: 'ok', status });
       expect(portal.registry.get(seeded.active1)).toBe(status);
-      expect(await setup.getUserRole(testDb.pool, seeded.active1)).toBe(role);
+      // Role never moves, no matter how the status swings.
+      expect(await setup.getUserRole(testDb.pool, seeded.active1)).toBe('Member');
     }
 
-    const audit = await getAuditRows(seeded.active1);
-    expect(audit).toHaveLength(legs.length);
-    legs.forEach((status, i) => {
-      const toRole = status === 'active' ? 'Active' : 'Alumni';
-      expect(audit[i]).toMatchObject({
-        from_role: toRole === 'Active' ? 'Alumni' : 'Active',
-        to_role: toRole,
-        initiator_id: seeded.active1,
-        initiator_kind: 'user',
-      });
-      expect(audit[i]!.note).toContain('ADR-014');
-    });
+    // Not a single role transition across all six flips.
+    expect(await roleAuditCount(seeded.active1)).toBe(0);
   });
 
-  it('re-setting the already-declared side is idempotent (no duplicate audit rows)', async () => {
+  it('re-setting the already-declared side is idempotent (registry stable, no role rows)', async () => {
     await linkPortalAccount(seeded.active1);
     portal.registry.set(seeded.active1, 'active');
     const c = setup.caller(
-      setup.makeCtx({ userId: seeded.active1, role: 'Active' }),
+      setup.makeCtx({ userId: seeded.active1, role: 'Member' }),
     );
 
-    // Same-side set: registry unchanged, role unchanged, zero audit rows.
     const same = await c.memberStatus.set({ status: 'active' });
-    expect(same).toEqual({ kind: 'ok', status: 'active', role: 'Active' });
-    expect(await getAuditRows(seeded.active1)).toHaveLength(0);
+    expect(same).toEqual({ kind: 'ok', status: 'active' });
 
-    // Flip once, then repeat the SAME flip (a server-side double-submit):
-    // exactly one transition total.
     await c.memberStatus.set({ status: 'alumni' });
     const repeat = await c.memberStatus.set({ status: 'alumni' });
-    expect(repeat).toEqual({ kind: 'ok', status: 'alumni', role: 'Alumni' });
-    expect(await getAuditRows(seeded.active1)).toHaveLength(1);
+    expect(repeat).toEqual({ kind: 'ok', status: 'alumni' });
+    expect(portal.registry.get(seeded.active1)).toBe('alumni');
+    expect(await roleAuditCount(seeded.active1)).toBe(0);
   });
 
-  it('get after set never writes an echo row — the two sync paths agree', async () => {
+  it('get after set is inert — the read path writes no role row', async () => {
     await linkPortalAccount(seeded.active1);
     portal.registry.set(seeded.active1, 'active');
     const c = setup.caller(
-      setup.makeCtx({ userId: seeded.active1, role: 'Active' }),
+      setup.makeCtx({ userId: seeded.active1, role: 'Member' }),
     );
 
     await c.memberStatus.set({ status: 'alumni' });
-    expect(await getAuditRows(seeded.active1)).toHaveLength(1);
-
     const read = await c.memberStatus.get();
-    expect(read).toEqual({ kind: 'ok', status: 'alumni', role: 'Alumni' });
-    expect(await getAuditRows(seeded.active1)).toHaveLength(1); // no echo
+    expect(read).toEqual({ kind: 'ok', status: 'alumni' });
 
-    // And around again — set back, get again, still exactly one row per flip.
     await c.memberStatus.set({ status: 'active' });
     const read2 = await c.memberStatus.get();
-    expect(read2).toEqual({ kind: 'ok', status: 'active', role: 'Active' });
-    expect(await getAuditRows(seeded.active1)).toHaveLength(2);
+    expect(read2).toEqual({ kind: 'ok', status: 'active' });
+
+    expect(await roleAuditCount(seeded.active1)).toBe(0);
+    expect(await setup.getUserRole(testDb.pool, seeded.active1)).toBe('Member');
   });
 
-  it('repeated portal-side edits land on successive gets, one system row each', async () => {
+  it('repeated portal-side edits land on successive gets; role untouched throughout', async () => {
     await linkPortalAccount(seeded.active1);
     const c = setup.caller(
-      setup.makeCtx({ userId: seeded.active1, role: 'Active' }),
+      setup.makeCtx({ userId: seeded.active1, role: 'Member' }),
     );
 
-    // Portal-side declaration flips, each observed by the next page load.
     portal.registry.set(seeded.active1, 'alumni');
-    expect(await c.memberStatus.get()).toEqual({
-      kind: 'ok',
-      status: 'alumni',
-      role: 'Alumni',
-    });
+    expect(await c.memberStatus.get()).toEqual({ kind: 'ok', status: 'alumni' });
     portal.registry.set(seeded.active1, 'active');
-    expect(await c.memberStatus.get()).toEqual({
-      kind: 'ok',
-      status: 'active',
-      role: 'Active',
-    });
+    expect(await c.memberStatus.get()).toEqual({ kind: 'ok', status: 'active' });
+    expect(await c.memberStatus.get()).toEqual({ kind: 'ok', status: 'active' });
 
-    // Unchanged re-read stays silent.
-    expect(await c.memberStatus.get()).toEqual({
-      kind: 'ok',
-      status: 'active',
-      role: 'Active',
-    });
-
-    const audit = await getAuditRows(seeded.active1);
-    expect(audit).toHaveLength(2);
-    for (const row of audit) {
-      expect(row.initiator_kind).toBe('system');
-      expect(row.initiator_id).toBeNull();
-      expect(row.note).toContain('ADR-014');
-    }
-    expect(audit.map((r) => r.to_role)).toEqual(['Alumni', 'Active']);
+    expect(await roleAuditCount(seeded.active1)).toBe(0);
+    expect(await setup.getUserRole(testDb.pool, seeded.active1)).toBe('Member');
   });
 });

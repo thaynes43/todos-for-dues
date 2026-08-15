@@ -8,11 +8,11 @@ import {
   tierAllowsRole,
 } from '../src/portal-tiers';
 
-describe('ADR-013 portal tier → app role mapping', () => {
-  it('maps the four tiers per the adopted default', () => {
+describe('ADR-013 / ADR-015 portal tier → app role mapping (orthogonal to status)', () => {
+  it('maps the four tiers per the adopted default (brother → Member)', () => {
     expect(mapTierToRole('admin')).toBe('Admin');
     expect(mapTierToRole('operator')).toBe('Moderator');
-    expect(mapTierToRole('brother')).toBe('Alumni');
+    expect(mapTierToRole('brother')).toBe('Member');
     expect(mapTierToRole('pending')).toBe('refused');
   });
 
@@ -27,22 +27,21 @@ describe('ADR-013 portal tier → app role mapping', () => {
     expect(parsePortalTier(42)).toBeNull();
   });
 
-  it('brother tolerates the app-granted Active role (plan §2.0)', () => {
-    expect(tierAllowsRole('brother', 'Alumni')).toBe(true);
-    expect(tierAllowsRole('brother', 'Active')).toBe(true);
+  it('brother maps to Member regardless of member status (orthogonality)', () => {
+    expect(tierAllowsRole('brother', 'Member')).toBe(true);
     expect(tierAllowsRole('brother', 'Moderator')).toBe(false);
     expect(tierAllowsRole('brother', 'Admin')).toBe(false);
   });
 
   it('elevated tiers require their exact role', () => {
     expect(tierAllowsRole('operator', 'Moderator')).toBe(true);
-    expect(tierAllowsRole('operator', 'Alumni')).toBe(false);
+    expect(tierAllowsRole('operator', 'Member')).toBe(false);
     expect(tierAllowsRole('admin', 'Admin')).toBe(true);
     expect(tierAllowsRole('admin', 'Moderator')).toBe(false);
   });
 
   it('isAppRole gates the user-create sentinel', () => {
-    expect(isAppRole('Alumni')).toBe(true);
+    expect(isAppRole('Member')).toBe(true);
     expect(isAppRole('refused')).toBe(false);
     expect(isAppRole(undefined)).toBe(false);
   });

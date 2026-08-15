@@ -23,24 +23,25 @@ test.describe('PRD-008 AC-11 — role-change history descending', () => {
       // Drive three role transitions through the domain helper so the audit
       // log is populated the same way production writes do (single-writer
       // invariant enforced by packages/domain/__tests__/no-direct-state-writes.test.ts).
-      // Net path: Active → Alumni → Active → Alumni.
+      // ADR-015: roles are Member | Moderator | Admin only.
+      // Net path: Member → Moderator → Admin → Moderator.
       await transitionRole({
         targetUserId: target.id,
-        expectedFromRole: 'Active',
-        toRole: 'Alumni',
-        initiator: { id: target.id, kind: 'user' },
+        expectedFromRole: 'Member',
+        toRole: 'Moderator',
+        initiator: { id: cast.admin.id, kind: 'admin' },
       });
       await transitionRole({
         targetUserId: target.id,
-        expectedFromRole: 'Alumni',
-        toRole: 'Active',
-        initiator: { id: target.id, kind: 'user' },
+        expectedFromRole: 'Moderator',
+        toRole: 'Admin',
+        initiator: { id: cast.admin.id, kind: 'admin' },
       });
       await transitionRole({
         targetUserId: target.id,
-        expectedFromRole: 'Active',
-        toRole: 'Alumni',
-        initiator: { id: target.id, kind: 'user' },
+        expectedFromRole: 'Admin',
+        toRole: 'Moderator',
+        initiator: { id: cast.admin.id, kind: 'admin' },
       });
 
       await reAuth(page, context, cast.admin);
@@ -57,8 +58,8 @@ test.describe('PRD-008 AC-11 — role-change history descending', () => {
       const toRoles = await Promise.all(
         top.map((r) => r.getAttribute('data-to-role')),
       );
-      // Newest first → Alumni (offset 120), Active (offset 60), Alumni (offset 0).
-      expect(toRoles).toEqual(['Alumni', 'Active', 'Alumni']);
+      // Newest first → Moderator (last write), Admin, Moderator (first write).
+      expect(toRoles).toEqual(['Moderator', 'Admin', 'Moderator']);
     } finally {
       await pool.end();
     }

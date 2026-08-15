@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import type { Role } from '@app/db/schema';
 
 vi.mock('@/lib/trpc-client', () => {
   const stubMutation = () => ({
@@ -39,6 +38,7 @@ vi.mock('@/lib/trpc-client', () => {
 import {
   JobDetailView,
   type JobForDetailView,
+  type Viewer,
 } from '@/components/JobDetailView';
 
 function baseJob(overrides: Partial<JobForDetailView> = {}): JobForDetailView {
@@ -62,48 +62,71 @@ function baseJob(overrides: Partial<JobForDetailView> = {}): JobForDetailView {
   };
 }
 
-function viewer(role: Role, id = 'viewer-1') {
-  return { id, role };
+/**
+ * ADR-015: member STATUS (active/alumni) is orthogonal to role. Enroll/unenroll
+ * and the completed-Active credit view gate on the STATUS-derived `canClaim`
+ * flag / enrollment fact — never on role. Roles are Member | Moderator | Admin.
+ *
+ *   - 'claimer' — a plain Member with active status (canClaim): the one who
+ *     enrolls/unenrolls and, when enrolled, confirms receipt.
+ *   - 'poster'  — a plain Member with alumni status (cannot claim): posts jobs
+ *     and drives the poster-side lifecycle (lock / complete / mark-payment).
+ *   - 'Moderator' / 'Admin' — privileged roles.
+ */
+function viewer(
+  kind: 'claimer' | 'poster' | 'Moderator' | 'Admin',
+  id = 'viewer-1',
+): Viewer {
+  switch (kind) {
+    case 'claimer':
+      return { id, role: 'Member', canClaim: true };
+    case 'poster':
+      return { id, role: 'Member', canClaim: false };
+    case 'Moderator':
+      return { id, role: 'Moderator', canClaim: false };
+    case 'Admin':
+      return { id, role: 'Admin', canClaim: false };
+  }
 }
 
 describe('<JobDetailView> walking-skeleton affordances', () => {
-  it('Active not-enrolled on enrollment_open sees EnrollButton', () => {
+  it('claim-capable non-enrolled viewer on enrollment_open sees EnrollButton', () => {
     const job = baseJob({
       state: 'enrollment_open',
       roster: [],
       enrolleeCount: 0,
     });
-    render(<JobDetailView job={job} viewer={viewer('Active', 'newcomer')} />);
+    render(<JobDetailView job={job} viewer={viewer('claimer', 'newcomer')} />);
     expect(screen.getByTestId('enroll-button')).toBeInTheDocument();
   });
 
-  it('Active enrolled on enrollment_open does NOT see EnrollButton', () => {
+  it('claim-capable enrolled viewer on enrollment_open does NOT see EnrollButton', () => {
     const job = baseJob({ state: 'enrollment_open' });
-    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('claimer', 'active-1')} />);
     expect(screen.queryByTestId('enroll-button')).not.toBeInTheDocument();
   });
 
-  it('Alumni-poster on enrollment_open sees LockJobForm', () => {
+  it('poster on enrollment_open sees LockJobForm', () => {
     const job = baseJob({ state: 'enrollment_open' });
-    render(<JobDetailView job={job} viewer={viewer('Alumni', 'alumni-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('poster', 'alumni-1')} />);
     expect(screen.getByTestId('lock-job-form')).toBeInTheDocument();
   });
 
-  it('Alumni-poster on locked sees CompleteJobForm', () => {
+  it('poster on locked sees CompleteJobForm', () => {
     const job = baseJob({ state: 'locked' });
-    render(<JobDetailView job={job} viewer={viewer('Alumni', 'alumni-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('poster', 'alumni-1')} />);
     expect(screen.getByTestId('complete-job-form')).toBeInTheDocument();
   });
 
-  it('Alumni-poster on completed sees MarkPaymentSentButton', () => {
+  it('poster on completed sees MarkPaymentSentButton', () => {
     const job = baseJob({ state: 'completed' });
-    render(<JobDetailView job={job} viewer={viewer('Alumni', 'alumni-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('poster', 'alumni-1')} />);
     expect(screen.getByTestId('mark-payment-sent-button')).toBeInTheDocument();
   });
 
-  it('Enrolled Active on payment_sent sees ConfirmReceivedButton', () => {
+  it('enrolled viewer on payment_sent sees ConfirmReceivedButton', () => {
     const job = baseJob({ state: 'payment_sent' });
-    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('claimer', 'active-1')} />);
     expect(screen.getByTestId('confirm-received-button')).toBeInTheDocument();
   });
 
@@ -116,22 +139,24 @@ describe('<JobDetailView> walking-skeleton affordances', () => {
   it('renders TippingNudge in payment_sent and closed', () => {
     const ps = baseJob({ state: 'payment_sent' });
     const { unmount } = render(
-      <JobDetailView job={ps} viewer={viewer('Active', 'active-1')} />,
+      <JobDetailView job={ps} viewer={viewer('claimer', 'active-1')} />,
     );
     expect(screen.getByTestId('tipping-nudge')).toBeInTheDocument();
     unmount();
     const closed = baseJob({ state: 'closed' });
-    render(<JobDetailView job={closed} viewer={viewer('Active', 'active-1')} />);
+    render(
+      <JobDetailView job={closed} viewer={viewer('claimer', 'active-1')} />,
+    );
     expect(screen.getByTestId('tipping-nudge')).toBeInTheDocument();
   });
 
   it('does NOT render TippingNudge in locked', () => {
     const job = baseJob({ state: 'locked' });
-    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('claimer', 'active-1')} />);
     expect(screen.queryByTestId('tipping-nudge')).not.toBeInTheDocument();
   });
 
-  it('shows roster names when caller is enrolled (roster present); non-enrolled Active shows only count', () => {
+  it('shows roster names when caller is enrolled (roster present); non-enrolled viewer shows only count', () => {
     const job = baseJob({
       state: 'enrollment_open',
       roster: [
@@ -146,7 +171,7 @@ describe('<JobDetailView> walking-skeleton affordances', () => {
     render(
       <JobDetailView
         job={job}
-        viewer={viewer('Active', 'active-1')}
+        viewer={viewer('claimer', 'active-1')}
         rosterNames={[{ activeId: 'active-1', displayName: 'Alice Active' }]}
       />,
     );
@@ -159,49 +184,49 @@ describe('<JobDetailView> walking-skeleton affordances', () => {
       roster: null,
       enrolleeCount: 3,
     });
-    render(<JobDetailView job={job} viewer={viewer('Active', 'outside')} />);
+    render(<JobDetailView job={job} viewer={viewer('claimer', 'outside')} />);
     expect(screen.getByText(/3 people/)).toBeInTheDocument();
   });
 });
 
 describe('<JobDetailView> PLAN-010 MVP additions', () => {
-  it('Active enrolled on enrollment_open sees UnenrollButton (PRD-004 R-03)', () => {
+  it('enrolled claim-capable viewer on enrollment_open sees UnenrollButton (PRD-004 R-03)', () => {
     const job = baseJob({ state: 'enrollment_open' });
-    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('claimer', 'active-1')} />);
     expect(screen.getByTestId('unenroll-button')).toBeInTheDocument();
   });
 
-  it('Active enrolled on locked does NOT see UnenrollButton (PRD-004 AC-05)', () => {
+  it('enrolled viewer on locked does NOT see UnenrollButton (PRD-004 AC-05)', () => {
     const job = baseJob({ state: 'locked' });
-    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('claimer', 'active-1')} />);
     expect(screen.queryByTestId('unenroll-button')).not.toBeInTheDocument();
   });
 
-  it('Alumni-poster on enrollment_open sees LockJobForm + CancelJobModal', () => {
+  it('poster on enrollment_open sees LockJobForm + CancelJobModal', () => {
     const job = baseJob({ state: 'enrollment_open' });
-    render(<JobDetailView job={job} viewer={viewer('Alumni', 'alumni-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('poster', 'alumni-1')} />);
     expect(screen.getByTestId('lock-job-form')).toBeInTheDocument();
     expect(screen.getByTestId('cancel-job-button')).toBeInTheDocument();
   });
 
-  it('Alumni-poster on locked sees CompleteJobForm + Reschedule + Cancel', () => {
+  it('poster on locked sees CompleteJobForm + Reschedule + Cancel', () => {
     const job = baseJob({ state: 'locked' });
-    render(<JobDetailView job={job} viewer={viewer('Alumni', 'alumni-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('poster', 'alumni-1')} />);
     expect(screen.getByTestId('complete-job-form')).toBeInTheDocument();
     expect(screen.getByTestId('reschedule-button')).toBeInTheDocument();
     expect(screen.getByTestId('cancel-job-button')).toBeInTheDocument();
   });
 
-  it('Alumni-poster on completed sees MarkPaymentSent + RevertCompletion', () => {
+  it('poster on completed sees MarkPaymentSent + RevertCompletion', () => {
     const job = baseJob({ state: 'completed' });
-    render(<JobDetailView job={job} viewer={viewer('Alumni', 'alumni-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('poster', 'alumni-1')} />);
     expect(screen.getByTestId('mark-payment-sent-button')).toBeInTheDocument();
     expect(screen.getByTestId('revert-completion-button')).toBeInTheDocument();
   });
 
-  it('Active enrolled on payment_sent sees Confirm + Dispute', () => {
+  it('enrolled viewer on payment_sent sees Confirm + Dispute', () => {
     const job = baseJob({ state: 'payment_sent' });
-    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('claimer', 'active-1')} />);
     expect(screen.getByTestId('confirm-received-button')).toBeInTheDocument();
     expect(screen.getByTestId('dispute-button')).toBeInTheDocument();
   });
@@ -212,7 +237,7 @@ describe('<JobDetailView> PLAN-010 MVP additions', () => {
       rejectionReason: 'dues too low',
       roster: null,
     });
-    render(<JobDetailView job={job} viewer={viewer('Alumni', 'alumni-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('poster', 'alumni-1')} />);
     expect(screen.getByTestId('rejected-job-banner')).toBeInTheDocument();
     expect(screen.queryByTestId('job-actions')).not.toBeInTheDocument();
   });
@@ -223,7 +248,7 @@ describe('<JobDetailView> PLAN-010 MVP additions', () => {
       rejectionReason: 'dues too low',
       roster: null,
     });
-    render(<JobDetailView job={job} viewer={viewer('Alumni', 'alumni-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('poster', 'alumni-1')} />);
     expect(screen.getByTestId('rejected-post-new-cta')).toBeInTheDocument();
   });
 
@@ -232,14 +257,14 @@ describe('<JobDetailView> PLAN-010 MVP additions', () => {
       state: 'cancelled',
       cancellationReason: 'Mom moved the couch',
     });
-    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('claimer', 'active-1')} />);
     expect(screen.getByTestId('cancelled-job-banner')).toBeInTheDocument();
     expect(screen.queryByTestId('job-actions')).not.toBeInTheDocument();
   });
 
-  it('disputed state for an Active renders DisputedJobBanner', () => {
+  it('disputed state for an enrolled viewer renders DisputedJobBanner', () => {
     const job = baseJob({ state: 'disputed' });
-    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('claimer', 'active-1')} />);
     expect(screen.getByTestId('disputed-job-banner')).toBeInTheDocument();
     expect(screen.queryByTestId('job-actions')).not.toBeInTheDocument();
   });
@@ -249,38 +274,38 @@ describe('<JobDetailView> PLAN-010 MVP additions', () => {
       state: 'closed',
       closedBy: { displayName: 'Alice Active' },
     });
-    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('claimer', 'active-1')} />);
     expect(screen.getByTestId('closed-job-banner')).toBeInTheDocument();
     expect(screen.getByTestId('closed-by-name')).toHaveTextContent(
       /Alice Active/,
     );
   });
 
-  it('Active enrolled + completed shows credit (Q-PLN-01 confirmed)', () => {
+  it('enrolled viewer + completed shows credit (Q-PLN-01 confirmed)', () => {
     const job = baseJob({
       state: 'completed',
       viewerCredit: { confirmed: true, amount: '25.00' },
     });
-    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('claimer', 'active-1')} />);
     expect(screen.getByTestId('completed-credit-amount')).toHaveTextContent(
       /\$25\.00/,
     );
   });
 
-  it('Active enrolled + payment_sent who was not confirmed sees "weren\'t confirmed" copy', () => {
+  it('enrolled viewer + payment_sent who was not confirmed sees "weren\'t confirmed" copy', () => {
     const job = baseJob({
       state: 'payment_sent',
       viewerCredit: { confirmed: false, amount: null },
     });
-    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('claimer', 'active-1')} />);
     expect(screen.getByTestId('completed-not-confirmed')).toBeInTheDocument();
   });
 });
 
 describe('<JobDetailView> payment_sent RBAC (MVP-FIX-B #6)', () => {
-  it('Alumni poster on payment_sent does NOT see Confirm Received or Dispute', () => {
+  it('poster on payment_sent does NOT see Confirm Received or Dispute', () => {
     const job = baseJob({ state: 'payment_sent' });
-    render(<JobDetailView job={job} viewer={viewer('Alumni', 'alumni-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('poster', 'alumni-1')} />);
     expect(
       screen.queryByTestId('confirm-received-button'),
     ).not.toBeInTheDocument();
@@ -316,10 +341,10 @@ describe('<JobDetailView> payment_sent RBAC (MVP-FIX-B #6)', () => {
     expect(screen.queryByTestId('dispute-button')).not.toBeInTheDocument();
   });
 
-  it('Non-enrolled non-Admin Active on payment_sent does NOT see Confirm or Dispute (PRD-006 R-03)', () => {
+  it('non-enrolled non-Admin viewer on payment_sent does NOT see Confirm or Dispute (PRD-006 R-03)', () => {
     const job = baseJob({ state: 'payment_sent' });
     render(
-      <JobDetailView job={job} viewer={viewer('Active', 'outsider-active')} />,
+      <JobDetailView job={job} viewer={viewer('claimer', 'outsider-active')} />,
     );
     expect(
       screen.queryByTestId('confirm-received-button'),
@@ -327,9 +352,9 @@ describe('<JobDetailView> payment_sent RBAC (MVP-FIX-B #6)', () => {
     expect(screen.queryByTestId('dispute-button')).not.toBeInTheDocument();
   });
 
-  it('Enrolled Active on payment_sent DOES see Confirm + Dispute (PRD-006 R-01)', () => {
+  it('enrolled viewer on payment_sent DOES see Confirm + Dispute (PRD-006 R-01)', () => {
     const job = baseJob({ state: 'payment_sent' });
-    render(<JobDetailView job={job} viewer={viewer('Active', 'active-1')} />);
+    render(<JobDetailView job={job} viewer={viewer('claimer', 'active-1')} />);
     expect(screen.getByTestId('confirm-received-button')).toBeInTheDocument();
     expect(screen.getByTestId('dispute-button')).toBeInTheDocument();
   });

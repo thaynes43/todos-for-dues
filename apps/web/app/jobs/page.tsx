@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getServerSession, getSessionRole } from '@app/auth';
 import { JOB_STATES, type JobState } from '@app/db/schema';
+import { getMemberCapabilities } from '@/lib/access';
 import { PageHeader } from '@/components/PageHeader';
 import { JobsList } from './jobs-list';
 
@@ -26,13 +27,16 @@ export default async function JobsPage({ searchParams }: PageProps) {
   const session = await getServerSession(await headers());
   if (!session?.user?.id) redirect('/login');
   const { role } = await getSessionRole(session.user.id);
+  // ADR-015: the "My postings" section is a posting surface — gated on member
+  // STATUS (alumni), orthogonal to role.
+  const { canPost } = await getMemberCapabilities(session.user.id);
   const params = (await searchParams) ?? {};
   const stateFilter = parseStateFilter(params.state);
 
   return (
     <section className="space-y-8">
       <PageHeader title="Jobs" description="What's open right now." />
-      <JobsList role={role} stateFilter={stateFilter} />
+      <JobsList role={role} canPost={canPost} stateFilter={stateFilter} />
     </section>
   );
 }

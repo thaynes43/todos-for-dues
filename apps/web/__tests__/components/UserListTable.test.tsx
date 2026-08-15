@@ -1,59 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import type { Role } from '@app/db/schema';
 
-const mocks = vi.hoisted(() => ({
-  push: vi.fn(),
-  invalidate: vi.fn(),
-  grantMutate: vi.fn(),
-  listData: [] as Array<{
+/**
+ * ADR-015: <UserListTable> is READ-ONLY. Roles are portal-derived only — the
+ * self-service/admin role writers (users.grantRole / users.changeRole) were
+ * removed with the orthogonality ruling. This table renders the roster and its
+ * portal note; it never exposes a role dropdown, chip menu, or demote modal,
+ * and it never mutates a role. The mock therefore only wires `users.list`.
+ */
+
+const listState = vi.hoisted(() => ({
+  data: [] as Array<{
     id: string;
     displayName: string;
     email: string;
-    role: 'Active' | 'Alumni' | 'Moderator' | 'Admin';
+    role: Role;
   }>,
-  searchParams: new URLSearchParams(),
-  grantOpts: {
-    onSuccess: undefined as
-      | ((data: unknown, variables: { targetUserId: string }) => void)
-      | undefined,
-    onError: undefined as
-      | ((err: unknown, variables: { targetUserId: string }) => void)
-      | undefined,
-  },
-}));
-
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mocks.push }),
-  useSearchParams: () => ({ get: (k: string) => mocks.searchParams.get(k) }),
+  isLoading: false,
+  error: null as { message: string } | null,
 }));
 
 vi.mock('@/lib/trpc-client', () => ({
   trpc: {
-    useUtils: () => ({
-      users: { list: { invalidate: mocks.invalidate } },
-    }),
     users: {
       list: {
-        useQuery: () => ({
-          data: mocks.listData,
-          isLoading: false,
-          error: null,
-        }),
-      },
-      grantRole: {
-        useMutation: (opts: {
-          onSuccess?: (data: unknown, variables: { targetUserId: string }) => void;
-          onError?: (err: unknown, variables: { targetUserId: string }) => void;
-        }) => {
-          mocks.grantOpts.onSuccess = opts.onSuccess;
-          mocks.grantOpts.onError = opts.onError;
-          return {
-            mutate: (input: { targetUserId: string; toRole: string }) =>
-              mocks.grantMutate(input),
-            isPending: false,
-            error: null,
-          };
-        },
+        useQuery: () => ({ ...listState }),
       },
     },
   },
@@ -62,148 +34,73 @@ vi.mock('@/lib/trpc-client', () => ({
 import { UserListTable } from '@/components/UserListTable';
 
 beforeEach(() => {
-  mocks.push.mockClear();
-  mocks.invalidate.mockClear();
-  mocks.grantMutate.mockClear();
-  mocks.listData = [];
-  mocks.searchParams = new URLSearchParams();
-  mocks.grantOpts.onSuccess = undefined;
-  mocks.grantOpts.onError = undefined;
+  listState.data = [];
+  listState.isLoading = false;
+  listState.error = null;
 });
 
-describe('<UserListTable>', () => {
-  it('AC-08: renders one row per user with display name, email, role chip', () => {
-    mocks.listData = [
+describe('<UserListTable> (read-only roster)', () => {
+  it('AC-08: renders the portal note and one row per user with name, email, role pill', () => {
+    listState.data = [
       { id: 'u-1', displayName: 'Alice', email: 'a@x', role: 'Admin' },
-      { id: 'u-2', displayName: 'Bob', email: 'b@x', role: 'Alumni' },
+      { id: 'u-2', displayName: 'Bob', email: 'b@x', role: 'Member' },
     ];
     render(<UserListTable />);
+
+    expect(
+      screen.getByTestId('user-list-portal-note'),
+    ).toBeInTheDocument();
+
     const rows = screen.getAllByTestId('user-list-row');
     expect(rows).toHaveLength(2);
     expect(rows[0]!).toHaveAttribute('data-user-id', 'u-1');
+    expect(rows[0]!).toHaveAttribute('data-user-role', 'Admin');
     expect(rows[0]!).toHaveTextContent('Alice');
     expect(rows[0]!).toHaveTextContent('a@x');
-    expect(rows[1]!).toHaveAttribute('data-user-role', 'Alumni');
+    expect(rows[1]!).toHaveAttribute('data-user-role', 'Member');
     expect(rows[1]!).toHaveTextContent('Bob');
+
+    // Display-name links to the per-user page; role renders as a static pill.
+    const names = screen.getAllByTestId('user-list-display-name');
+    expect(names[0]!).toHaveAttribute('href', '/admin/users/u-1');
+    const pills = screen.getAllByTestId('user-list-role');
+    expect(pills.map((p) => p.textContent)).toEqual(['Admin', 'Member']);
   });
 
-  it('clicking the role chip opens a menu of target roles (excluding current)', () => {
-    mocks.listData = [
-      { id: 'u-1', displayName: 'Alice', email: 'a@x', role: 'Alumni' },
-    ];
-    render(<UserListTable />);
-    fireEvent.click(screen.getByTestId('user-list-role-chip'));
-    expect(screen.getByTestId('user-list-role-menu')).toBeInTheDocument();
-    expect(
-      screen.getByTestId('user-list-role-option-Active'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByTestId('user-list-role-option-Moderator'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByTestId('user-list-role-option-Admin'),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByTestId('user-list-role-option-Alumni'),
-    ).not.toBeInTheDocument();
-  });
-
-  it('grant to non-Admin from non-Admin target fires mutate without confirm', () => {
-    mocks.listData = [
-      { id: 'u-1', displayName: 'Alice', email: 'a@x', role: 'Alumni' },
-    ];
-    render(<UserListTable />);
-    fireEvent.click(screen.getByTestId('user-list-role-chip'));
-    fireEvent.click(screen.getByTestId('user-list-role-option-Moderator'));
-    expect(mocks.grantMutate).toHaveBeenCalledWith({
-      targetUserId: 'u-1',
-      toRole: 'Moderator',
-    });
-    expect(
-      screen.queryByTestId('user-list-demote-confirm'),
-    ).not.toBeInTheDocument();
-  });
-
-  it('demoting an Admin opens a confirm dialog before mutating', () => {
-    mocks.listData = [
+  it('exposes NO role-change surface — no chip menu, options, or demote modal', () => {
+    listState.data = [
       { id: 'u-1', displayName: 'Alice', email: 'a@x', role: 'Admin' },
+      { id: 'u-2', displayName: 'Bob', email: 'b@x', role: 'Moderator' },
     ];
     render(<UserListTable />);
-    fireEvent.click(screen.getByTestId('user-list-role-chip'));
-    fireEvent.click(screen.getByTestId('user-list-role-option-Alumni'));
-    expect(screen.getByTestId('user-list-demote-confirm')).toBeInTheDocument();
-    expect(mocks.grantMutate).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByTestId('user-list-demote-confirm-submit'));
-    expect(mocks.grantMutate).toHaveBeenCalledWith({
-      targetUserId: 'u-1',
-      toRole: 'Alumni',
-    });
+
+    // The role cell is a plain pill, not an interactive chip/button.
+    const pill = screen.getAllByTestId('user-list-role')[0]!;
+    expect(pill.tagName).toBe('SPAN');
+
+    expect(screen.queryByTestId('user-list-role-chip')).toBeNull();
+    expect(screen.queryByTestId('user-list-role-menu')).toBeNull();
+    for (const role of ['Member', 'Moderator', 'Admin'] as const) {
+      expect(
+        screen.queryByTestId(`user-list-role-option-${role}`),
+      ).toBeNull();
+    }
+    expect(screen.queryByTestId('user-list-demote-confirm')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
   });
 
-  it('Cancel on the Admin-demote confirm dialog closes without mutating', () => {
-    mocks.listData = [
-      { id: 'u-1', displayName: 'Alice', email: 'a@x', role: 'Admin' },
-    ];
+  it('shows a loading state while users.list is pending', () => {
+    listState.isLoading = true;
     render(<UserListTable />);
-    fireEvent.click(screen.getByTestId('user-list-role-chip'));
-    fireEvent.click(screen.getByTestId('user-list-role-option-Active'));
-    fireEvent.click(screen.getByTestId('user-list-demote-cancel'));
-    expect(
-      screen.queryByTestId('user-list-demote-confirm'),
-    ).not.toBeInTheDocument();
-    expect(mocks.grantMutate).not.toHaveBeenCalled();
+    expect(screen.getByTestId('users-loading')).toBeInTheDocument();
+    expect(screen.queryByTestId('user-list-row')).toBeNull();
   });
 
-  it('renders MinAdminErrorBanner inline on MIN_ADMIN_INVARIANT_VIOLATED', () => {
-    mocks.listData = [
-      { id: 'u-1', displayName: 'Alice', email: 'a@x', role: 'Admin' },
-    ];
+  it('surfaces a query error', () => {
+    listState.error = { message: 'boom' };
     render(<UserListTable />);
-    fireEvent.click(screen.getByTestId('user-list-role-chip'));
-    fireEvent.click(screen.getByTestId('user-list-role-option-Alumni'));
-    fireEvent.click(screen.getByTestId('user-list-demote-confirm-submit'));
-    act(() => {
-      mocks.grantOpts.onError?.(
-        { data: { appCode: 'MIN_ADMIN_INVARIANT_VIOLATED' } },
-        { targetUserId: 'u-1' },
-      );
-    });
-    expect(screen.getByTestId('min-admin-error-banner')).toBeInTheDocument();
-    expect(
-      screen.getByTestId('min-admin-error-banner-link'),
-    ).toBeInTheDocument();
-  });
-
-  it('redirects to the validated returnTo after a successful grant', async () => {
-    mocks.searchParams = new URLSearchParams('returnTo=/profile');
-    mocks.listData = [
-      { id: 'u-1', displayName: 'Alice', email: 'a@x', role: 'Alumni' },
-    ];
-    render(<UserListTable />);
-    fireEvent.click(screen.getByTestId('user-list-role-chip'));
-    fireEvent.click(screen.getByTestId('user-list-role-option-Admin'));
-    await act(async () => {
-      await mocks.grantOpts.onSuccess?.(undefined, { targetUserId: 'u-1' });
-    });
-    expect(mocks.push).toHaveBeenCalledWith('/profile');
-  });
-
-  it('ignores an open-redirect returnTo (https:// or //evil)', async () => {
-    mocks.searchParams = new URLSearchParams(
-      'returnTo=https://evil.example.com',
-    );
-    mocks.listData = [
-      { id: 'u-1', displayName: 'Alice', email: 'a@x', role: 'Alumni' },
-    ];
-    render(<UserListTable />);
-    expect(
-      screen.queryByTestId('user-list-return-banner'),
-    ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('user-list-role-chip'));
-    fireEvent.click(screen.getByTestId('user-list-role-option-Admin'));
-    await act(async () => {
-      await mocks.grantOpts.onSuccess?.(undefined, { targetUserId: 'u-1' });
-    });
-    expect(mocks.push).not.toHaveBeenCalled();
+    const err = screen.getByTestId('users-error');
+    expect(err).toHaveTextContent('boom');
+    expect(screen.queryByTestId('user-list-row')).toBeNull();
   });
 });

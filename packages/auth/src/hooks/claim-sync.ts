@@ -10,17 +10,14 @@ import {
   tierAllowsRole,
   type PortalTier,
 } from '../portal-tiers';
-import {
-  parseMemberStatus,
-  statusToRole,
-  type MemberStatus,
-} from '../portal-status';
 
 /**
- * ADR-013 claim sync: the portal (sigoalumni.org) is the only identity
- * source; app roles are derived from the `tier` claim at every sign-in
- * (session create). Role writes route through `transitionRole` so the
- * user_role_transitions audit trail stays honest (PLAN-003 invariant).
+ * ADR-013 / ADR-015 claim sync: the portal (sigoalumni.org) is the only
+ * identity source; app roles are derived from the `tier` claim ALONE at every
+ * sign-in (session create). The id_token also carries a `status` claim, but it
+ * is orthogonal to roles and is NEVER read here — member status can only move
+ * status, never role (ADR-015). Role writes route through `transitionRole` so
+ * the user_role_transitions audit trail stays honest (PLAN-003 invariant).
  */
 
 const membershipPendingError = () =>
@@ -49,15 +46,10 @@ export function decodeJwtClaims(jwt: string): Record<string, unknown> | null {
   }
 }
 
-export interface PortalClaims {
-  tier: PortalTier | null;
-  /** ADR-014 `status` claim — sign-in snapshot; null when absent/undeclared. */
-  status: MemberStatus | null;
-}
-
-/** Read the freshest portal claims for a user from the stored sigo-portal
- * id_token (updated on every sign-in via updateAccountOnSignIn). */
-export async function readPortalClaims(userId: string): Promise<PortalClaims> {
+/** Read the freshest portal tier for a user from the stored sigo-portal
+ * id_token (updated on every sign-in via updateAccountOnSignIn). Member status
+ * is intentionally NOT read here — it is orthogonal to roles (ADR-015). */
+export async function readPortalTier(userId: string): Promise<PortalTier | null> {
   const [row] = await db
     .select({ idToken: account.idToken })
     .from(account)
@@ -66,18 +58,10 @@ export async function readPortalClaims(userId: string): Promise<PortalClaims> {
     )
     .orderBy(desc(account.updatedAt))
     .limit(1);
-  if (!row?.idToken) return { tier: null, status: null };
+  if (!row?.idToken) return null;
   const claims = decodeJwtClaims(row.idToken);
-  if (!claims) return { tier: null, status: null };
-  return {
-    tier: parsePortalTier(claims.tier),
-    status: parseMemberStatus(claims.status),
-  };
-}
-
-/** Back-compat wrapper — tier only. */
-export async function readPortalTier(userId: string): Promise<PortalTier | null> {
-  return (await readPortalClaims(userId)).tier;
+  if (!claims) return null;
+  return parsePortalTier(claims.tier);
 }
 
 export type ClaimSyncOutcome =
@@ -101,7 +85,7 @@ export type ClaimSyncOutcome =
 export async function syncRoleFromPortalTier(
   userId: string,
 ): Promise<ClaimSyncOutcome> {
-  const { tier, status } = await readPortalClaims(userId);
+  const tier = await readPortalTier(userId);
   if (!tier) return { kind: 'skipped', reason: 'no-portal-tier' };
   if (tier === 'pending') return { kind: 'refused' };
 
@@ -111,24 +95,14 @@ export async function syncRoleFromPortalTier(
     .where(eq(users.id, userId));
   if (!row) return { kind: 'skipped', reason: 'no-user-row' };
 
-  // ADR-014: for `brother` a DECLARED `status` claim pins which of the two
-  // brother-consistent roles the user holds (active → Active, alumni →
-  // Alumni). Absent/undeclared status keeps the pre-status behavior: both
-  // Active and Alumni are consistent with `brother`, so nothing moves.
-  let target: Role | 'refused';
-  let note: string;
-  if (tier === 'brother' && status) {
-    const desired = statusToRole(status);
-    if (row.role === desired) return { kind: 'unchanged', role: row.role };
-    target = desired;
-    note = `portal claim-sync: tier=${tier} status=${status} (ADR-014)`;
-  } else {
-    if (tierAllowsRole(tier, row.role)) {
-      return { kind: 'unchanged', role: row.role };
-    }
-    target = mapTierToRole(tier);
-    note = `portal claim-sync: tier=${tier} (ADR-013)`;
+  // ADR-015: role follows tier ALONE. The `status` claim is orthogonal and
+  // never consulted here — `brother` maps to Member whether the member is
+  // active or alumni.
+  if (tierAllowsRole(tier, row.role)) {
+    return { kind: 'unchanged', role: row.role };
   }
+  const target: Role | 'refused' = mapTierToRole(tier);
+  const note = `portal claim-sync: tier=${tier} (ADR-013)`;
   if (target === 'refused') return { kind: 'refused' }; // unreachable (pending handled above)
 
   const attempt = async (toRole: Role): Promise<void> => {

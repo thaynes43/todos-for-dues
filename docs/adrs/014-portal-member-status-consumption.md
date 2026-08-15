@@ -1,7 +1,7 @@
 ---
 id: ADR-014
 title: Consume portal member status (active|alumni) as the source for the Active/Alumni role partition
-status: Accepted
+status: Superseded by 015
 date: 2026-08-14
 deciders: [Tom Haynes]
 consulted: [sigo-alumni backlog item 07 (member status designation), sigo-alumni ADR 0005 (registry), sigo-alumni ADR 0006 (tiers)]
@@ -12,7 +12,7 @@ related:
   flows: []
   designs: []
   supersedes: null
-  superseded_by: null
+  superseded_by: ADR-015
 ---
 
 ## Context and problem statement

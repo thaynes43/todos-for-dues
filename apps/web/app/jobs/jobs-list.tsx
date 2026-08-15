@@ -9,9 +9,12 @@ import type { JobState, Role } from '@app/db/schema';
 
 export function JobsList({
   role,
+  canPost,
   stateFilter,
 }: {
   role: Role;
+  /** ADR-015: member STATUS is alumni — may post, so "My postings" shows. */
+  canPost: boolean;
   stateFilter?: JobState | null;
 }) {
   const filteredEnabled =
@@ -36,9 +39,7 @@ export function JobsList({
   );
 
   const myPosted = trpc.jobs.listMyPosted.useQuery(undefined, {
-    enabled:
-      !filteredEnabled &&
-      (role === 'Alumni' || role === 'Moderator' || role === 'Admin'),
+    enabled: !filteredEnabled && canPost,
   });
 
   if (filteredEnabled) {
@@ -120,7 +121,7 @@ export function JobsList({
         )}
       </section>
 
-      {(role === 'Alumni' || role === 'Moderator' || role === 'Admin') && (
+      {canPost && (
         <section>
           <h2 className="mb-4 text-2xl font-semibold sm:text-3xl">
             My postings

@@ -36,7 +36,8 @@ test.describe('PRD-007 AC-05 — Disputes list shape', () => {
       await expect(row).toBeVisible();
       await expect(row).toContainText(description);
       await expect(row).toContainText(cast.active.displayName);
-      await expect(row).toContainText('(Active)');
+      // ADR-015: the disputer's DB role is Member (status active is orthogonal).
+      await expect(row).toContainText('(Member)');
       await expect(row.getByTestId('dispute-card-reason')).toContainText(reason);
       const age = row.getByTestId('dispute-card-age');
       await expect(age).toBeVisible();

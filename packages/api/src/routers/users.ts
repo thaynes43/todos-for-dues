@@ -1,59 +1,18 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { asc, desc, eq } from 'drizzle-orm';
-import { users, userRoleTransitions, ROLES, type Role } from '@app/db/schema';
-import { transitionRole } from '@app/domain';
-import {
-  authedProcedure,
-  mapDomainErrors,
-  publicProcedure,
-  router,
-} from '../trpc';
+import { users, userRoleTransitions } from '@app/db/schema';
+import { authedProcedure, publicProcedure, router } from '../trpc';
 import { adminProcedure } from '../middleware/role';
 
-const SELF_SERVICE_ROLES = z.enum(['Active', 'Alumni']);
-
+// ADR-015: roles are portal-derived ONLY. The self-service `changeRole` and
+// admin `grantRole` procedures were REMOVED — they wrote `users.role`
+// directly, which is exactly the landmine the owner stepped on (a status
+// toggle rewrote his Admin role). Claim-sync (packages/auth) is now the sole
+// role writer; membership status moves through `memberStatus` and never
+// touches role. Both writes were already ephemeral under SSO claim-sync
+// (ADR-013 C-07), so nothing user-visible is lost.
 export const usersRouter = router({
-  // PRD-008 R-01/R-04 self-service role change. Schema enumerates only the
-  // non-privileged roles — self-elevation requests get a Zod BAD_REQUEST
-  // before they reach any business logic.
-  changeRole: authedProcedure
-    .input(z.object({ toRole: SELF_SERVICE_ROLES }))
-    .mutation(async ({ ctx, input }) => {
-      return mapDomainErrors(async () => {
-        await transitionRole({
-          targetUserId: ctx.userId,
-          expectedFromRole: ctx.userRole,
-          toRole: input.toRole,
-          initiator: { id: ctx.userId, kind: 'user' },
-        });
-      });
-    }),
-
-  // PRD-008 R-02/R-03 — Admin grants any role to any user.
-  grantRole: adminProcedure
-    .input(
-      z.object({
-        targetUserId: z.string().uuid(),
-        toRole: z.enum(ROLES),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      return mapDomainErrors(async () => {
-        const [target] = await ctx.db
-          .select({ role: users.role })
-          .from(users)
-          .where(eq(users.id, input.targetUserId));
-        if (!target) throw new TRPCError({ code: 'NOT_FOUND' });
-        await transitionRole({
-          targetUserId: input.targetUserId,
-          expectedFromRole: target.role as Role,
-          toRole: input.toRole,
-          initiator: { id: ctx.userId, kind: 'admin' },
-        });
-      });
-    }),
-
   // PRD-007 R-08 / PRD-008 R-08 — Admin list of all users.
   list: adminProcedure.query(async ({ ctx }) => {
     return ctx.db

@@ -4,11 +4,9 @@ import {
   memberStatusUrl,
   parseMemberStatus,
   resolvePortalApiBaseUrl,
-  roleToStatus,
-  statusToRole,
 } from '../src/portal-status';
 
-describe('ADR-014 member status parsing + projection', () => {
+describe('ADR-015 member status parsing (orthogonal to role — no projection)', () => {
   it('parseMemberStatus accepts only the two contract values (null = undeclared)', () => {
     for (const status of MEMBER_STATUSES) {
       expect(parseMemberStatus(status)).toBe(status);
@@ -20,21 +18,9 @@ describe('ADR-014 member status parsing + projection', () => {
     expect(parseMemberStatus(undefined)).toBeNull();
     expect(parseMemberStatus(1)).toBeNull();
   });
-
-  it('projects status onto the Active/Alumni partition only', () => {
-    expect(statusToRole('active')).toBe('Active');
-    expect(statusToRole('alumni')).toBe('Alumni');
-  });
-
-  it('roleToStatus inverts on the partition and is null for privileged roles', () => {
-    expect(roleToStatus('Active')).toBe('active');
-    expect(roleToStatus('Alumni')).toBe('alumni');
-    expect(roleToStatus('Moderator')).toBeNull();
-    expect(roleToStatus('Admin')).toBeNull();
-  });
 });
 
-describe('ADR-014 portal API base URL from OIDC_DISCOVERY_URL (no new env var)', () => {
+describe('ADR-015 portal API base URL from OIDC_DISCOVERY_URL (no new env var)', () => {
   it('is the origin of the discovery URL', () => {
     expect(
       resolvePortalApiBaseUrl(

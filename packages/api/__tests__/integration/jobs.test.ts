@@ -187,7 +187,11 @@ describe('jobs router', () => {
     });
 
     it('AC-09: Moderator approves a job they themselves posted (self-approval)', async () => {
-      const c = caller(makeCtx({ userId: users.moderator, role: 'Moderator' }));
+      // ADR-015: posting is gated on member STATUS, so this Moderator must be
+      // status-alumni to post (role no longer grants the posting capability).
+      const c = caller(
+        makeCtx({ userId: users.moderator, role: 'Moderator', status: 'alumni' }),
+      );
       const { jobId } = await c.jobs.post({
         description: 'mod self-post',
         duesAmount: 10,
@@ -697,7 +701,7 @@ describe('jobs router', () => {
       }
       // 4th enrollee
       await testDb.pool.query(
-        `INSERT INTO users (email, display_name, role) VALUES ('active4@test.invalid', 'Dan Active', 'Active') RETURNING id`,
+        `INSERT INTO users (email, display_name, role) VALUES ('active4@test.invalid', 'Dan Active', 'Member') RETURNING id`,
       );
       const { rows: dRows } = await testDb.pool.query<{ id: string }>(
         `SELECT id FROM users WHERE email='active4@test.invalid'`,
@@ -1041,12 +1045,14 @@ describe('jobs router', () => {
       expect(list).toHaveLength(1);
     });
 
-    it('Active restricted to enrollment_open', async () => {
-      await expect(
-        caller(makeCtx({ userId: users.active1, role: 'Active' })).jobs.listByState({
-          state: 'awaiting_moderation',
-        }),
-      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    // ADR-015: listByState is scoped by OWNERSHIP for non-privileged members,
+    // not status/role — a status-active member with no postings simply sees an
+    // empty list for a non-public state (no FORBIDDEN, no cross-member leak).
+    it('non-privileged member sees only own postings in non-public states', async () => {
+      const list = await caller(
+        makeCtx({ userId: users.active1, role: 'Active' }),
+      ).jobs.listByState({ state: 'awaiting_moderation' });
+      expect(list).toEqual([]);
     });
 
     it('Alumni sees own awaiting_moderation only', async () => {

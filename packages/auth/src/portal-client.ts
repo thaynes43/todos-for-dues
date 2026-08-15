@@ -13,20 +13,19 @@ import { PORTAL_PROVIDER_ID } from './portal-tiers';
  *   GET <portal>/api/member/status            → { status: 'active'|'alumni'|null }
  *   PUT <portal>/api/member/status            body { status: 'active'|'alumni' }
  *
- * Both authenticated with the user's OIDC access token from sign-in. The
- * portal side ships post-8/17 — until the route exists every call resolves
- * to `{ kind: 'unavailable' }` and the app falls back to local-only
- * Active/Alumni self-service, so nothing here blocks on the portal.
+ * Both authenticated with the user's OIDC access token from sign-in.
  *
- * Feature detection / 404 disambiguation (contract ambiguity, tolerant
- * reading): the contract's 404 for "no linked registry row" is
- * indistinguishable at the status-code level from a route-level 404 on a
- * portal that hasn't shipped the endpoint yet. Heuristic: a 404 whose body
- * is JSON with an `error`/`code`/`message` field is an APPLICATION 404 from
- * an existing route ⇒ `no-registry-row`; anything else (HTML error page,
- * empty body, plain text) is a ROUTE-LEVEL 404 ⇒ `unavailable` (feature
- * off). 409 is unambiguous (`no-registry-row`); 501 and network refusal ⇒
- * `unavailable`.
+ * Response classification is pinned to the portal's shipped route contract
+ * (sigo-alumni backlog item 07, verified against the portal source):
+ *   - GET 200 `{ status: 'active'|'alumni'|null }` ⇒ `ok` / `undeclared`;
+ *   - PUT any 2xx ⇒ `ok` (the caller re-GETs);
+ *   - **409 JSON `{ code: 'no_registry_row' }`** ⇒ `no-registry-row`: an
+ *     authenticated member with no linked registry row (Pending) — consumers
+ *     hide the control;
+ *   - 404 is reserved for route-absent, so 404/401/501/5xx/non-JSON all ⇒
+ *     `unavailable` (portal down / not yet shipped) — consumers hide the
+ *     control and never fall back to any local role write (there is no local
+ *     status store anymore, ADR-015).
  */
 
 export type MemberStatusReadResult =
@@ -57,34 +56,12 @@ type FetchLike = (
 /** Upstream timeout — the profile page must not hang on a dead portal. */
 const PORTAL_TIMEOUT_MS = 5_000;
 
-function isJsonObjectWithErrorField(
-  contentType: string | null,
-  body: string,
-): boolean {
-  if (!contentType?.toLowerCase().includes('json')) return false;
-  try {
-    const parsed = JSON.parse(body) as unknown;
-    if (typeof parsed !== 'object' || parsed === null) return false;
-    return 'error' in parsed || 'code' in parsed || 'message' in parsed;
-  } catch {
-    return false;
-  }
-}
-
-function classifyFailure(
-  status: number,
-  contentType: string | null,
-  body: string,
-): 'no-registry-row' | 'unavailable' {
+function classifyFailure(status: number): 'no-registry-row' | 'unavailable' {
+  // Pinned contract: 409 is the ONLY no-registry-row signal (authenticated
+  // member, no linked row). 404 is reserved for route-absent, so it — like
+  // 401/501/5xx/anything unexpected — classifies `unavailable`: hide the
+  // control, write nothing.
   if (status === 409) return 'no-registry-row';
-  if (status === 404) {
-    // Route-404 vs no-row-404 heuristic — see module doc.
-    return isJsonObjectWithErrorField(contentType, body)
-      ? 'no-registry-row'
-      : 'unavailable';
-  }
-  // 501 (not implemented), auth failures, 5xx, anything unexpected: keep the
-  // portal-backed path dormant rather than guessing.
   return 'unavailable';
 }
 
@@ -127,7 +104,7 @@ export async function fetchMemberStatus(
       return { kind: 'unavailable' };
     }
   }
-  return { kind: classifyFailure(res.status, res.headers.get('content-type'), body) };
+  return { kind: classifyFailure(res.status) };
 }
 
 /** PUT a new status. Same auth + classification as the GET. */
@@ -153,8 +130,7 @@ export async function sendMemberStatus(
     return { kind: 'unavailable' };
   }
   if (res.status >= 200 && res.status < 300) return { kind: 'ok' };
-  const body = await res.text().catch(() => '');
-  return { kind: classifyFailure(res.status, res.headers.get('content-type'), body) };
+  return { kind: classifyFailure(res.status) };
 }
 
 /**
@@ -202,4 +178,45 @@ export async function putMemberStatus(
   const token = await getPortalAccessToken(userId);
   if (!token) return { kind: 'unavailable' };
   return sendMemberStatus(baseUrl, token, status);
+}
+
+/**
+ * Collapsed member status for ACCESS GATING (ADR-015). The job-board gates key
+ * on this value directly — status `active` can claim/enroll, status `alumni`
+ * can post — never on role. Everything that is not a declared status (`null`
+ * undeclared, `no-registry-row` for a member with no linked row, `unavailable`
+ * when the portal is down/unshipped) collapses to a state that can do neither;
+ * gating fails closed. A user with no registry row is treated like undeclared.
+ */
+export type MemberStatusGate =
+  | MemberStatus
+  | 'undeclared'
+  | 'no-registry-row'
+  | 'unavailable';
+
+/** Resolve the gating status for a user — one fresh portal read (ADR-015). */
+export async function getMemberStatusGate(
+  userId: string,
+): Promise<MemberStatusGate> {
+  const read = await getMemberStatus(userId);
+  switch (read.kind) {
+    case 'ok':
+      return read.status;
+    case 'undeclared':
+      return 'undeclared';
+    case 'no-registry-row':
+      return 'no-registry-row';
+    case 'unavailable':
+      return 'unavailable';
+  }
+}
+
+/** True iff the resolved status permits claiming/enrolling in jobs (ADR-015). */
+export function statusCanClaim(gate: MemberStatusGate): boolean {
+  return gate === 'active';
+}
+
+/** True iff the resolved status permits posting jobs (ADR-015). */
+export function statusCanPost(gate: MemberStatusGate): boolean {
+  return gate === 'alumni';
 }

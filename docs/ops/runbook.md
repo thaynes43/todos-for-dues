@@ -7,7 +7,7 @@ owner: Tom Haynes
 # TODOs for Dues — Ops Runbook
 
 Operator-scannable cheat-sheet for the deployed launch chapter
-(`https://todos-for-dues.haynesops.com`). Each section is meant to be
+(`https://dues.sigoalumni.org`). Each section is meant to be
 read in under 30 seconds during an incident. When a section is verified
 against the live environment, bump its `Last verified` stamp.
 
@@ -168,14 +168,14 @@ The exact path Better Auth's `genericOAuth` plugin uses (per PLAN-009
 §7 reconciliation, 2026-05-17):
 
 ```
-https://todos-for-dues.haynesops.com/api/auth/oauth2/callback/{providerId}
+https://dues.sigoalumni.org/api/auth/oauth2/callback/{providerId}
 ```
 
 Where `{providerId}` is `sigo-portal` (`PORTAL_PROVIDER_ID` in
 `packages/auth/src/portal-tiers.ts`), so the registered value is:
 
 ```
-https://todos-for-dues.haynesops.com/api/auth/oauth2/callback/sigo-portal
+https://dues.sigoalumni.org/api/auth/oauth2/callback/sigo-portal
 ```
 
 This MUST match the client registration at the sigoalumni.org portal
@@ -211,7 +211,7 @@ If a challenge is `Pending` for > 5 minutes:
 - Confirm the Traefik IngressRoute routes `/.well-known/acme-challenge/*`
   to the cert-manager solver service (it should — the default solver
   service is created automatically).
-- DNS — `dig todos-for-dues.haynesops.com` must resolve to the cluster
+- DNS — `dig dues.sigoalumni.org` must resolve to the cluster
   ingress IP.
 - Let's Encrypt rate limits — 5 duplicate certificates / week. If hit,
   switch to the staging issuer temporarily.

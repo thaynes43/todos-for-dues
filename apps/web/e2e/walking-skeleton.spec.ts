@@ -81,15 +81,19 @@ test.describe('PLAN-008 walking skeleton — full happy-path job loop', () => {
           email: alumni.email,
           name: alumni.displayName,
           tier: 'brother',
+          // ADR-015: posting is gated on member STATUS (alumni), orthogonal to
+          // role. Declare it so this poster can reach /jobs/new.
+          status: 'alumni',
         });
         await signInAs(page, alumni.email);
 
-        // The OAuth callback created the user with the mapped role (ADR-013).
+        // The OAuth callback created the user with the tier-mapped role
+        // (ADR-013/ADR-015: brother → Member; status alumni is orthogonal).
         const created = await pool.query<{ role: string }>(
           `SELECT role FROM users WHERE email = $1`,
           [alumni.email],
         );
-        expect(created.rows[0]?.role).toBe('Alumni');
+        expect(created.rows[0]?.role).toBe('Member');
 
         await page.goto('/jobs/new');
         await page.getByPlaceholder(/Describe the job/i).fill(description);
