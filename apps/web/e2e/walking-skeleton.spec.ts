@@ -9,6 +9,7 @@ import {
   signInAs,
 } from './fixtures/personas';
 import { seedPersona } from './walking-skeleton/support/seed';
+import { lockWithRefill } from './walking-skeleton/support/flow';
 
 /**
  * PLAN-008 canonical walking-skeleton spec — the single chained Playwright
@@ -30,12 +31,6 @@ import { seedPersona } from './walking-skeleton/support/seed';
  * canonical sequence are filtered out explicitly so the assertion stays
  * deterministic across multi-Active permutations.
  */
-
-function futureLocalDatetimeMinutes(minutesAhead: number): string {
-  const d = new Date(Date.now() + minutesAhead * 60_000);
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
-}
 
 async function pollState(
   pool: Pool,
@@ -174,10 +169,9 @@ test.describe('PLAN-008 walking skeleton — full happy-path job loop', () => {
         await logoutAndClear(page);
         await signInAs(page, alumni.email);
         await page.goto(`/jobs/${jobId}`);
-        await page
-          .getByTestId('lock-job-work-date')
-          .fill(futureLocalDatetimeMinutes(60 * 24 * 2));
-        await page.getByTestId('lock-job-submit').click();
+        // Controlled datetime input + ADR-015 per-load status read widened the
+        // pre-hydration window — refill until the submit enables (see flow.ts).
+        await lockWithRefill(page);
         await pollState(pool, jobId, 'locked');
       });
 

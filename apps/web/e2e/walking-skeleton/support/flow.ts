@@ -123,18 +123,37 @@ export async function driveToLocked(opts: DriveOpts): Promise<string> {
   const jobId = await driveToEnrolled(opts);
   await reAuth(opts.page, opts.context, opts.personas.alumni);
   await opts.page.goto(`/jobs/${jobId}`);
-  // Wait for /jobs/[jobId] to hydrate before driving the lock form. On cold
-  // GHA runners the submit button stayed `disabled` past 30s because React
-  // state hadn't caught up to the .fill() yet.
-  await opts.page.waitForLoadState('load');
-  await opts.page
-    .getByTestId('lock-job-work-date')
-    .fill(futureLocalDatetimeMinutes(60 * 24 * 3));
-  const submit = opts.page.getByTestId('lock-job-submit');
-  await expect(submit).toBeEnabled({ timeout: 30_000 });
-  await submit.click();
+  await lockWithRefill(opts.page);
   await pollJobState(opts.pool, jobId, 'locked');
   return jobId;
+}
+
+/**
+ * Fill the lock work-date and submit, re-filling until the submit enables.
+ * The datetime-local input is a CONTROLLED field: a `.fill()` that lands before
+ * React hydration is wiped when the controlled input mounts (state resets to
+ * ''), leaving `lock-job-submit` disabled forever. Re-filling in a poll loop
+ * (the mvp/support.ts pattern) is robust to that window — which the ADR-015
+ * per-page-load status read widened. `waitForLoadState('load')` first so the
+ * first fill has the best chance of sticking.
+ */
+export async function lockWithRefill(page: Page): Promise<void> {
+  await page.waitForLoadState('load');
+  const workDate = futureLocalDatetimeMinutes(60 * 24 * 3);
+  const dateBox = page.getByTestId('lock-job-work-date');
+  await dateBox.fill(workDate);
+  const submit = page.getByTestId('lock-job-submit');
+  await expect
+    .poll(
+      async () => {
+        if (await submit.isEnabled().catch(() => false)) return true;
+        await dateBox.fill(workDate);
+        return submit.isEnabled().catch(() => false);
+      },
+      { timeout: 30_000, intervals: [300, 700, 1500] },
+    )
+    .toBe(true);
+  await submit.click();
 }
 
 export async function driveToCompleted(opts: DriveOpts): Promise<string> {
