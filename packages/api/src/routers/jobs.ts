@@ -25,10 +25,10 @@ import {
 } from '@app/notifications';
 import { authedProcedure, mapDomainErrors, router } from '../trpc';
 import {
-  activeProcedure,
   adminProcedure,
-  alumniProcedure,
+  claimProcedure,
   moderatorProcedure,
+  postProcedure,
 } from '../middleware/role';
 import { jobPosterProcedure } from '../middleware/job';
 import { computeDuesSplit } from '../dues';
@@ -60,7 +60,8 @@ export const jobsRouter = router({
   // ─── Mutations ─────────────────────────────────────────────────────
 
   // CMD-01 PostJob — PRD-002 R-01..R-05 + R-12, extended by PRD-010 R-01..R-07.
-  post: alumniProcedure
+  // ADR-015: posting is gated on member STATUS (alumni), not role.
+  post: postProcedure
     .input(
       z.object({
         description: z.string().trim().min(1),
@@ -140,7 +141,8 @@ export const jobsRouter = router({
     }),
 
   // CMD-04 EnrollInJob — PRD-004 R-02 / AC-03 (idempotent)
-  enroll: activeProcedure
+  // ADR-015: enrolling is gated on member STATUS (active), not role.
+  enroll: claimProcedure
     .input(jobIdInput)
     .mutation(async ({ ctx, input }) => {
       return mapDomainErrors(async () => {
@@ -184,7 +186,7 @@ export const jobsRouter = router({
     }),
 
   // CMD-05 UnenrollFromJob — PRD-004 R-03/R-04
-  unenroll: activeProcedure
+  unenroll: claimProcedure
     .input(jobIdInput)
     .mutation(async ({ ctx, input }) => {
       return mapDomainErrors(async () => {
@@ -537,19 +539,20 @@ export const jobsRouter = router({
       const raw = (await getRawInput()) as { jobId?: string } | undefined;
       const jobId = raw?.jobId;
       if (!jobId) throw new TRPCError({ code: 'BAD_REQUEST' });
+      // ADR-015: enrollment is the fact that grants confirm/dispute — an
+      // enrolled member (they were status-active when they enrolled), plus
+      // Admin. Role-orthogonal: no Active-role check.
       if (ctx.userRole === 'Admin') return next();
-      if (ctx.userRole === 'Active') {
-        const [row] = await ctx.db
-          .select({ jobId: jobEnrollments.jobId })
-          .from(jobEnrollments)
-          .where(
-            and(
-              eq(jobEnrollments.jobId, jobId),
-              eq(jobEnrollments.activeId, ctx.userId!),
-            ),
-          );
-        if (row) return next();
-      }
+      const [row] = await ctx.db
+        .select({ jobId: jobEnrollments.jobId })
+        .from(jobEnrollments)
+        .where(
+          and(
+            eq(jobEnrollments.jobId, jobId),
+            eq(jobEnrollments.activeId, ctx.userId!),
+          ),
+        );
+      if (row) return next();
       throw new TRPCError({ code: 'FORBIDDEN' });
     })
     .mutation(async ({ ctx, input }) => {
@@ -601,19 +604,20 @@ export const jobsRouter = router({
       const raw = (await getRawInput()) as { jobId?: string } | undefined;
       const jobId = raw?.jobId;
       if (!jobId) throw new TRPCError({ code: 'BAD_REQUEST' });
+      // ADR-015: enrollment is the fact that grants confirm/dispute — an
+      // enrolled member (they were status-active when they enrolled), plus
+      // Admin. Role-orthogonal: no Active-role check.
       if (ctx.userRole === 'Admin') return next();
-      if (ctx.userRole === 'Active') {
-        const [row] = await ctx.db
-          .select({ jobId: jobEnrollments.jobId })
-          .from(jobEnrollments)
-          .where(
-            and(
-              eq(jobEnrollments.jobId, jobId),
-              eq(jobEnrollments.activeId, ctx.userId!),
-            ),
-          );
-        if (row) return next();
-      }
+      const [row] = await ctx.db
+        .select({ jobId: jobEnrollments.jobId })
+        .from(jobEnrollments)
+        .where(
+          and(
+            eq(jobEnrollments.jobId, jobId),
+            eq(jobEnrollments.activeId, ctx.userId!),
+          ),
+        );
+      if (row) return next();
       throw new TRPCError({ code: 'FORBIDDEN' });
     })
     .mutation(async ({ ctx, input }) => {
@@ -735,19 +739,18 @@ export const jobsRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      // S-M3 (AUDIT-2026-08) gating:
+      // S-M3 (AUDIT-2026-08) gating, re-keyed for ADR-015 orthogonality:
       //   Admin / Moderator — any state (the /jobs state-filter UI is
-      //     privileged-only), full chapter visibility.
-      //   Active — enrollment_open only.
-      //   Alumni — enrollment_open freely; every other state restricted to
-      //     their own postings (no chapter-wide credit maps / reasons).
+      //     privileged-only), full chapter visibility (role-gated, unchanged).
+      //   Everyone else — enrollment_open freely (the public board); every
+      //     other state restricted to their OWN postings (no chapter-wide
+      //     credit maps / reasons). Ownership, not status, scopes this read —
+      //     so it needs no portal round-trip and stays orthogonal to status.
       const role = ctx.userRole;
-      if (role === 'Active' && input.state !== 'enrollment_open') {
-        throw new TRPCError({ code: 'FORBIDDEN' });
-      }
+      const privileged = role === 'Moderator' || role === 'Admin';
 
       let whereExpr;
-      if (role === 'Alumni' && input.state !== 'enrollment_open') {
+      if (!privileged && input.state !== 'enrollment_open') {
         whereExpr = and(
           eq(jobs.state, input.state),
           eq(jobs.postedBy, ctx.userId),
@@ -795,22 +798,6 @@ export const jobsRouter = router({
       const isPoster = job.postedBy === ctx.userId;
       const isPrivileged = role === 'Moderator' || role === 'Admin';
 
-      let viewerEnrolled = false;
-      if (role === 'Active') {
-        const [row] = await ctx.db
-          .select({ jobId: jobEnrollments.jobId })
-          .from(jobEnrollments)
-          .where(
-            and(
-              eq(jobEnrollments.jobId, input.jobId),
-              eq(jobEnrollments.activeId, ctx.userId),
-            ),
-          );
-        viewerEnrolled = Boolean(row);
-      }
-
-      const seesRoster = isPoster || isPrivileged || viewerEnrolled;
-
       const enrollmentRows = await ctx.db
         .select({
           activeId: jobEnrollments.activeId,
@@ -819,6 +806,13 @@ export const jobsRouter = router({
         })
         .from(jobEnrollments)
         .where(eq(jobEnrollments.jobId, input.jobId));
+
+      // ADR-015: enrollment is a fact, not a role. Any enrolled viewer sees the
+      // roster + their own credit — orthogonal to status/role.
+      const viewerEnrolled = enrollmentRows.some(
+        (r) => r.activeId === ctx.userId,
+      );
+      const seesRoster = isPoster || isPrivileged || viewerEnrolled;
 
       const enrolleeCount = enrollmentRows.length;
       const roster = seesRoster ? enrollmentRows : null;
@@ -844,7 +838,7 @@ export const jobsRouter = router({
         | { confirmed: boolean; amount: string | null }
         | null = null;
       if (
-        role === 'Active' &&
+        viewerEnrolled &&
         (job.state === 'completed' ||
           job.state === 'payment_sent' ||
           job.state === 'closed')
@@ -906,8 +900,8 @@ export const jobsRouter = router({
         .orderBy(asc(jobStateTransitions.createdAt));
     }),
 
-  // Q-04 ListMyPostedJobs — PRD-002 R-11
-  listMyPosted: alumniProcedure.query(async ({ ctx }) => {
+  // Q-04 ListMyPostedJobs — PRD-002 R-11 (ADR-015: status alumni)
+  listMyPosted: postProcedure.query(async ({ ctx }) => {
     return ctx.db
       .select()
       .from(jobs)
@@ -915,8 +909,8 @@ export const jobsRouter = router({
       .orderBy(desc(jobs.createdAt));
   }),
 
-  // Q-05 ListMyEnrolledJobs — PRD-004 R-06
-  listMyEnrolled: activeProcedure.query(async ({ ctx }) => {
+  // Q-05 ListMyEnrolledJobs — PRD-004 R-06 (ADR-015: status active)
+  listMyEnrolled: claimProcedure.query(async ({ ctx }) => {
     const rows = await ctx.db
       .select({
         id: jobs.id,

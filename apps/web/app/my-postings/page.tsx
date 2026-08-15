@@ -1,7 +1,8 @@
 import { headers } from 'next/headers';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getServerSession, getSessionRole } from '@app/auth';
+import { getServerSession } from '@app/auth';
+import { getMemberCapabilities } from '@/lib/access';
 import { getServerCaller } from '@/lib/trpc-server';
 import { JobStateBadge } from '@/components/JobStateBadge';
 import { PageHeader } from '@/components/PageHeader';
@@ -14,8 +15,10 @@ export const metadata = { title: 'My postings' };
 export default async function MyPostingsPage() {
   const session = await getServerSession(await headers());
   if (!session?.user?.id) redirect('/login');
-  const { role } = await getSessionRole(session.user.id);
-  if (role !== 'Alumni' && role !== 'Moderator' && role !== 'Admin') {
+  // ADR-015: "my postings" is the posting surface — gated on member STATUS
+  // (alumni), orthogonal to role.
+  const caps = await getMemberCapabilities(session.user.id);
+  if (!caps.canPost) {
     redirect('/');
   }
 

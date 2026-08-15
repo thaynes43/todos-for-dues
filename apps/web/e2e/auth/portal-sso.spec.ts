@@ -19,7 +19,7 @@ function createTestPool(): Pool {
 }
 
 test.describe('ADR-013 — portal SSO sign-in', () => {
-  test('brother tier: first sign-in creates an Alumni user, lands signed-in', async ({
+  test('brother tier: first sign-in creates a Member user, lands signed-in', async ({
     page,
   }) => {
     const errors: Error[] = [];
@@ -34,7 +34,8 @@ test.describe('ADR-013 — portal SSO sign-in', () => {
         `SELECT role, display_name FROM users WHERE email = $1`,
         [email],
       );
-      expect(rows[0]).toMatchObject({ role: 'Alumni', display_name: 'New Brother' });
+      // ADR-015: tier brother → role Member (the old 'Alumni' role is gone).
+      expect(rows[0]).toMatchObject({ role: 'Member', display_name: 'New Brother' });
 
       const accounts = await pool.query<{ provider_id: string }>(
         `SELECT a.provider_id FROM "account" a

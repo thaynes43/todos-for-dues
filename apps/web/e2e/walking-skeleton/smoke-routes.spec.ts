@@ -5,6 +5,7 @@ import {
   truncateWalkingSkeleton,
 } from './support/seed';
 import { signInAs } from './support/personas';
+import { setPortalMemberStatus } from '../fixtures/personas';
 
 test.describe('walking-skeleton smoke — routes load', () => {
   test('every walking-skeleton route returns 200 (or redirects appropriately)', async ({
@@ -18,6 +19,11 @@ test.describe('walking-skeleton smoke — routes load', () => {
         displayName: 'Admin',
         role: 'Admin',
       });
+      // ADR-015: posting is gated on member STATUS, orthogonal to role — an
+      // undeclared member (even an Admin) sees the StatusPrompt on /jobs/new,
+      // not the posting form. Declare a status so the /jobs/new route renders
+      // the posting UI this smoke test asserts.
+      await setPortalMemberStatus({ email: admin.email, status: 'alumni' });
 
       // Public routes when signed-out.
       await page.goto('/login');

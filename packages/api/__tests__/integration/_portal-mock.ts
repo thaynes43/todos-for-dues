@@ -24,7 +24,7 @@ export interface PortalApiMock {
   tokens: Map<string, string>;
   /** refresh token → registry key (refresh mints a new access token). */
   refreshTokens: Map<string, string>;
-  /** registry key → status row. Absent key = no linked registry row (404 JSON). */
+  /** registry key → status row. Absent key = no linked registry row (409 JSON). */
   registry: Map<string, MockMemberStatus>;
   /** 'on' = normal; 'absent' = route-level 404 (portal pre-launch); 'not-implemented' = 501. */
   mode: 'on' | 'absent' | 'not-implemented';
@@ -119,9 +119,10 @@ export async function startPortalApiMock(): Promise<PortalApiMock> {
         return;
       }
       if (!state.registry.has(key)) {
-        // Application 404 — route exists, no linked registry row.
-        res.writeHead(404, { 'content-type': 'application/json' });
-        res.end(JSON.stringify({ error: 'no_registry_row' }));
+        // Pinned contract: 409 JSON `{ code: 'no_registry_row' }` — route
+        // exists, authenticated member has no linked registry row.
+        res.writeHead(409, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ code: 'no_registry_row' }));
         return;
       }
       if (req.method === 'GET') {

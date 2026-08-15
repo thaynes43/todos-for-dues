@@ -130,7 +130,7 @@ Known-churn risks (budget time here):
 plugin on sigoalumni.org) must exist for the live cutover; the code + tests can
 be built NOW against the repo's e2e OIDC mock reshaped to the portal's claim
 set. Register this app at the portal with redirect URI
-`https://todos-for-dues.haynesops.com/api/auth/oauth2/callback/sigo-portal`
+`https://dues.sigoalumni.org/api/auth/oauth2/callback/sigo-portal`
 (providerId chosen below; regenerate if renamed).
 
 ### 2.0 The one design decision — claim → role mapping (needs Tom's ack; a
@@ -358,7 +358,7 @@ All through GitOps (branch + PR in haynes-ops; Flux applies). Files:
      chart values, template it next to `NODE_ENV`) so `/api/health` stops
      reporting `dev`.
 3. **Portal side**: register client `sigo-portal` redirect URI
-   `https://todos-for-dues.haynesops.com/api/auth/oauth2/callback/sigo-portal`
+   `https://dues.sigoalumni.org/api/auth/oauth2/callback/sigo-portal`
    (members-portal workstream owns this).
 4. **Egress check**: the app pod must reach `https://sigoalumni.org` (Cloud
    Run) for discovery + token exchange. Verify whether the `frontend`

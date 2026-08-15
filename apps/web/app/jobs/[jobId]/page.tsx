@@ -1,6 +1,7 @@
 import { headers } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession, getSessionRole } from '@app/auth';
+import { getMemberCapabilities } from '@/lib/access';
 import { getServerCaller } from '@/lib/trpc-server';
 import { JobDetailView, type JobForDetailView } from '@/components/JobDetailView';
 
@@ -13,6 +14,7 @@ export default async function JobDetailPage({ params }: PageProps) {
   const session = await getServerSession(await headers());
   if (!session?.user?.id) redirect('/login');
   const { role } = await getSessionRole(session.user.id);
+  const { canClaim } = await getMemberCapabilities(session.user.id);
 
   const caller = await getServerCaller();
   let job: JobForDetailView;
@@ -46,7 +48,7 @@ export default async function JobDetailPage({ params }: PageProps) {
   return (
     <JobDetailView
       job={job}
-      viewer={{ id: session.user.id, role }}
+      viewer={{ id: session.user.id, role, canClaim }}
       rosterNames={rosterNames}
       treasurerRecipient={treasurerRecipient}
     />

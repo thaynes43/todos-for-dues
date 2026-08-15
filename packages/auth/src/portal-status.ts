@@ -1,10 +1,12 @@
 /**
  * Portal member status — `active` | `alumni` (sigo-alumni backlog item 07,
- * consumed per ADR-014). A roster fact, NOT a permission: the single source
- * of truth is the portal's member registry. This app stores nothing durable —
- * status is read from the portal on page load (GET /api/member/status),
- * written back on change (PUT), and only *projected* onto the app's
- * Active/Alumni role partition through `transitionRole`.
+ * consumed per ADR-015). A roster fact, NOT a permission, and FULLY ORTHOGONAL
+ * to roles/tiers: an Admin/Moderator/Member can each be active or alumni.
+ * Setting status never reads from or writes to any role field. The single
+ * source of truth is the portal's member registry; this app stores nothing
+ * durable — status is read fresh from the portal on page load
+ * (GET /api/member/status) and written back on change (PUT). Access gates
+ * (post vs. claim) key on the status value directly (ADR-015), never on role.
  */
 
 /** Member statuses carried by the portal registry + `status` claim. */
@@ -17,23 +19,6 @@ export function parseMemberStatus(value: unknown): MemberStatus | null {
     (MEMBER_STATUSES as readonly string[]).includes(value)
     ? (value as MemberStatus)
     : null;
-}
-
-/**
- * Status → app-role projection (ADR-014). Only meaningful on the
- * Active/Alumni partition — privileged roles (Moderator/Admin) are driven by
- * portal *tier*, never by status.
- */
-export function statusToRole(status: MemberStatus): 'Active' | 'Alumni' {
-  return status === 'active' ? 'Active' : 'Alumni';
-}
-
-/** Inverse projection — used to display a current selection when the portal
- * row is undeclared (the app role is the access truth in that case). */
-export function roleToStatus(role: string): MemberStatus | null {
-  if (role === 'Active') return 'active';
-  if (role === 'Alumni') return 'alumni';
-  return null;
 }
 
 /**

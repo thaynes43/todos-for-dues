@@ -62,6 +62,8 @@ export interface JobForDetailView {
 export interface Viewer {
   id: string;
   role: Role;
+  /** ADR-015: member STATUS is active → may claim/enroll (orthogonal to role). */
+  canClaim: boolean;
 }
 
 interface RosterDisplayName {
@@ -230,10 +232,10 @@ export function JobDetailView({
         />
       )}
 
-      {/* Active-side completed-view (credit display). Renders for completed /
-         payment_sent / closed when the viewer is an enrolled Active. */}
-      {viewer.role === 'Active' &&
-        viewerEnrolled &&
+      {/* Completed-view (credit display). ADR-015: enrollment is the fact, not
+         a role — renders for any enrolled viewer in completed / payment_sent /
+         closed. */}
+      {viewerEnrolled &&
         (job.state === 'completed' ||
           job.state === 'payment_sent' ||
           job.state === 'closed') && (
@@ -263,13 +265,15 @@ export function JobDetailView({
             />
           )}
 
-          {viewer.role === 'Active' &&
+          {/* ADR-015: claim/unenroll affordances gate on member STATUS
+              (active), not role. */}
+          {viewer.canClaim &&
             job.state === 'enrollment_open' &&
             !viewerEnrolled && (
               <EnrollButton jobId={job.id} state={job.state} />
             )}
 
-          {viewer.role === 'Active' &&
+          {viewer.canClaim &&
             job.state === 'enrollment_open' &&
             viewerEnrolled && (
               <UnenrollButton jobId={job.id} state={job.state} />

@@ -42,7 +42,7 @@ import { exportJWK, generateKeyPair, SignJWT } from 'jose';
  * default. Specs opt into the contract's edge shapes per email via
  * `/_test/member-status`:
  *   - `{ status: 'active'|'alumni'|null }`  → declared / undeclared row
- *   - `{ hasRow: false }`                    → no linked row (404 JSON error)
+ *   - `{ hasRow: false }`                    → no linked row (409 JSON `{code:'no_registry_row'}`)
  *   - `{ mode: 'absent' }`                   → route-level 404 for THIS member's
  *     calls (feature-off / portal-not-shipped shape, parallel-worker-safe —
  *     a global toggle would leak into concurrently running specs)
@@ -435,9 +435,10 @@ export async function startOidcMockServer(
           return;
         }
         if (!row.hasRow) {
-          // Application 404 — route exists, no linked registry row.
-          res.writeHead(404, { 'content-type': 'application/json' });
-          res.end(JSON.stringify({ error: 'no_registry_row' }));
+          // Pinned contract: 409 JSON `{ code: 'no_registry_row' }` — route
+          // exists, authenticated member has no linked registry row.
+          res.writeHead(409, { 'content-type': 'application/json' });
+          res.end(JSON.stringify({ code: 'no_registry_row' }));
           return;
         }
         if (req.method === 'GET') {

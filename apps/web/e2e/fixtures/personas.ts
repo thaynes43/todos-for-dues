@@ -3,20 +3,44 @@ import type { Page } from '@playwright/test';
 import { readRuntimeEnv } from './runtime-env';
 import type { MemberStatusRow, PortalIdentity } from './oidc-mock-server';
 
-export type Role = 'Active' | 'Alumni' | 'Moderator' | 'Admin';
+// ADR-015: roles are Member | Moderator | Admin (orthogonal to member status).
+export type Role = 'Member' | 'Moderator' | 'Admin';
 export type PortalTier = 'pending' | 'brother' | 'operator' | 'admin';
+export type MemberStatus = 'active' | 'alumni';
+
+/**
+ * Legacy-friendly persona role. `'Active'`/`'Alumni'` describe a plain Member
+ * whose orthogonal portal STATUS is active/alumni — the shape most specs want
+ * (a member who can claim / can post). Real roles pass through. This keeps the
+ * many `seedPersona({ role: 'Active' | 'Alumni' })` call sites meaningful under
+ * ADR-015 without threading a separate status arg through every spec.
+ */
+export type PersonaRole = Role | 'Active' | 'Alumni';
 
 export interface Persona {
   email: string;
   displayName: string;
+  /** Resolved DB role (Member | Moderator | Admin). */
   role: Role;
+  /** Resolved portal member status (null for a bare Member/Moderator/Admin). */
+  status: MemberStatus | null;
   tier: PortalTier;
 }
 
+/** Resolve a (possibly legacy) persona role into a DB role + portal status. */
+export function resolvePersonaRole(role: PersonaRole): {
+  dbRole: Role;
+  status: MemberStatus | null;
+} {
+  if (role === 'Active') return { dbRole: 'Member', status: 'active' };
+  if (role === 'Alumni') return { dbRole: 'Member', status: 'alumni' };
+  return { dbRole: role, status: null };
+}
+
 /**
- * ADR-013 tier ↔ role mapping for seeded personas: elevated app roles come
- * from elevated portal tiers; both Alumni AND Active ride on `brother`
- * (Active is app-granted — the portal registry has no actives).
+ * ADR-013 / ADR-015 tier ↔ role mapping for seeded personas: elevated app roles
+ * come from elevated portal tiers; a plain Member rides on `brother`
+ * (regardless of member status — orthogonality).
  */
 export function tierForRole(role: Role): PortalTier {
   switch (role) {
@@ -33,12 +57,14 @@ export function tierForRole(role: Role): PortalTier {
  * Per-test persona blueprints. Each one carries a fresh UUID-suffixed email
  * so reruns and parallel workers can never collide (PLAN-008 Trap 6).
  */
-export function newPersona(role: Role, displayNameSeed: string): Persona {
+export function newPersona(role: PersonaRole, displayNameSeed: string): Persona {
+  const { dbRole, status } = resolvePersonaRole(role);
   return {
-    email: `${role.toLowerCase()}-${randomUUID()}@chapter.test`,
+    email: `${String(role).toLowerCase()}-${randomUUID()}@chapter.test`,
     displayName: `${displayNameSeed}-${role}`,
-    role,
-    tier: tierForRole(role),
+    role: dbRole,
+    status,
+    tier: tierForRole(dbRole),
   };
 }
 

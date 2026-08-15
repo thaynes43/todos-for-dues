@@ -1,17 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import type { Role } from '@app/db/schema';
 
 /**
- * ADR-014 — <ProfileStatusSection> renders one of three paths from the
- * `memberStatus.get` state:
- *   - portal available → portal-backed Active/Alumni buttons (memberStatus.set)
- *   - portal unavailable → the pre-existing local RoleChangeDropdown fallback
- *   - no registry row → no control at all
+ * ADR-015 — <ProfileStatusSection> takes NO props and is FULLY ORTHOGONAL to
+ * role. It renders solely from the `memberStatus.get` state and only ever
+ * writes STATUS via `memberStatus.set` — there is no RoleChangeDropdown
+ * fallback and no role mutation anywhere (the mock deliberately wires no role
+ * procedure, so any attempted role write would throw). Response shape is
+ * `{ kind, status }` with NO role field.
+ *
+ * kinds: ok / undeclared → the Active/Alumni toggle; no-registry-row → hidden
+ * control; unavailable → an off note; plus loading and query-error paths.
  */
 
 const setMutate = vi.fn();
-const changeRoleMutate = vi.fn();
 const setDataSpy = vi.fn();
 
 const queryState = vi.hoisted(() => ({
@@ -24,8 +26,11 @@ const setMutationOpts = vi.hoisted(() => ({
   onSuccess: undefined as ((data: unknown) => void) | undefined,
 }));
 
-/** Mutable mutation state so specs can pin the in-flight (isPending) UI. */
-const setMutationState = vi.hoisted(() => ({ isPending: false }));
+/** Mutable mutation state so specs can pin the in-flight / error UI. */
+const setMutationState = vi.hoisted(() => ({
+  isPending: false,
+  error: null as unknown,
+}));
 
 vi.mock('@/lib/trpc-client', () => ({
   trpc: {
@@ -46,18 +51,9 @@ vi.mock('@/lib/trpc-client', () => ({
           return {
             mutate: (input: unknown) => setMutate(input),
             isPending: setMutationState.isPending,
-            error: null,
+            error: setMutationState.error,
           };
         },
-      },
-    },
-    users: {
-      changeRole: {
-        useMutation: () => ({
-          mutate: (input: unknown) => changeRoleMutate(input),
-          isPending: false,
-          error: null,
-        }),
       },
     },
   },
@@ -67,165 +63,171 @@ import { ProfileStatusSection } from '@/app/profile/ProfileStatusSection';
 
 beforeEach(() => {
   setMutate.mockClear();
-  changeRoleMutate.mockClear();
   setDataSpy.mockClear();
   queryState.data = undefined;
   queryState.error = null;
   queryState.isPending = false;
   setMutationOpts.onSuccess = undefined;
   setMutationState.isPending = false;
+  setMutationState.error = null;
 });
 
-describe('<ProfileStatusSection> — portal-backed path', () => {
-  it('declared status drives the current marker; picking the other side PUTs it', () => {
-    queryState.data = { kind: 'ok', status: 'active', role: 'Active' };
-    render(<ProfileStatusSection role={'Active' as Role} />);
+describe('<ProfileStatusSection> — the status toggle (ok / undeclared)', () => {
+  it('ok(active) marks Active as current and Alumni as switchable', () => {
+    queryState.data = { kind: 'ok', status: 'active' };
+    render(<ProfileStatusSection />);
 
-    expect(screen.getByTestId('profile-status-section')).toHaveAttribute(
-      'data-portal',
-      'on',
-    );
-    expect(screen.getByTestId('role-change-dropdown')).toHaveAttribute(
-      'data-portal-backed',
-      'true',
-    );
-    const current = screen.getByTestId('role-change-option-Active');
-    expect(current).toBeDisabled();
-    expect(current).toHaveTextContent(/Active \(current\)/);
+    const section = screen.getByTestId('member-status-section');
+    expect(section).toHaveAttribute('data-portal', 'on');
+    expect(section).toHaveAttribute('data-current-status', 'active');
 
-    fireEvent.click(screen.getByTestId('role-change-option-Alumni'));
-    expect(setMutate).toHaveBeenCalledWith({ status: 'alumni' });
-    expect(changeRoleMutate).not.toHaveBeenCalled();
+    const active = screen.getByTestId('member-status-option-active');
+    expect(active).toHaveAttribute('data-is-current', 'true');
+    expect(active).toHaveTextContent(/Active \(current\)/);
+    expect(active).toBeDisabled();
+
+    const alumni = screen.getByTestId('member-status-option-alumni');
+    expect(alumni).toHaveAttribute('data-is-current', 'false');
+    expect(alumni).toHaveTextContent('Alumni');
+    expect(alumni).toBeEnabled();
+
+    // Current status is declared, so no "pick a side" prompt.
+    expect(screen.queryByTestId('member-status-undeclared')).toBeNull();
   });
 
-  it('undeclared status pins the current marker to the app role', () => {
-    queryState.data = { kind: 'undeclared', status: null, role: 'Alumni' };
-    render(<ProfileStatusSection role={'Alumni' as Role} />);
-    expect(screen.getByTestId('role-change-option-Alumni')).toBeDisabled();
-    expect(screen.getByTestId('role-change-option-Active')).toBeEnabled();
+  it('ok(alumni) marks Alumni as current and Active as switchable', () => {
+    queryState.data = { kind: 'ok', status: 'alumni' };
+    render(<ProfileStatusSection />);
+
+    expect(screen.getByTestId('member-status-section')).toHaveAttribute(
+      'data-current-status',
+      'alumni',
+    );
+    const alumni = screen.getByTestId('member-status-option-alumni');
+    expect(alumni).toHaveAttribute('data-is-current', 'true');
+    expect(alumni).toHaveTextContent(/Alumni \(current\)/);
+    expect(alumni).toBeDisabled();
+    expect(screen.getByTestId('member-status-option-active')).toBeEnabled();
   });
 
-  it('an in-flight save disables both sides and drops extra clicks (double-click guard)', () => {
-    queryState.data = { kind: 'ok', status: 'active', role: 'Active' };
-    setMutationState.isPending = true;
-    render(<ProfileStatusSection role={'Active' as Role} />);
+  it('undeclared marks neither side current and shows the pick-a-side prompt', () => {
+    queryState.data = { kind: 'undeclared', status: null };
+    render(<ProfileStatusSection />);
 
-    // While the PUT is in flight neither side is clickable…
-    expect(screen.getByTestId('role-change-option-Active')).toBeDisabled();
-    expect(screen.getByTestId('role-change-option-Alumni')).toBeDisabled();
+    expect(screen.getByTestId('member-status-section')).toHaveAttribute(
+      'data-current-status',
+      'none',
+    );
+    expect(screen.getByTestId('member-status-undeclared')).toBeInTheDocument();
+    expect(screen.getByTestId('member-status-option-active')).toHaveAttribute(
+      'data-is-current',
+      'false',
+    );
+    expect(screen.getByTestId('member-status-option-alumni')).toHaveAttribute(
+      'data-is-current',
+      'false',
+    );
+    expect(screen.getByTestId('member-status-option-active')).toBeEnabled();
+    expect(screen.getByTestId('member-status-option-alumni')).toBeEnabled();
+  });
 
-    // …and even a click that slips through (e.g. dispatched programmatically)
-    // is dropped by the handler guard — no second mutation.
-    fireEvent.click(screen.getByTestId('role-change-option-Alumni'));
+  it('clicking a non-current option PUTs that STATUS — and never a role', () => {
+    queryState.data = { kind: 'ok', status: 'active' };
+    render(<ProfileStatusSection />);
+
+    fireEvent.click(screen.getByTestId('member-status-option-alumni'));
+    expect(setMutate).toHaveBeenCalledTimes(1);
+    const arg = setMutate.mock.calls[0]![0] as Record<string, unknown>;
+    // Orthogonality: the payload carries ONLY a status, never a role field.
+    expect(arg).toEqual({ status: 'alumni' });
+    expect(Object.keys(arg)).toEqual(['status']);
+  });
+
+  it('clicking the already-current option is a no-op (no mutation)', () => {
+    queryState.data = { kind: 'ok', status: 'active' };
+    render(<ProfileStatusSection />);
+    fireEvent.click(screen.getByTestId('member-status-option-active'));
     expect(setMutate).not.toHaveBeenCalled();
   });
 
-  it('back-and-forth flips keep the current marker on the freshly-saved side', () => {
-    queryState.data = { kind: 'ok', status: 'active', role: 'Active' };
-    const { rerender } = render(<ProfileStatusSection role={'Active' as Role} />);
+  it('an in-flight save disables both sides and drops extra clicks', () => {
+    queryState.data = { kind: 'ok', status: 'active' };
+    setMutationState.isPending = true;
+    render(<ProfileStatusSection />);
 
-    // Flip 1: Active → Alumni.
-    fireEvent.click(screen.getByTestId('role-change-option-Alumni'));
-    expect(setMutate).toHaveBeenNthCalledWith(1, { status: 'alumni' });
-    act(() => {
-      queryState.data = { kind: 'ok', status: 'alumni', role: 'Alumni' };
-      setMutationOpts.onSuccess?.(queryState.data);
-    });
-    rerender(<ProfileStatusSection role={'Active' as Role} />);
-    expect(screen.getByTestId('role-change-option-Alumni')).toBeDisabled();
-    expect(screen.getByTestId('role-change-option-Active')).toBeEnabled();
+    expect(screen.getByTestId('member-status-option-active')).toBeDisabled();
+    expect(screen.getByTestId('member-status-option-alumni')).toBeDisabled();
 
-    // Flip 2: Alumni → back to Active.
-    fireEvent.click(screen.getByTestId('role-change-option-Active'));
-    expect(setMutate).toHaveBeenNthCalledWith(2, { status: 'active' });
-    act(() => {
-      queryState.data = { kind: 'ok', status: 'active', role: 'Active' };
-      setMutationOpts.onSuccess?.(queryState.data);
-    });
-    rerender(<ProfileStatusSection role={'Active' as Role} />);
-    expect(screen.getByTestId('role-change-option-Active')).toBeDisabled();
-    expect(screen.getByTestId('role-change-option-Alumni')).toBeEnabled();
-
-    // Two flips → exactly two mutations, no doubles.
-    expect(setMutate).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByTestId('member-status-option-alumni'));
+    expect(setMutate).not.toHaveBeenCalled();
   });
 
-  it('shows the one-word confirmation and refreshes the cache on save', () => {
-    queryState.data = { kind: 'ok', status: 'active', role: 'Active' };
-    render(<ProfileStatusSection role={'Active' as Role} />);
-    const fresh = { kind: 'ok', status: 'alumni', role: 'Alumni' };
+  it('a successful save refreshes the cache and shows the one-word confirmation', () => {
+    queryState.data = { kind: 'ok', status: 'active' };
+    render(<ProfileStatusSection />);
+
+    const fresh = { kind: 'ok', status: 'alumni' };
     act(() => {
       setMutationOpts.onSuccess?.(fresh);
     });
     expect(setDataSpy).toHaveBeenCalledWith(fresh);
     expect(screen.getByTestId('member-status-saved')).toHaveTextContent('Saved');
   });
+
+  it('surfaces a set error without touching any role control', () => {
+    queryState.data = { kind: 'ok', status: 'active' };
+    setMutationState.error = new Error('nope');
+    render(<ProfileStatusSection />);
+    expect(screen.getByTestId('member-status-error')).toBeInTheDocument();
+    // Still only the status toggle — never a role dropdown.
+    expect(screen.queryByTestId('role-change-dropdown')).toBeNull();
+  });
 });
 
-describe('<ProfileStatusSection> — fallback + hidden paths', () => {
-  it('portal unavailable falls back to the local users.changeRole control', () => {
-    queryState.data = { kind: 'unavailable', status: null, role: 'Active' };
-    render(<ProfileStatusSection role={'Active' as Role} />);
+describe('<ProfileStatusSection> — hidden / unavailable / loading / error', () => {
+  it('no-registry-row renders only the empty control-hidden marker', () => {
+    queryState.data = { kind: 'no-registry-row', status: null };
+    render(<ProfileStatusSection />);
 
-    expect(screen.getByTestId('profile-status-section')).toHaveAttribute(
+    const section = screen.getByTestId('member-status-section');
+    expect(section).toHaveAttribute('data-portal', 'no-registry-row');
+    expect(section).toBeEmptyDOMElement();
+    expect(screen.queryByTestId('member-status-option-active')).toBeNull();
+    expect(screen.queryByTestId('member-status-option-alumni')).toBeNull();
+  });
+
+  it('unavailable shows the off note and no toggle (no local fallback)', () => {
+    queryState.data = { kind: 'unavailable', status: null };
+    render(<ProfileStatusSection />);
+
+    expect(screen.getByTestId('member-status-section')).toHaveAttribute(
       'data-portal',
       'off',
     );
-    const dropdown = screen.getByTestId('role-change-dropdown');
-    expect(dropdown).not.toHaveAttribute('data-portal-backed');
-
-    fireEvent.click(screen.getByTestId('role-change-option-Alumni'));
-    expect(changeRoleMutate).toHaveBeenCalledWith({ toRole: 'Alumni' });
-    expect(setMutate).not.toHaveBeenCalled();
-  });
-
-  it('fallback control tracks the server-fresh role, not the stale query cache', () => {
-    // BUG caught by e2e (PR #58 run 4caba7f): after a local users.changeRole
-    // flip, router.refresh() updates the server-provided `role` prop but
-    // nothing refetches memberStatus.get — `data.role` stays at the pre-flip
-    // value. The fallback control must render from the prop, or it keeps the
-    // old side "(current)"/disabled and wedges back-and-forth until reload.
-    queryState.data = { kind: 'unavailable', status: null, role: 'Active' };
-    const { rerender } = render(<ProfileStatusSection role={'Active' as Role} />);
-    expect(screen.getByTestId('role-change-option-Active')).toBeDisabled();
-
-    // Simulate the post-flip refresh: prop is fresh (Alumni), cache is stale.
-    rerender(<ProfileStatusSection role={'Alumni' as Role} />);
-    expect(screen.getByTestId('role-change-option-Alumni')).toBeDisabled();
-    expect(screen.getByTestId('role-change-option-Alumni')).toHaveTextContent(
-      /Alumni \(current\)/,
-    );
-    expect(screen.getByTestId('role-change-option-Active')).toBeEnabled();
-  });
-
-  it('a tRPC-level query error also falls back (never blocks the member)', () => {
-    queryState.error = new Error('boom');
-    render(<ProfileStatusSection role={'Active' as Role} />);
-    expect(screen.getByTestId('profile-status-section')).toHaveAttribute(
-      'data-portal',
-      'error',
-    );
-    expect(screen.getByTestId('role-change-dropdown')).toBeInTheDocument();
-  });
-
-  it('no registry row hides the control entirely', () => {
-    queryState.data = { kind: 'no-registry-row', status: null, role: 'Active' };
-    render(<ProfileStatusSection role={'Active' as Role} />);
-    expect(screen.getByTestId('profile-status-section')).toHaveAttribute(
-      'data-portal',
-      'no-registry-row',
-    );
-    expect(screen.queryByTestId('role-change-option-Active')).toBeNull();
-    expect(screen.queryByTestId('role-change-option-Alumni')).toBeNull();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.queryByTestId('member-status-option-active')).toBeNull();
+    expect(screen.queryByTestId('member-status-option-alumni')).toBeNull();
+    expect(screen.queryByTestId('role-change-dropdown')).toBeNull();
   });
 
   it('renders a quiet disabled placeholder while loading', () => {
     queryState.isPending = true;
-    render(<ProfileStatusSection role={'Active' as Role} />);
-    expect(screen.getByTestId('profile-status-section')).toHaveAttribute(
+    render(<ProfileStatusSection />);
+    expect(screen.getByTestId('member-status-section')).toHaveAttribute(
       'data-portal',
       'loading',
     );
-    expect(screen.queryByTestId('role-change-option-Active')).toBeNull();
+    expect(screen.queryByTestId('member-status-option-active')).toBeNull();
+  });
+
+  it('a query error shows the terse error note (never a role control)', () => {
+    queryState.error = new Error('boom');
+    render(<ProfileStatusSection />);
+    expect(screen.getByTestId('member-status-section')).toHaveAttribute(
+      'data-portal',
+      'error',
+    );
+    expect(screen.queryByTestId('member-status-option-active')).toBeNull();
+    expect(screen.queryByTestId('role-change-dropdown')).toBeNull();
   });
 });

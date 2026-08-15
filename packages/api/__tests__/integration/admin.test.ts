@@ -81,7 +81,9 @@ describe('admin router', () => {
       expect(list[0]!.id).toBe(jobId);
       expect(list[0]!.disputeReason).toBe('Did not receive payment');
       expect(list[0]!.disputer?.id).toBe(users.active1);
-      expect(list[0]!.disputer?.role).toBe('Active');
+      // ADR-015: the disputer's ROLE is Member (their orthogonal member
+      // status is active — but that never touches role).
+      expect(list[0]!.disputer?.role).toBe('Member');
       expect(list[0]!.disputedAt).toBeInstanceOf(Date);
     });
 

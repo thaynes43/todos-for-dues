@@ -2,17 +2,25 @@ import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import {
   registerPortalIdentity,
+  resolvePersonaRole,
   tierForRole,
   unsignedPortalIdToken,
+  type MemberStatus,
+  type PersonaRole,
+  type Role as DbRole,
 } from '../../fixtures/personas';
 
-export type Role = 'Active' | 'Alumni' | 'Moderator' | 'Admin';
+// Legacy-friendly input type for specs ('Active'/'Alumni' → Member + status).
+export type Role = PersonaRole;
 
 export interface SeededPersona {
   id: string;
   email: string;
   displayName: string;
-  role: Role;
+  /** Resolved DB role (Member | Moderator | Admin). */
+  role: DbRole;
+  /** Resolved portal member status (null for a bare Member/Moderator/Admin). */
+  status: MemberStatus | null;
 }
 
 export function createPool(): Pool {
@@ -59,10 +67,12 @@ export async function seedPersona(
   },
 ): Promise<SeededPersona> {
   const email = uniqueEmail(opts.email);
-  const tier = tierForRole(opts.role);
+  // ADR-015: legacy 'Active'/'Alumni' → plain Member + portal status.
+  const { dbRole, status } = resolvePersonaRole(opts.role);
+  const tier = tierForRole(dbRole);
   const { rows } = await pool.query<{ id: string }>(
     `INSERT INTO users (email, display_name, role, email_verified) VALUES ($1, $2, $3, true) RETURNING id`,
-    [email, opts.displayName, opts.role],
+    [email, opts.displayName, dbRole],
   );
   const userId = rows[0]!.id;
   await pool.query(
@@ -78,12 +88,14 @@ export async function seedPersona(
     name: opts.displayName,
     tier,
     sub: userId,
+    status: status ?? undefined,
   });
   return {
     id: userId,
     email,
     displayName: opts.displayName,
-    role: opts.role,
+    role: dbRole,
+    status,
   };
 }
 

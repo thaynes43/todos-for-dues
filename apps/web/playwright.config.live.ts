@@ -3,7 +3,7 @@ import { defineConfig } from '@playwright/test';
 const LIVE_URL = process.env.LIVE_URL;
 if (!LIVE_URL) {
   throw new Error(
-    'LIVE_URL must be set to run live-smoke tests (e.g. LIVE_URL=https://todos-for-dues.haynesops.com).',
+    'LIVE_URL must be set to run live-smoke tests (e.g. LIVE_URL=https://dues.sigoalumni.org).',
   );
 }
 

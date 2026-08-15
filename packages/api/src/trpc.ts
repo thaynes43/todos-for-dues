@@ -1,5 +1,10 @@
 import { initTRPC, TRPCError } from '@trpc/server';
-import { auth, type Session } from '@app/auth';
+import {
+  auth,
+  getMemberStatusGate,
+  type MemberStatusGate,
+  type Session,
+} from '@app/auth';
 import { db } from '@app/db';
 import type { Role } from '@app/db/schema';
 import {
@@ -15,7 +20,15 @@ export interface TRPCContext {
   session: Session;
   userId: string | null;
   userRole: Role | null;
-}
+  /**
+   * Lazily-resolved, per-request-memoized member-status gate for the caller
+   * (ADR-015). Access gates (claim vs. post) key on this fresh portal read,
+   * never on role. Resolved on first call and cached for the life of the
+   * request; `unavailable` (fail closed) when there is no user or the portal
+   * is unreachable.
+   */
+  memberStatus: () => Promise<MemberStatusGate>;
+};
 
 export const createTRPCContext = async ({
   req,
@@ -25,21 +38,26 @@ export const createTRPCContext = async ({
   const session = await auth.api.getSession({ headers: req.headers });
   const userRoleRaw = (session?.user as { role?: string } | undefined)?.role;
   const userRole = isRole(userRoleRaw) ? userRoleRaw : null;
+  const userId = session?.user.id ?? null;
+
+  let memberStatusPromise: Promise<MemberStatusGate> | undefined;
+  const memberStatus = (): Promise<MemberStatusGate> => {
+    if (!userId) return Promise.resolve('unavailable');
+    memberStatusPromise ??= getMemberStatusGate(userId);
+    return memberStatusPromise;
+  };
+
   return {
     db,
     session,
-    userId: session?.user.id ?? null,
+    userId,
     userRole,
+    memberStatus,
   };
 };
 
 function isRole(value: unknown): value is Role {
-  return (
-    value === 'Active' ||
-    value === 'Alumni' ||
-    value === 'Moderator' ||
-    value === 'Admin'
-  );
+  return value === 'Member' || value === 'Moderator' || value === 'Admin';
 }
 
 const t = initTRPC.context<TRPCContext>().create({

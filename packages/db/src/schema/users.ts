@@ -10,7 +10,7 @@ export const users = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     email: text('email').notNull().unique(),
     displayName: text('display_name').notNull(),
-    role: text('role').$type<Role>().notNull().default('Active'),
+    role: text('role').$type<Role>().notNull().default('Member'),
     emailVerified: boolean('email_verified').notNull().default(false),
     image: text('image'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

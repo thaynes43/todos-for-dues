@@ -3,6 +3,7 @@ import { startPostgres, type StartedPostgres } from '@app/test-utils';
 import { getPool as getAppDbPool, db } from '@app/db';
 import { runMigrations } from '@app/db/migrate';
 import type { Role } from '@app/db/schema';
+import type { MemberStatusGate } from '@app/auth';
 import { appRouter, type AppRouter } from '../../src/routers';
 import { createCallerFactory, type TRPCContext } from '../../src/trpc';
 
@@ -65,14 +66,18 @@ export async function resetAndSeedUsers(pool: Pool): Promise<SeedUsers> {
     await client.query(
       `TRUNCATE users, jobs, job_enrollments, job_state_transitions, user_role_transitions, chapter_settings, "session", "account", "verification" RESTART IDENTITY CASCADE`,
     );
+    // ADR-015: roles are Member | Moderator | Admin. The keys `alumni`/`active`
+    // are kept as stable handles for the personas whose orthogonal member
+    // STATUS is alumni/active (supplied to makeCtx), but every non-privileged
+    // seed row is a plain Member in the DB.
     const roster: Array<{ email: string; name: string; role: Role }> = [
       { email: 'admin@test.invalid', name: 'Admin Anne', role: 'Admin' },
       { email: 'mod@test.invalid', name: 'Mod Maya', role: 'Moderator' },
-      { email: 'alumni@test.invalid', name: 'Alumni Adam', role: 'Alumni' },
-      { email: 'alumni2@test.invalid', name: 'Alumni Beth', role: 'Alumni' },
-      { email: 'active1@test.invalid', name: 'Alice Active', role: 'Active' },
-      { email: 'active2@test.invalid', name: 'Bob Active', role: 'Active' },
-      { email: 'active3@test.invalid', name: 'Carol Active', role: 'Active' },
+      { email: 'alumni@test.invalid', name: 'Alumni Adam', role: 'Member' },
+      { email: 'alumni2@test.invalid', name: 'Alumni Beth', role: 'Member' },
+      { email: 'active1@test.invalid', name: 'Alice Active', role: 'Member' },
+      { email: 'active2@test.invalid', name: 'Bob Active', role: 'Member' },
+      { email: 'active3@test.invalid', name: 'Carol Active', role: 'Member' },
     ];
     const ids: Record<string, string> = {};
     for (const u of roster) {
@@ -94,19 +99,45 @@ export async function resetAndSeedUsers(pool: Pool): Promise<SeedUsers> {
   });
 }
 
+/**
+ * Role accepted by `makeCtx`. The real roles are Member | Moderator | Admin;
+ * the legacy `'Active'`/`'Alumni'` inputs are an ADR-015 test ergonomic —
+ * they describe a Member whose orthogonal member STATUS is active/alumni (the
+ * shape most job-loop tests want), so the gate middleware sees a status-active
+ * / status-alumni caller. Real roles pass through unchanged; pass `status`
+ * explicitly to gate a privileged role by status too.
+ */
+export type CtxRole = Role | 'Active' | 'Alumni';
+
 export function makeCtx(opts: {
   userId: string;
-  role: Role;
+  role: CtxRole;
+  status?: MemberStatusGate;
 }): TRPCContext {
+  let userRole: Role;
+  let status: MemberStatusGate;
+  if (opts.role === 'Active') {
+    userRole = 'Member';
+    status = 'active';
+  } else if (opts.role === 'Alumni') {
+    userRole = 'Member';
+    status = 'alumni';
+  } else {
+    userRole = opts.role;
+    status = 'unavailable';
+  }
+  if (opts.status !== undefined) status = opts.status;
+
   const fakeSession = {
     session: { id: `sess-${opts.userId}`, userId: opts.userId },
-    user: { id: opts.userId, role: opts.role },
+    user: { id: opts.userId, role: userRole },
   } as unknown as TRPCContext['session'];
   return {
     db,
     session: fakeSession,
     userId: opts.userId,
-    userRole: opts.role,
+    userRole,
+    memberStatus: () => Promise.resolve(status),
   };
 }
 
@@ -116,6 +147,7 @@ export function unauthedCtx(): TRPCContext {
     session: null,
     userId: null,
     userRole: null,
+    memberStatus: () => Promise.resolve('unavailable'),
   };
 }
 

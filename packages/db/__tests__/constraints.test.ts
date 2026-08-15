@@ -28,7 +28,7 @@ async function insertUser(
 ): Promise<string> {
   const email = overrides.email ?? `user-${Math.random().toString(36).slice(2, 10)}@test.invalid`;
   const displayName = overrides.displayName ?? 'Test User';
-  const role = overrides.role ?? 'Active';
+  const role = overrides.role ?? 'Member';
   const { rows } = await pool.query<{ id: string }>(
     `INSERT INTO users (email, display_name, role)
      VALUES ($1, $2, $3) RETURNING id`,

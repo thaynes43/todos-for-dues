@@ -25,7 +25,7 @@ describe('idempotency / composite PK on job_enrollments', () => {
     adminId = u1[0]!.id;
     const { rows: u2 } = await pool.query<{ id: string }>(
       `INSERT INTO users (email, display_name, role)
-       VALUES ('active@test.invalid', 'Active', 'Active') RETURNING id`,
+       VALUES ('active@test.invalid', 'Active', 'Member') RETURNING id`,
     );
     activeId = u2[0]!.id;
     const { rows: jobRows } = await pool.query<{ id: string }>(

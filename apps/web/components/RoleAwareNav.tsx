@@ -4,36 +4,34 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { Role } from '@app/db/schema';
 
+/** Status-derived capabilities for the nav (ADR-015). Null when signed out. */
+export interface NavCapabilities {
+  /** status `alumni` → can post. */
+  canPost: boolean;
+  /** status `active` → can claim/enroll. */
+  canClaim: boolean;
+}
+
 interface NavLink {
   href: string;
   label: string;
-  roles: ReadonlyArray<Role>;
+  /** Visibility predicate — role for privileged surfaces, member STATUS
+   * capabilities for the post/claim surfaces (ADR-015 orthogonality). */
+  show: (role: Role, caps: NavCapabilities) => boolean;
 }
 
 const NAV_LINKS: ReadonlyArray<NavLink> = [
-  { href: '/jobs', label: 'Jobs', roles: ['Active', 'Alumni', 'Moderator', 'Admin'] },
-  { href: '/jobs/new', label: 'Post a job', roles: ['Alumni', 'Moderator', 'Admin'] },
-  {
-    href: '/my-postings',
-    label: 'My postings',
-    roles: ['Alumni', 'Moderator', 'Admin'],
-  },
-  {
-    href: '/my-enrollments',
-    label: 'My enrollments',
-    roles: ['Active'],
-  },
+  { href: '/jobs', label: 'Jobs', show: () => true },
+  { href: '/jobs/new', label: 'Post a job', show: (_r, c) => c.canPost },
+  { href: '/my-postings', label: 'My postings', show: (_r, c) => c.canPost },
+  { href: '/my-enrollments', label: 'My enrollments', show: (_r, c) => c.canClaim },
   {
     href: '/moderation-queue',
     label: 'Moderation queue',
-    roles: ['Moderator', 'Admin'],
+    show: (role) => role === 'Moderator' || role === 'Admin',
   },
-  { href: '/admin', label: 'Admin', roles: ['Admin'] },
-  {
-    href: '/profile',
-    label: 'Profile',
-    roles: ['Active', 'Alumni', 'Moderator', 'Admin'],
-  },
+  { href: '/admin', label: 'Admin', show: (role) => role === 'Admin' },
+  { href: '/profile', label: 'Profile', show: () => true },
 ];
 
 // A link is active when its href is the longest-prefix match for the current
@@ -53,10 +51,17 @@ function isActiveLink(
   );
 }
 
-export function RoleAwareNav({ role }: { role: Role | null }) {
+export function RoleAwareNav({
+  role,
+  caps,
+}: {
+  role: Role | null;
+  caps: NavCapabilities | null;
+}) {
   const pathname = usePathname() ?? '';
   if (!role) return null;
-  const visible = NAV_LINKS.filter((l) => l.roles.includes(role));
+  const resolvedCaps: NavCapabilities = caps ?? { canPost: false, canClaim: false };
+  const visible = NAV_LINKS.filter((l) => l.show(role, resolvedCaps));
   const allHrefs = visible.map((l) => l.href);
   // One line, wraps on phones — no hamburger (design-system main-nav shape).
   return (

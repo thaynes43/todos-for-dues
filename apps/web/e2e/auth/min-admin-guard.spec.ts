@@ -16,8 +16,8 @@ import {
  * (loud log; demotion lands once another Admin exists).
  *
  * NEEDS ITS OWN PLAYWRIGHT INVOCATION (fresh DB): depends on chapter-wide
- * count(Admin) = 1 at sign-in time, same constraint as
- * roles/last-admin-blocked (see .github/workflows/e2e.yml).
+ * count(Admin) = 1 at sign-in time, and races walking-skeleton's
+ * BOOTSTRAP_ADMIN signin path (see .github/workflows/e2e.yml).
  */
 
 test.describe('ADR-013 — min-Admin guard on claim-sync demotion', () => {

@@ -2,9 +2,10 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { getServerSession, getSessionRole } from '@app/auth';
 import type { Role } from '@app/db/schema';
+import { getMemberCapabilities } from '@/lib/access';
 import { TRPCProvider } from '@/lib/trpc-provider';
 import { ChapterHeader } from '@/components/ChapterHeader';
-import { RoleAwareNav } from '@/components/RoleAwareNav';
+import { RoleAwareNav, type NavCapabilities } from '@/components/RoleAwareNav';
 import { Footer } from '@/components/Footer';
 import { RealtimeProvider } from '@/components/RealtimeProvider';
 import './globals.css';
@@ -27,10 +28,14 @@ export default async function RootLayout({
   const session = await getServerSession(await headers());
   let role: Role | null = null;
   let displayName: string | null = null;
+  let caps: NavCapabilities | null = null;
   if (session?.user?.id) {
     const sessionRole = await getSessionRole(session.user.id);
     role = sessionRole.role;
     displayName = sessionRole.displayName;
+    // ADR-015: nav visibility of post/claim surfaces keys on member STATUS.
+    const c = await getMemberCapabilities(session.user.id);
+    caps = { canPost: c.canPost, canClaim: c.canClaim };
   }
 
   return (
@@ -39,7 +44,7 @@ export default async function RootLayout({
         <TRPCProvider>
           <RealtimeProvider signedIn={Boolean(session?.user?.id)} />
           <ChapterHeader displayName={displayName} />
-          <RoleAwareNav role={role} />
+          <RoleAwareNav role={role} caps={caps} />
           <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-12">
             {children}
           </main>

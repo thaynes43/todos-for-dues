@@ -3,7 +3,7 @@ import { ROLES, type Role } from '@app/db/schema';
 /**
  * Portal OIDC provider id (ADR-013). Also the last path segment of the
  * registered redirect URI:
- *   https://todos-for-dues.haynesops.com/api/auth/oauth2/callback/sigo-portal
+ *   https://dues.sigoalumni.org/api/auth/oauth2/callback/sigo-portal
  * Renaming it invalidates the portal-side client registration.
  */
 export const PORTAL_PROVIDER_ID = 'sigo-portal';
@@ -24,18 +24,18 @@ export function isAppRole(value: unknown): value is Role {
 }
 
 /**
- * ADR-013 tier → app-role mapping (adopted by default per the modernization
- * plan §2.0 — TODO(tom): bless or amend in ADR-013):
+ * ADR-013 / ADR-015 tier → app-role mapping. Roles are Member | Moderator |
+ * Admin and are FULLY ORTHOGONAL to member status (active|alumni) — the
+ * `brother` tier maps to `Member` regardless of whether the member is active or
+ * alumni. Membership status is a portal-only roster fact and never influences
+ * this mapping.
  *
  *   admin    → Admin
  *   operator → Moderator
- *   brother  → Alumni
+ *   brother  → Member
  *   pending  → 'refused' (sign-in denied — membership pending)
  *
- * `Active` (undergrads doing the work) is app-granted on top of a `brother`
- * tier — the portal registry has no actives — so `brother` tolerates BOTH
- * Alumni and Active (see tierAllowsRole). An unknown/missing tier maps to
- * 'refused' at the call sites (fail closed).
+ * An unknown/missing tier maps to 'refused' at the call sites (fail closed).
  */
 export function mapTierToRole(tier: PortalTier): Role | 'refused' {
   switch (tier) {
@@ -44,7 +44,7 @@ export function mapTierToRole(tier: PortalTier): Role | 'refused' {
     case 'operator':
       return 'Moderator';
     case 'brother':
-      return 'Alumni';
+      return 'Member';
     case 'pending':
       return 'refused';
   }
@@ -52,6 +52,5 @@ export function mapTierToRole(tier: PortalTier): Role | 'refused' {
 
 /** Whether the user's current app role is consistent with the portal tier (no claim-sync transition needed). */
 export function tierAllowsRole(tier: PortalTier, role: Role): boolean {
-  if (tier === 'brother') return role === 'Alumni' || role === 'Active';
   return mapTierToRole(tier) === role;
 }

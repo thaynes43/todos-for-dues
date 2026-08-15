@@ -86,40 +86,24 @@ jobs:
             exit 1
           fi
 
-      # PLAN-013 §3.1 #1: `demoteAllOtherAdmins` is now scope-narrowed to a
-      # per-spec ID allowlist, so the 6 chapter-safe roles specs (admin-grant,
-      # admin-demote-admin, admin-users-list, role-history, self-service,
-      # member-status) no longer race each other's seeded admins. Collapse
-      # them into one invocation.
+      # ADR-015 orthogonality refactor removed the in-app role-mutation specs
+      # (admin-grant / admin-demote-admin / self-service / admin-swap /
+      # last-admin-blocked) — role changes now happen at the portal, not in the
+      # app. The remaining chapter-safe roles specs seed only their own
+      # UUID-suffixed personas and never demote admins, so they collapse into
+      # one invocation.
       - name: e2e — roles (chapter-safe set, single invocation)
         run: |
           .github/scripts/e2e-annotated.sh "roles chapter-safe" \
-            e2e/roles/admin-grant.spec.ts \
-            e2e/roles/admin-demote-admin.spec.ts \
             e2e/roles/admin-users-list.spec.ts \
             e2e/roles/role-history.spec.ts \
-            e2e/roles/self-service.spec.ts \
             e2e/roles/member-status.spec.ts
 
-      # `last-admin-blocked` + `admin-swap` each need their OWN Playwright
-      # invocation (fresh testcontainer DB). Both depend on chapter-wide
-      # count(Admin) = 1 at the moment of self-demote — achieved by demoting
-      # the globally-seeded Bootstrap Admin via the scope-narrowed helper +
-      # `fetchBootstrapAdminIds`. Sharing a DB across these two specs would
-      # leave each prior spec's `cast.admin` lingering as Admin (no spec
-      # demotes another spec's seeded admin post scope-narrow), pushing
-      # count(Admin) ≥ 2 by the second spec's run. Sharing a DB with any
-      # other suite would also race walking-skeleton's BOOTSTRAP_ADMIN
-      # signin path. Per-spec isolation is the only safe option until the
-      # min-Admin trigger is made chapter-scoped (out of scope here).
-      - name: e2e — roles last-admin-blocked (own invocation)
-        run: .github/scripts/e2e-annotated.sh "last-admin-blocked" e2e/roles/last-admin-blocked.spec.ts
-
-      - name: e2e — roles admin-swap (own invocation)
-        run: .github/scripts/e2e-annotated.sh "admin-swap" e2e/roles/admin-swap.spec.ts
-
-      # ADR-013 min-Admin claim-sync guard: same chapter-wide count(Admin)=1
-      # dependency as last-admin-blocked → own invocation / fresh DB.
+      # ADR-013 min-Admin claim-sync guard: depends on chapter-wide
+      # count(Admin) = 1 at sign-in time (achieved by demoting the
+      # globally-seeded Bootstrap Admin via the scope-narrowed helper +
+      # `fetchBootstrapAdminIds`), and racing walking-skeleton's BOOTSTRAP_ADMIN
+      # signin path, so it needs its own Playwright invocation / fresh DB.
       - name: e2e — auth min-admin-guard (own invocation)
         run: .github/scripts/e2e-annotated.sh "min-admin-guard" e2e/auth/min-admin-guard.spec.ts
 

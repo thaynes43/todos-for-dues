@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { fetchMemberStatus, sendMemberStatus } from '../src/portal-client';
 
 /**
- * ADR-014 feature-detection heuristics against a stubbed transport. The
- * classification is the load-bearing part of the contract's tolerant
- * reading: route-404 ⇒ unavailable (portal hasn't shipped the endpoint),
- * JSON-error-404 / 409 ⇒ no-registry-row (route exists, user has no row).
+ * ADR-015 response classification against a stubbed transport. Pinned to the
+ * portal's shipped route contract: **409 JSON `{code:'no_registry_row'}`** is
+ * the ONLY no-registry-row signal (route exists, user has no linked row); 404
+ * is reserved for route-absent, so it — like 401/501/5xx/non-JSON — classifies
+ * `unavailable` (portal down / not yet shipped). The old JSON-body-404
+ * heuristic is gone.
  */
 
 type StubResponse = {
@@ -101,7 +103,8 @@ describe('fetchMemberStatus — GET /api/member/status classification', () => {
     ).resolves.toEqual({ kind: 'unavailable' });
   });
 
-  it('404 with a JSON error body → no-registry-row (route exists, no linked row)', async () => {
+  it('404 (any body) → unavailable — 404 is route-absent per the pin', async () => {
+    // JSON error body no longer means no-registry-row (that is 409 now).
     await expect(
       fetchMemberStatus(
         BASE,
@@ -112,10 +115,7 @@ describe('fetchMemberStatus — GET /api/member/status classification', () => {
           body: JSON.stringify({ error: 'no_registry_row' }),
         }),
       ),
-    ).resolves.toEqual({ kind: 'no-registry-row' });
-  });
-
-  it('404 without a JSON error body → unavailable (route-level 404, portal not shipped)', async () => {
+    ).resolves.toEqual({ kind: 'unavailable' });
     await expect(
       fetchMemberStatus(
         BASE,
@@ -126,26 +126,18 @@ describe('fetchMemberStatus — GET /api/member/status classification', () => {
     await expect(
       fetchMemberStatus(BASE, TOKEN, stubFetch({ status: 404 })),
     ).resolves.toEqual({ kind: 'unavailable' });
-    // JSON content-type but not an error-shaped object still reads as route-level.
+  });
+
+  it('409 JSON {code:no_registry_row} → no-registry-row (the only no-row signal)', async () => {
     await expect(
       fetchMemberStatus(
         BASE,
         TOKEN,
         stubFetch({
-          status: 404,
+          status: 409,
           contentType: 'application/json',
-          body: '"Not Found"',
+          body: JSON.stringify({ code: 'no_registry_row' }),
         }),
-      ),
-    ).resolves.toEqual({ kind: 'unavailable' });
-  });
-
-  it('409 → no-registry-row (contract: 404/409 for users with no linked row)', async () => {
-    await expect(
-      fetchMemberStatus(
-        BASE,
-        TOKEN,
-        stubFetch({ status: 409, contentType: 'application/json', body: '{}' }),
       ),
     ).resolves.toEqual({ kind: 'no-registry-row' });
   });
@@ -184,7 +176,20 @@ describe('sendMemberStatus — PUT /api/member/status classification', () => {
     ).resolves.toEqual({ kind: 'ok' });
   });
 
-  it('404 JSON-error / 409 → no-registry-row; route-404 → unavailable', async () => {
+  it('409 → no-registry-row; 404 (any body) → unavailable (route-absent)', async () => {
+    await expect(
+      sendMemberStatus(
+        BASE,
+        TOKEN,
+        'active',
+        stubFetch({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 'no_registry_row' }),
+        }),
+      ),
+    ).resolves.toEqual({ kind: 'no-registry-row' });
+    // 404 is route-absent now — even with a JSON error body.
     await expect(
       sendMemberStatus(
         BASE,
@@ -196,15 +201,7 @@ describe('sendMemberStatus — PUT /api/member/status classification', () => {
           body: JSON.stringify({ error: 'no_registry_row' }),
         }),
       ),
-    ).resolves.toEqual({ kind: 'no-registry-row' });
-    await expect(
-      sendMemberStatus(
-        BASE,
-        TOKEN,
-        'active',
-        stubFetch({ status: 409, contentType: 'application/json', body: '{}' }),
-      ),
-    ).resolves.toEqual({ kind: 'no-registry-row' });
+    ).resolves.toEqual({ kind: 'unavailable' });
     await expect(
       sendMemberStatus(BASE, TOKEN, 'active', stubFetch({ status: 404 })),
     ).resolves.toEqual({ kind: 'unavailable' });

@@ -1,7 +1,8 @@
 import { headers } from 'next/headers';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getServerSession, getSessionRole } from '@app/auth';
+import { getServerSession } from '@app/auth';
+import { getMemberCapabilities } from '@/lib/access';
 import { getServerCaller } from '@/lib/trpc-server';
 import { JobStateBadge } from '@/components/JobStateBadge';
 import { PageHeader } from '@/components/PageHeader';
@@ -14,8 +15,10 @@ export const metadata = { title: 'My enrollments' };
 export default async function MyEnrollmentsPage() {
   const session = await getServerSession(await headers());
   if (!session?.user?.id) redirect('/login');
-  const { role } = await getSessionRole(session.user.id);
-  if (role !== 'Active') redirect('/');
+  // ADR-015: "my enrollments" is the claiming surface — gated on member STATUS
+  // (active), orthogonal to role.
+  const caps = await getMemberCapabilities(session.user.id);
+  if (!caps.canClaim) redirect('/');
 
   const caller = await getServerCaller();
   const rows = await caller.jobs.listMyEnrolled();

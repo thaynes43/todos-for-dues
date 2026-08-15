@@ -56,7 +56,8 @@ export async function withTx<T>(
   }
 }
 
-export type Role = 'Active' | 'Alumni' | 'Moderator' | 'Admin';
+// ADR-015: roles are Member | Moderator | Admin (orthogonal to member status).
+export type Role = 'Member' | 'Moderator' | 'Admin';
 
 export interface SeedUsers {
   admin: string;
@@ -69,7 +70,8 @@ export interface SeedUsers {
 
 /**
  * Reset all transactional tables and seed the canonical user roster:
- * one Admin, one Moderator, one Alumni, three Actives. All inside one
+ * one Admin, one Moderator, four Members (the `alumni`/`active*` keys are
+ * stable handles — their DB role is plain Member now). All inside one
  * transaction so the DEFERRABLE min-Admin trigger fires exactly once at COMMIT
  * with admin_count = 1.
  */
@@ -81,10 +83,10 @@ export async function resetAndSeedUsers(pool: Pool): Promise<SeedUsers> {
     const roster: Array<{ email: string; name: string; role: Role }> = [
       { email: 'admin@test.invalid', name: 'Admin User', role: 'Admin' },
       { email: 'mod@test.invalid', name: 'Mod User', role: 'Moderator' },
-      { email: 'alumni@test.invalid', name: 'Alumni Poster', role: 'Alumni' },
-      { email: 'active1@test.invalid', name: 'Alice Active', role: 'Active' },
-      { email: 'active2@test.invalid', name: 'Bob Active', role: 'Active' },
-      { email: 'active3@test.invalid', name: 'Carol Active', role: 'Active' },
+      { email: 'alumni@test.invalid', name: 'Alumni Poster', role: 'Member' },
+      { email: 'active1@test.invalid', name: 'Alice Active', role: 'Member' },
+      { email: 'active2@test.invalid', name: 'Bob Active', role: 'Member' },
+      { email: 'active3@test.invalid', name: 'Carol Active', role: 'Member' },
     ];
     const ids: Record<string, string> = {};
     for (const u of roster) {

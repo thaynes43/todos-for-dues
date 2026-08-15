@@ -51,10 +51,10 @@ async function getRoleAuditRows(
 }
 
 describe('transitionRole — happy path + audit row', () => {
-  it('promotes an Active to Moderator + writes audit row', async () => {
+  it('promotes a Member to Moderator + writes audit row', async () => {
     await transitionRole({
       targetUserId: users.active1,
-      expectedFromRole: 'Active',
+      expectedFromRole: 'Member',
       toRole: 'Moderator',
       initiator: { id: users.admin, kind: 'admin' },
       note: 'mid-semester promotion',
@@ -64,7 +64,7 @@ describe('transitionRole — happy path + audit row', () => {
     const audit = await getRoleAuditRows(users.active1);
     expect(audit).toHaveLength(1);
     expect(audit[0]).toMatchObject({
-      fromRole: 'Active',
+      fromRole: 'Member',
       toRole: 'Moderator',
       initiatorKind: 'admin',
       note: 'mid-semester promotion',
@@ -78,7 +78,7 @@ describe('min-Admin invariant integration (PRD-008 R-05, AC-04)', () => {
       transitionRole({
         targetUserId: users.admin,
         expectedFromRole: 'Admin',
-        toRole: 'Alumni',
+        toRole: 'Member',
         initiator: { id: users.admin, kind: 'admin' },
       }),
     ).rejects.toBeInstanceOf(MinAdminInvariantError);
@@ -93,7 +93,7 @@ describe('min-Admin invariant integration (PRD-008 R-05, AC-04)', () => {
     await transitionRolesAtomically([
       {
         targetUserId: users.active1,
-        expectedFromRole: 'Active',
+        expectedFromRole: 'Member',
         toRole: 'Admin',
         initiator: { id: users.admin, kind: 'admin' },
         note: 'incoming Admin',
@@ -101,22 +101,22 @@ describe('min-Admin invariant integration (PRD-008 R-05, AC-04)', () => {
       {
         targetUserId: users.admin,
         expectedFromRole: 'Admin',
-        toRole: 'Alumni',
+        toRole: 'Member',
         initiator: { id: users.admin, kind: 'admin' },
         note: 'outgoing Admin',
       },
     ]);
 
     expect(await getRole(users.active1)).toBe('Admin');
-    expect(await getRole(users.admin)).toBe('Alumni');
+    expect(await getRole(users.admin)).toBe('Member');
 
     const incomingAudit = await getRoleAuditRows(users.active1);
     expect(incomingAudit).toEqual([
-      { fromRole: 'Active', toRole: 'Admin', initiatorKind: 'admin', note: 'incoming Admin' },
+      { fromRole: 'Member', toRole: 'Admin', initiatorKind: 'admin', note: 'incoming Admin' },
     ]);
     const outgoingAudit = await getRoleAuditRows(users.admin);
     expect(outgoingAudit).toEqual([
-      { fromRole: 'Admin', toRole: 'Alumni', initiatorKind: 'admin', note: 'outgoing Admin' },
+      { fromRole: 'Admin', toRole: 'Member', initiatorKind: 'admin', note: 'outgoing Admin' },
     ]);
   });
 
@@ -127,7 +127,7 @@ describe('min-Admin invariant integration (PRD-008 R-05, AC-04)', () => {
         {
           targetUserId: users.admin,
           expectedFromRole: 'Admin',
-          toRole: 'Alumni',
+          toRole: 'Member',
           initiator: { id: users.admin, kind: 'admin' },
         },
       ]),
@@ -139,18 +139,18 @@ describe('min-Admin invariant integration (PRD-008 R-05, AC-04)', () => {
   it('sequential (two separate txs): promote B → demote A succeeds', async () => {
     await transitionRole({
       targetUserId: users.active1,
-      expectedFromRole: 'Active',
+      expectedFromRole: 'Member',
       toRole: 'Admin',
       initiator: { id: users.admin, kind: 'admin' },
     });
     await transitionRole({
       targetUserId: users.admin,
       expectedFromRole: 'Admin',
-      toRole: 'Alumni',
+      toRole: 'Member',
       initiator: { id: users.active1, kind: 'admin' },
     });
     expect(await getRole(users.active1)).toBe('Admin');
-    expect(await getRole(users.admin)).toBe('Alumni');
+    expect(await getRole(users.admin)).toBe('Member');
   });
 
   it('zero-Admin recovery path (e.g. portal claim-sync promotion): promote one user → succeeds', async () => {
@@ -158,7 +158,7 @@ describe('min-Admin invariant integration (PRD-008 R-05, AC-04)', () => {
     // moment after a chapter is provisioned but before its first Admin signs in.
     await testDb.pool.query(`ALTER TABLE users DISABLE TRIGGER trg_min_one_admin`);
     try {
-      await testDb.pool.query(`UPDATE users SET role = 'Active' WHERE role = 'Admin'`);
+      await testDb.pool.query(`UPDATE users SET role = 'Member' WHERE role = 'Admin'`);
       const { rows } = await testDb.pool.query<{ count: string }>(
         `SELECT COUNT(*)::text AS count FROM users WHERE role = 'Admin'`,
       );
@@ -171,7 +171,7 @@ describe('min-Admin invariant integration (PRD-008 R-05, AC-04)', () => {
     // admin_count after COMMIT is 1 → passes.
     await transitionRole({
       targetUserId: users.active1,
-      expectedFromRole: 'Active',
+      expectedFromRole: 'Member',
       toRole: 'Admin',
       initiator: { id: null, kind: 'system' },
       note: 'bootstrap recovery',
@@ -187,8 +187,8 @@ describe('ConcurrentTransitionError when the user is not in the expected role', 
     await expect(
       transitionRole({
         targetUserId: users.alumni,
-        // alumni's actual role is 'Alumni', not 'Active'
-        expectedFromRole: 'Active',
+        // alumni's actual role is 'Member', not 'Admin'
+        expectedFromRole: 'Admin',
         toRole: 'Moderator',
         initiator: { id: users.admin, kind: 'admin' },
       }),

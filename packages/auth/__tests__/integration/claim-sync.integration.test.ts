@@ -49,18 +49,29 @@ async function insertUser(
 
 async function insertPortalAccount(
   pool: Pool,
-  opts: { userId: string; tier?: string | null; providerId?: string },
+  opts: {
+    userId: string;
+    tier?: string | null;
+    providerId?: string;
+    status?: string | null;
+  },
 ): Promise<void> {
-  const idToken =
-    opts.tier === null
-      ? fakeIdToken({ sub: opts.userId, email: 'x@sigo.test' })
-      : fakeIdToken({
-          sub: opts.userId,
-          email: 'x@sigo.test',
-          name: 'X',
-          tier: opts.tier,
-          capabilities: [],
-        });
+  let idToken: string;
+  if (opts.tier === null) {
+    idToken = fakeIdToken({ sub: opts.userId, email: 'x@sigo.test' });
+  } else {
+    const claims: Record<string, unknown> = {
+      sub: opts.userId,
+      email: 'x@sigo.test',
+      name: 'X',
+      tier: opts.tier,
+      capabilities: [],
+    };
+    // The portal also carries a `status` claim; claim-sync must ignore it for
+    // role purposes (ADR-015 orthogonality). Tests set it to prove that.
+    if (opts.status !== undefined) claims.status = opts.status;
+    idToken = fakeIdToken(claims);
+  }
   await pool.query(
     `INSERT INTO "account" (user_id, provider_id, account_id, id_token)
      VALUES ($1::uuid, $2, $1::uuid::text, $3)`,
@@ -79,7 +90,7 @@ describe('syncRoleFromPortalTier (ADR-013 claim sync)', () => {
     await insertBackstopAdmin(testDb.pool);
     const id = await insertUser(testDb.pool, {
       email: 'nolink@sigo.test',
-      role: 'Alumni',
+      role: 'Member',
     });
     await expect(syncRoleFromPortalTier(id)).resolves.toEqual({
       kind: 'skipped',
@@ -91,7 +102,7 @@ describe('syncRoleFromPortalTier (ADR-013 claim sync)', () => {
     await insertBackstopAdmin(testDb.pool);
     const id = await insertUser(testDb.pool, {
       email: 'notier@sigo.test',
-      role: 'Alumni',
+      role: 'Member',
     });
     await insertPortalAccount(testDb.pool, { userId: id, tier: null });
     await expect(syncRoleFromPortalTier(id)).resolves.toEqual({
@@ -100,42 +111,66 @@ describe('syncRoleFromPortalTier (ADR-013 claim sync)', () => {
     });
   });
 
-  it('brother tier leaves Alumni AND app-granted Active untouched (no audit rows)', async () => {
+  it('brother tier leaves a Member untouched (no audit rows)', async () => {
     await insertBackstopAdmin(testDb.pool);
-    const alumni = await insertUser(testDb.pool, {
-      email: 'alumni@sigo.test',
-      role: 'Alumni',
+    const member = await insertUser(testDb.pool, {
+      email: 'member@sigo.test',
+      role: 'Member',
     });
-    const active = await insertUser(testDb.pool, {
-      email: 'active@sigo.test',
-      role: 'Active',
-    });
-    await insertPortalAccount(testDb.pool, { userId: alumni, tier: 'brother' });
-    await insertPortalAccount(testDb.pool, { userId: active, tier: 'brother' });
+    await insertPortalAccount(testDb.pool, { userId: member, tier: 'brother' });
 
-    await expect(syncRoleFromPortalTier(alumni)).resolves.toEqual({
+    await expect(syncRoleFromPortalTier(member)).resolves.toEqual({
       kind: 'unchanged',
-      role: 'Alumni',
+      role: 'Member',
     });
-    await expect(syncRoleFromPortalTier(active)).resolves.toEqual({
-      kind: 'unchanged',
-      role: 'Active',
-    });
-    expect(await getRoleAuditRows(testDb.pool, alumni)).toHaveLength(0);
-    expect(await getRoleAuditRows(testDb.pool, active)).toHaveLength(0);
+    expect(await getRoleAuditRows(testDb.pool, member)).toHaveLength(0);
   });
 
-  it('operator tier promotes Alumni → Moderator through the audited FSM path', async () => {
+  it('ADR-015 REGRESSION: a status claim never moves the role at sign-in', async () => {
+    await insertBackstopAdmin(testDb.pool);
+    // Same brother member, first with status=active, then status=alumni — the
+    // role must stay Member and not one audit row may be written. This is the
+    // sign-in-path half of "status change does not alter role".
+    const member = await insertUser(testDb.pool, {
+      email: 'orthogonal@sigo.test',
+      role: 'Member',
+    });
+    for (const status of ['active', 'alumni', null] as const) {
+      await testDb.pool.query(`DELETE FROM "account" WHERE user_id = $1::uuid`, [
+        member,
+      ]);
+      await insertPortalAccount(testDb.pool, {
+        userId: member,
+        tier: 'brother',
+        status,
+      });
+      await expect(syncRoleFromPortalTier(member)).resolves.toEqual({
+        kind: 'unchanged',
+        role: 'Member',
+      });
+    }
+    expect(await getUserRoleByEmail(testDb.pool, 'orthogonal@sigo.test')).toBe(
+      'Member',
+    );
+    expect(await getRoleAuditRows(testDb.pool, member)).toHaveLength(0);
+  });
+
+  it('operator tier promotes Member → Moderator through the audited FSM path', async () => {
     await insertBackstopAdmin(testDb.pool);
     const id = await insertUser(testDb.pool, {
       email: 'operator@sigo.test',
-      role: 'Alumni',
+      role: 'Member',
     });
-    await insertPortalAccount(testDb.pool, { userId: id, tier: 'operator' });
+    // Even with a declared status claim, tier drives the role.
+    await insertPortalAccount(testDb.pool, {
+      userId: id,
+      tier: 'operator',
+      status: 'active',
+    });
 
     await expect(syncRoleFromPortalTier(id)).resolves.toEqual({
       kind: 'synced',
-      from: 'Alumni',
+      from: 'Member',
       to: 'Moderator',
       fallback: false,
     });
@@ -145,7 +180,7 @@ describe('syncRoleFromPortalTier (ADR-013 claim sync)', () => {
     const audit = await getRoleAuditRows(testDb.pool, id);
     expect(audit).toHaveLength(1);
     expect(audit[0]).toMatchObject({
-      fromRole: 'Alumni',
+      fromRole: 'Member',
       toRole: 'Moderator',
       initiatorKind: 'system',
       initiatorId: null,
@@ -153,11 +188,11 @@ describe('syncRoleFromPortalTier (ADR-013 claim sync)', () => {
     expect(audit[0]!.note).toContain('portal claim-sync');
   });
 
-  it('admin tier promotes to Admin; a later brother tier demotes to Alumni', async () => {
+  it('admin tier promotes to Admin; a later brother tier demotes to Member', async () => {
     await insertBackstopAdmin(testDb.pool);
     const id = await insertUser(testDb.pool, {
       email: 'updown@sigo.test',
-      role: 'Alumni',
+      role: 'Member',
     });
     await insertPortalAccount(testDb.pool, { userId: id, tier: 'admin' });
     await expect(syncRoleFromPortalTier(id)).resolves.toMatchObject({
@@ -171,7 +206,7 @@ describe('syncRoleFromPortalTier (ADR-013 claim sync)', () => {
     await expect(syncRoleFromPortalTier(id)).resolves.toEqual({
       kind: 'synced',
       from: 'Admin',
-      to: 'Alumni',
+      to: 'Member',
       fallback: false,
     });
   });
@@ -199,7 +234,7 @@ describe('syncRoleFromPortalTier (ADR-013 claim sync)', () => {
     await insertBackstopAdmin(testDb.pool);
     const id = await insertUser(testDb.pool, {
       email: 'pending@sigo.test',
-      role: 'Alumni',
+      role: 'Member',
     });
     await insertPortalAccount(testDb.pool, { userId: id, tier: 'pending' });
 
@@ -215,7 +250,7 @@ describe('syncRoleFromPortalTier (ADR-013 claim sync)', () => {
     await insertBackstopAdmin(testDb.pool);
     const id = await insertUser(testDb.pool, {
       email: 'other-provider@sigo.test',
-      role: 'Alumni',
+      role: 'Member',
     });
     await insertPortalAccount(testDb.pool, {
       userId: id,
@@ -243,7 +278,7 @@ describe('refuseNonMemberUserCreate (pending never gets a user row)', () => {
   });
 
   it('passes real app roles through', () => {
-    expect(() => refuseNonMemberUserCreate({ role: 'Alumni' })).not.toThrow();
+    expect(() => refuseNonMemberUserCreate({ role: 'Member' })).not.toThrow();
     expect(() => refuseNonMemberUserCreate({ role: 'Admin' })).not.toThrow();
   });
 });

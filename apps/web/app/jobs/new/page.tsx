@@ -1,16 +1,23 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { getServerSession, getSessionRole } from '@app/auth';
+import { getServerSession } from '@app/auth';
+import { getMemberCapabilities } from '@/lib/access';
 import { PostJobForm } from '@/components/PostJobForm';
 import { PageHeader } from '@/components/PageHeader';
+import { StatusPrompt } from '@/components/StatusPrompt';
 
 export const metadata = { title: 'Post a job' };
 
 export default async function NewJobPage() {
   const session = await getServerSession(await headers());
   if (!session?.user?.id) redirect('/login');
-  const { role } = await getSessionRole(session.user.id);
-  if (role === 'Active') {
+  // ADR-015: posting is gated on member STATUS (alumni), not role.
+  const caps = await getMemberCapabilities(session.user.id);
+  if (!caps.canPost) {
+    if (caps.undeclared) {
+      return <StatusPrompt />;
+    }
+    // Status active — the claiming side.
     return (
       <section className="space-y-4">
         <PageHeader

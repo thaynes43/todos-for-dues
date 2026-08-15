@@ -68,7 +68,7 @@ export async function demoteAllOtherAdmins(
     await transitionRole({
       targetUserId: id,
       expectedFromRole: 'Admin',
-      toRole: 'Alumni',
+      toRole: 'Member',
       initiator: { id: keepAdminId, kind: 'admin' },
     });
   }

@@ -96,7 +96,7 @@ describe('sendAdminDisputeEmail()', () => {
 
     const html = mockSend.mock.calls[0]![0].html as string;
     expect(html).toContain('Alice Active');
-    expect(html).toContain('Active'); // role
+    expect(html).toContain('Member'); // role (ADR-015: orthogonal to status)
     expect(html).toContain('specific reason text');
     expect(html).toContain(jobId);
     expect(html).toContain(`https://app.test.invalid/admin/jobs/${jobId}`);
