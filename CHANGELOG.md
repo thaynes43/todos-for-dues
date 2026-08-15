@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/thaynes43/todos-for-dues/compare/v1.1.1...v2.0.0) (2026-08-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* users.role enum drops Active/Alumni (Alumni renamed to Member); the users.changeRole and users.grantRole tRPC procedures are removed. Migration 0012 data-migrates existing Active/Alumni role rows to Member.
+
+### Features
+
+* member status orthogonal to roles (backlog 07 ruling) ([#60](https://github.com/thaynes43/todos-for-dues/issues/60)) ([6ad7675](https://github.com/thaynes43/todos-for-dues/commit/6ad767527d83907ff4238e5ec4dbd6807364917b))
+
 ## [1.1.1](https://github.com/thaynes43/todos-for-dues/compare/v1.1.0...v1.1.1) (2026-08-14)
 
 
