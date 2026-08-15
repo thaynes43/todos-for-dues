@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { transitionRole } from '@app/domain';
+import { appRouter } from '../../src/routers';
 import {
   caller,
   makeCtx,
@@ -33,16 +34,19 @@ describe('users router', () => {
   // never moves a role lives in member-status.test.ts.
 
   describe('no self-service / admin role-change procedures exist (ADR-015)', () => {
-    it('users.changeRole is not a procedure', () => {
-      const c = caller(makeCtx({ userId: users.active1, role: 'Active' }));
-      expect(
-        (c.users as Record<string, unknown>)['changeRole'],
-      ).toBeUndefined();
-    });
-
-    it('users.grantRole is not a procedure', () => {
-      const c = caller(makeCtx({ userId: users.admin, role: 'Admin' }));
-      expect((c.users as Record<string, unknown>)['grantRole']).toBeUndefined();
+    it('the router exposes no changeRole / grantRole procedures', () => {
+      // Check the router definition directly (the tRPC caller is a recursive
+      // proxy, so a missing path would still return a callable). The flat
+      // procedure record is keyed by dotted path.
+      const procedures = (
+        appRouter._def as { procedures: Record<string, unknown> }
+      ).procedures;
+      const paths = Object.keys(procedures);
+      expect(paths).not.toContain('users.changeRole');
+      expect(paths).not.toContain('users.grantRole');
+      // Sanity: the surviving user procedures are still registered.
+      expect(paths).toContain('users.list');
+      expect(paths).toContain('users.getRoleHistory');
     });
   });
 

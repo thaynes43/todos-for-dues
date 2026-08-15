@@ -9,6 +9,14 @@ import { JOB_STATES, ROLES } from '../src/schema/enums';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const INIT_SQL = readFileSync(join(HERE, '..', 'migrations', '0002_init.sql'), 'utf8');
+// ADR-015 / migration 0012: the users.role CHECK was redefined (Alumni→Member,
+// Active removed). 0002_init is immutable, so the CURRENT role enum is
+// cross-checked against 0012, not the historical 0002 CHECK. Job states are
+// unchanged, so their check still reads 0002.
+const ROLE_RENAME_SQL = readFileSync(
+  join(HERE, '..', 'migrations', '0012_role_member_rename.sql'),
+  'utf8',
+);
 
 describe('enums match generated migration CHECK lists', () => {
   it('JOB_STATES array matches jobs_state_enum CHECK', () => {
@@ -20,9 +28,11 @@ describe('enums match generated migration CHECK lists', () => {
     expect(fromMigration).toEqual([...JOB_STATES]);
   });
 
-  it('ROLES array matches users_role_enum CHECK', () => {
-    const match = INIT_SQL.match(/users_role_enum.*ARRAY\[([^\]]+)\]/);
-    expect(match).not.toBeNull();
+  it('ROLES array matches the current users_role_enum CHECK (migration 0012)', () => {
+    const match = ROLE_RENAME_SQL.match(
+      /ADD CONSTRAINT "users_role_enum"[\s\S]*?ARRAY\[([^\]]+)\]/,
+    );
+    expect(match, 'users_role_enum CHECK not found in 0012 migration').not.toBeNull();
     const fromMigration = match![1]!
       .split(',')
       .map((s) => s.trim().replace(/^'/, '').replace(/'$/, ''));
