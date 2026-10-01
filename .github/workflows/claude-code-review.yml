@@ -1,0 +1,167 @@
+name: Claude Code Review
+
+# Advisory automated PR review. NOT a required check: do not add it to branch
+# protection (required checks are `lint-and-typecheck` and `test`). It skips
+# cleanly, never fails, until the CLAUDE_CODE_OAUTH_TOKEN repo secret exists.
+#
+# `opened` and `synchronize` are needed because agents open PRs ready-for-review
+# and merge once checks are green; these four types are also the set
+# `track_progress` supports. Plain `pull_request` (never `pull_request_target`):
+# fork PRs get no secrets and are skipped below.
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+permissions:
+  contents: read
+
+# Re-review on every push, but only the newest push per PR.
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  claude-advisory-review:
+    name: Claude advisory review
+    # No drafts, no fork PRs (no secrets there), no dependency bots (they get no
+    # repo secrets), no release-please PRs (generated changelog/version bump).
+    if: >-
+      ${{ !github.event.pull_request.draft
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && github.event.pull_request.user.login != 'dependabot[bot]'
+      && github.event.pull_request.user.login != 'renovate[bot]'
+      && !startsWith(github.event.pull_request.head.ref, 'release-please--') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write # post the review + inline comments
+      id-token: write # OIDC exchange for the Claude GitHub App token
+      actions: read # read CI results for the PR
+
+    steps:
+      # Secrets cannot appear in `if:`, so gate on a step output instead.
+      - name: Check for CLAUDE_CODE_OAUTH_TOKEN
+        id: gate
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Claude review skipped::CLAUDE_CODE_OAUTH_TOKEN repo secret is not set."
+          fi
+
+      - name: Checkout repository
+        if: steps.gate.outputs.enabled == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code Review
+        if: steps.gate.outputs.enabled == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          allowed_bots: "haynes-dev-bot"
+          track_progress: true
+          use_sticky_comment: true
+          # Automated surfaces pin the newest Opus explicitly: never an alias.
+          # `--allowedTools` merges with tag mode's base set; without the Bash and
+          # inline-comment grants below Claude cannot run `gh` or post line
+          # comments at all.
+          claude_args: |
+            --model claude-opus-5-5
+            --max-turns 60
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*)"
+          additional_permissions: |
+            actions: read
+          prompt: |
+            You are the automated reviewer for TODOs for Dues, a per-organization SaaS
+            for Greek-life chapters: Alumni post small jobs (TODOs) with a dues
+            contribution, Actives claim and complete them, Moderators approve, Admins
+            manage. The app never custodies money (payment is out-of-band). The repo is
+            a pnpm workspace (Next.js 16 App Router, Tailwind v4, tRPC, Better Auth,
+            Drizzle on Postgres 16) and it is PUBLIC.
+            The PR branch is already checked out. Review PR #${{ github.event.pull_request.number }}
+            of ${{ github.repository }}.
+
+            ## Step 1 - context
+            - `gh pr diff ${{ github.event.pull_request.number }}` for the changes
+            - `gh pr view ${{ github.event.pull_request.number }}` for intent
+            - Read `CLAUDE.md` and, for the packages touched, the matching ADR in
+              `docs/adrs/`. Do not repeat feedback already present on the PR.
+
+            ## Step 2 - what this repo cares about
+            Layout: `apps/web` (UI, auth and tRPC route handlers), `packages/db`
+            (schema, `migrations/*.sql`), `packages/domain` (FSM), `packages/auth`,
+            `packages/api` (tRPC routers), `packages/notifications` (email),
+            `packages/test-utils`, docs under `docs/`.
+
+            **CRITICAL - block the merge**
+            - Secrets and PII in a public repo: committed `.env` files, values for
+              `BETTER_AUTH_SECRET`, `OIDC_CLIENT_SECRET`, `RESEND_API_KEY`,
+              `RESEND_WEBHOOK_SECRET`, tokens or keys in code, docs, fixtures, logs or
+              error messages; real member names or emails in tests, seeds, fixtures or
+              docs (use obvious placeholders).
+            - FSM-only state writes: job state and user role state must change only via
+              `transitionJob` / `transitionRole` in `packages/domain` (atomic state row
+              plus audit row). Flag any direct UPDATE/insert of job or role state, any
+              bypass of the audit tables, and any edit to `JOB_TRANSITIONS` with no test.
+              The min-1-Admin-per-chapter trigger (migration 0003) must stay intact.
+            - Auth (ADR-013, portal SSO only): no local credentials or invite tokens; the
+              `sigo-portal` provider id and redirect URI must not change; OIDC must fail
+              closed when its three env vars are unset; the tier-to-role mapping in
+              `packages/auth/src/portal-tiers.ts` and the claim re-sync must not widen
+              access (`pending` stays refused).
+            - Authorization gaps: a tRPC procedure or route handler that acts on chapter
+              data without checking the caller's session and role, or that trusts a
+              client-supplied user id, chapter id or role.
+            - Migrations: editing an already-applied `packages/db/migrations/*.sql`
+              (changes need a new numbered migration plus the matching Drizzle schema and
+              `meta` snapshot); destructive migrations with no data-safety reasoning.
+            - Logic errors: races, missing transactions around multi-row writes, off-by-one,
+              unhandled null/undefined, SSE or timer resources never cleaned up.
+
+            **HIGH - should fix**
+            - Tests substituting another database engine (SQLite, mocks of the DB layer)
+              for the Testcontainers Postgres 16 helper; behavior changes with no test;
+              deleted or weakened assertions.
+            - `any`, `@ts-ignore` or `eslint-disable` added without a reason, or anything
+              that loosens the strict tsconfig (`noUncheckedIndexedAccess`, NodeNext ESM).
+            - Money handling: any code that moves, holds or verifies funds. The app only
+              records the dues amount and the out-of-band payment status.
+            - Next.js 16 / Tailwind v4 code that relies on older conventions (the repo's
+              `apps/web/AGENTS.md` says to read `node_modules/next/dist/docs/`), or a
+              `tailwind.config.*` added.
+            - Docs-first violations: a new feature or behavior change with no PRD/ADR/PLAN
+              reference; an `Accepted` ADR edited instead of superseded; renumbered PRD
+              `R-NN`/`AC-NN` IDs; `docs/plans/COVERAGE.md` not updated for a new plan.
+            - Workflow changes under `.github/` that add `pull_request_target`, widen
+              permissions, or expose secrets to fork PRs; a new package needing a native
+              build that is not allowlisted in `pnpm-workspace.yaml`; a dependency change
+              with no lockfile update.
+            - PR title not a conventional-commit prefix (`feat:`, `fix:`, `chore:`,
+              `docs:`, `test:`, `refactor:`); release-please derives versions from it.
+
+            **MEDIUM - consider**
+            - User-facing copy that is wordy or exposes internal mechanism; the
+              organization name written `SIGO` instead of `Sigo`.
+            - Missing input validation (zod) on a new procedure; unbounded queries.
+
+            **Ignore entirely:** formatting (prettier), naming, import order, missing
+            docstrings on unchanged code, and feature suggestions beyond the PR's intent.
+
+            ## Step 3 - report
+            - Post each line-specific finding with
+              `mcp__github_inline_comment__create_inline_comment` (`confirmed: true`),
+              prefixing the body with its severity: `CRITICAL:`, `HIGH:` or `MEDIUM:`.
+              Keep each one to a few sentences. No praise.
+            - Then post ONE summary comment with `gh pr comment` containing a verdict
+              (`Looks good` / `Needs changes` / `Has critical issues`) and the findings
+              grouped by severity, each naming the file and line.
+            - If the diff is clean, say exactly "No findings." followed by one sentence on
+              what you checked. Never invent a finding to look thorough.
+            - Only review files changed in this PR. Post GitHub comments only; do not
+              return the review as chat text.

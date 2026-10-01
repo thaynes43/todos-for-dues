@@ -82,6 +82,10 @@ From PLAN-009 Step 2.5 onward, `main` is **branch-protected**. Direct push to `m
 
 Hot-fixes that bypass CI are a coordinator-only break-glass — agents must never `gh pr merge --admin` or push to `main` directly.
 
+### Claude PR reviewer (advisory)
+
+`.github/workflows/claude-code-review.yml` runs an automated Claude review on every non-draft PR (job `Claude advisory review`); `.github/workflows/claude.yml` answers `@claude` mentions from users with write access. The review is **advisory**: it is not a required check and never goes in branch protection. **Read its findings before merging.** Each finding gets fixed, or answered on the PR with a concrete reason it is wrong; never "merging anyway". Both workflows skip (green) when the secret is missing, and skip fork, draft, dependabot/renovate and release-please PRs. Prerequisites: the Claude GitHub App has access to this repo, and the `CLAUDE_CODE_OAUTH_TOKEN` repo secret exists.
+
 ## Release versioning (release-please)
 
 Docker images are released by tag, not by commit:
